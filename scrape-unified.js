@@ -4,12 +4,13 @@
  */
 
 // 导入依赖
-const puppeteer = require('puppeteer-extra');
-const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-puppeteer.use(StealthPlugin());
-// Medium 相关依赖已移除
 const path = require('path');
 const fs = require('fs');
+
+// 核心模块
+const { BrowserManager } = require('./core/browser-manager');
+const { CookieManager } = require('./core/cookie-manager');
+const dataExtractor = require('./core/data-extractor');
 
 // 工具模块
 const fileUtils = require('./utils/fileutils');
@@ -19,53 +20,12 @@ const screenshotUtils = require('./utils/screenshot');
 const retryUtils = require('./utils/retry');
 const validation = require('./utils/validation');
 const constants = require('./config/constants');
-// const { getPageContent } = require('./utils/flaresolverr'); // 不再使用
 
 // 常量定义
 const X_HOME_URL = 'https://x.com/home';
-const X_COOKIE_FILE = path.join(__dirname, 'env.json');
-// Medium 相关常量与服务已移除
-
-// Twitter选择器
-const X_SELECTORS = {
-  TWEET: 'article[data-testid="tweet"]',
-  TWEET_TEXT: '[data-testid="tweetText"]',
-  LIKE: '[data-testid="like"]',
-  RETWEET: '[data-testid="retweet"]',
-  REPLY: '[data-testid="reply"]',
-  SHARE: '[data-testid="app-text-transition-container"]',
-  TIME: 'time',
-  MEDIA: '[data-testid="tweetPhoto"], [data-testid="videoPlayer"]'
-};
 
 // 工具函数
 const throttle = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-const getFormattedDate = () => {
-  const today = new Date();
-  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-};
-
-const parseCount = (countText) => {
-  if (!countText) return 0;
-  const text = countText.toLowerCase().replace(/,/g, '');
-  
-  const kMatch = text.match(/^([\d.]+)\s*k/);
-  if (kMatch && !isNaN(parseFloat(kMatch[1]))) {
-    return Math.round(parseFloat(kMatch[1]) * 1000);
-  }
-  
-  const mMatch = text.match(/^([\d.]+)\s*m/);
-  if (mMatch && !isNaN(parseFloat(mMatch[1]))) {
-    return Math.round(parseFloat(mMatch[1]) * 1000000);
-  }
-  
-  if (!isNaN(parseFloat(text))) {
-    return Math.round(parseFloat(text));
-  }
-  
-  return 0;
-};
 
 /****************************
  * TWITTER/X 相关函数
@@ -158,7 +118,8 @@ async function scrapeTwitter(options = {}) {
   const cacheIdentifier = runContext.identifier || fileUtils.sanitizeSegment(identifierForRun);
   const runStartedAt = new Date().toISOString();
   
-  let browser = null;
+  let browserManager = null;
+  let page = null;
   let collectedTweets = [];
   const scrapedUrls = new Set();
   let seenUrls = await fileUtils.loadSeenUrls(cachePlatform, cacheIdentifier);
@@ -166,60 +127,19 @@ async function scrapeTwitter(options = {}) {
   let profileInfo = null;
 
   try {
-    // 启动浏览器（优化性能设置）
-    browser = await puppeteer.launch({
-      headless: true,
-      args: constants.BROWSER_ARGS,
-      defaultViewport: constants.BROWSER_VIEWPORT
-    });
+    // 启动浏览器并配置页面
+    browserManager = new BrowserManager();
+    await browserManager.launch({ headless: true });
+    page = await browserManager.createPage();
+    console.log(`[${platform.toUpperCase()}] Browser launched and configured`);
 
-    const page = await browser.newPage();
-
-    // 设置现代浏览器UA
-    await page.setUserAgent(constants.BROWSER_USER_AGENT);
-
-    // 屏蔽不必要的资源以加快加载速度
-    await page.setRequestInterception(true);
-    page.on('request', (req) => {
-      const resourceType = req.resourceType();
-      if (constants.BLOCKED_RESOURCE_TYPES.includes(resourceType)) {
-        req.abort();
-      } else {
-        req.continue();
-      }
-    });
-
-    // 注入Cookie进行认证
+    // 加载并注入 Cookie
     try {
-      let cookieSource = null;
-      let envData = null;
-      // 首先尝试 env.json（新格式）
-      try {
-        const cookiesString = await fs.promises.readFile(X_COOKIE_FILE, 'utf-8');
-        envData = JSON.parse(cookiesString);
-        cookieSource = X_COOKIE_FILE;
-      } catch (_) {
-        // 回退到 ./cookies/twitter-cookies.json
-        const altPath = path.join(__dirname, 'cookies', 'twitter-cookies.json');
-        const cookiesString = await fs.promises.readFile(altPath, 'utf-8');
-        envData = JSON.parse(cookiesString);
-        cookieSource = altPath;
-      }
-
-      // 验证 Cookie 数据格式
-      const cookieValidation = validation.validateEnvCookieData(envData);
-      if (!cookieValidation.valid) {
-        throw new Error(`Cookie 验证失败: ${cookieValidation.error}`);
-      }
-
-      // 使用验证后的 Cookies
-      const cookiesToSet = cookieValidation.cookies;
-      console.log(`[${platform.toUpperCase()}] 已验证 ${cookiesToSet.length} 个 Cookie`);
-
-      await page.setCookie(...cookiesToSet);
-      console.log(`[${platform.toUpperCase()}] 已从 ${cookieSource} 注入Cookie`);
+      const cookieManager = new CookieManager();
+      const cookieInfo = await cookieManager.loadAndInject(page);
+      console.log(`[${platform.toUpperCase()}] Loaded ${cookieInfo.cookies.length} cookies from ${cookieInfo.source}`);
     } catch (error) {
-      console.error(`[${platform.toUpperCase()}] Cookie错误: ${error.message}`);
+      console.error(`[${platform.toUpperCase()}] Cookie error: ${error.message}`);
       return { success: false, tweets: [], error: error.message };
     }
 
@@ -251,78 +171,26 @@ async function scrapeTwitter(options = {}) {
     try {
       await retryUtils.retryWaitForSelector(
         page,
-        X_SELECTORS.TWEET,
+        dataExtractor.X_SELECTORS.TWEET,
         { timeout: constants.WAIT_FOR_TWEETS_TIMEOUT },
         {
           ...constants.SELECTOR_RETRY_CONFIG,
           onRetry: (error, attempt) => {
-            console.log(`[${platform.toUpperCase()}] 等待推文加载失败 (尝试 ${attempt}/${constants.SELECTOR_RETRY_CONFIG.maxRetries}): ${error.message}`);
+            console.log(`[${platform.toUpperCase()}] Waiting for tweets failed (attempt ${attempt}/${constants.SELECTOR_RETRY_CONFIG.maxRetries}): ${error.message}`);
           }
         }
       );
-      console.log(`[${platform.toUpperCase()}] 推文加载成功`);
+      console.log(`[${platform.toUpperCase()}] Tweets loaded successfully`);
     } catch (waitError) {
-      console.error(`[${platform.toUpperCase()}] 未找到推文（所有重试均失败）:`, waitError.message);
+      console.error(`[${platform.toUpperCase()}] No tweets found (all retries failed):`, waitError.message);
       return { success: false, tweets: [], error: waitError.message };
     }
 
     // 提取用户资料信息（如果是访问特定用户）
     if (config.username) {
-      try {
-        profileInfo = await page.evaluate(() => {
-          const getText = (sel) => {
-            const el = document.querySelector(sel);
-            return el ? (el.textContent || '').trim() : null;
-          };
-          const parseCountInBrowser = (countText) => {
-            if (!countText) return null;
-            const text = countText.toLowerCase().replace(/,/g, '').trim();
-            const m = text.match(/([\d.]+)\s*([km]?)/);
-            if (!m) return parseFloat(text) || 0;
-            const n = parseFloat(m[1]);
-            const suf = m[2];
-            if (isNaN(n)) return 0;
-            if (suf === 'k') return Math.round(n * 1000);
-            if (suf === 'm') return Math.round(n * 1000000);
-            return Math.round(n);
-          };
-
-          // 显示名与@handle
-          let displayName = null;
-          let handle = null;
-          const nameRoot = document.querySelector('[data-testid="UserName"]');
-          if (nameRoot) {
-            const span = nameRoot.querySelector('span');
-            if (span) displayName = (span.textContent || '').trim();
-            const a = nameRoot.querySelector('a[href^="/"]');
-            if (a) handle = (a.getAttribute('href') || '').replace(/^\//, '').replace(/^@/, '');
-          }
-
-          const bio = getText('[data-testid="UserDescription"]');
-          const location = getText('[data-testid="UserLocation"]');
-          const joined = getText('[data-testid="UserJoinDate"]');
-          let website = null;
-          const urlEl = document.querySelector('[data-testid="UserUrl"] a[href]');
-          if (urlEl) website = urlEl.getAttribute('href');
-
-          let followers = null;
-          let following = null;
-          try {
-            document.querySelectorAll('a[href*="/followers"], a[href*="/following"]').forEach(a => {
-              const href = a.getAttribute('href') || '';
-              const txt = (a.textContent || '').trim();
-              if (href.includes('/followers')) followers = parseCountInBrowser(txt);
-              if (href.includes('/following')) following = parseCountInBrowser(txt);
-            });
-          } catch (e) {}
-
-          return { displayName, handle, bio, location, website, joined, followers, following };
-        });
-        if (profileInfo) {
-          console.log(`[${platform.toUpperCase()}] 资料: ${JSON.stringify(profileInfo)}`);
-        }
-      } catch (e) {
-        console.warn(`[${platform.toUpperCase()}] 提取用户资料失败: ${e.message}`);
+      profileInfo = await dataExtractor.extractProfileInfo(page);
+      if (profileInfo) {
+        console.log(`[${platform.toUpperCase()}] Profile: ${JSON.stringify(profileInfo)}`);
       }
     }
 
@@ -341,97 +209,10 @@ async function scrapeTwitter(options = {}) {
     
     while (collectedTweets.length < config.limit && scrollAttempts < maxScrollAttempts) {
       scrollAttempts++;
-      console.log(`[${platform.toUpperCase()}] 抓取尝试 ${scrollAttempts}...`);
+      console.log(`[${platform.toUpperCase()}] Scraping attempt ${scrollAttempts}...`);
 
-      // 使用page.evaluate提取推文数据（性能更好）
-      const tweetsOnPage = await page.evaluate((SELECTORS) => {
-        const parseCountInBrowser = (countText) => {
-          if (!countText) return 0;
-          const text = countText.toLowerCase().replace(/,/g, '');
-          
-          if (text.includes('k')) {
-            return Math.round(parseFloat(text) * 1000);
-          } else if (text.includes('m')) {
-            return Math.round(parseFloat(text) * 1000000);
-          } else if (!isNaN(parseFloat(text))) {
-            return Math.round(parseFloat(text));
-          }
-          
-          return 0;
-        };
-
-        return Array.from(document.querySelectorAll(SELECTORS.TWEET))
-          .map(article => {
-            try {
-              const textNode = article.querySelector(SELECTORS.TWEET_TEXT);
-              const timeNode = article.querySelector(SELECTORS.TIME);
-              const linkNode = timeNode?.closest('a[href*="/status/"]');
-              
-              // 计数元素
-              const likeButton = article.querySelector(SELECTORS.LIKE);
-              const retweetButton = article.querySelector(SELECTORS.RETWEET);
-              const replyButton = article.querySelector(SELECTORS.REPLY);
-              
-              // 计数span
-              const likeCountSpan = likeButton?.querySelector(`${SELECTORS.SHARE} span > span`);
-              const retweetCountSpan = retweetButton?.querySelector(`${SELECTORS.SHARE} span > span`);
-              const replyCountSpan = replyButton?.querySelector(`${SELECTORS.SHARE} span > span`);
-              
-              // 检查是否包含媒体
-              const hasMedia = !!article.querySelector(SELECTORS.MEDIA);
-
-              // 获取推文URL
-              let tweetUrl = null;
-              if (linkNode) {
-                const href = linkNode.getAttribute('href');
-                if (href && href.includes('/status/')) {
-                  tweetUrl = `https://x.com${href.split('?')[0]}`;
-                }
-              }
-
-              const tweetText = textNode?.innerText?.trim() || null;
-              const dateTime = timeNode?.getAttribute('datetime') || null;
-
-              if (!tweetUrl || !tweetText || !dateTime) {
-                return null;
-              }
-
-              // 提取作者信息
-              let author = '';
-              try {
-                // 尝试从URL中提取
-                const urlParts = tweetUrl.split('/');
-                const authorIndex = urlParts.indexOf('status') - 1;
-                if (authorIndex > 0) {
-                  author = urlParts[authorIndex];
-                }
-              } catch (e) {}
-
-              // 解析计数
-              const likes = parseCountInBrowser(likeCountSpan?.innerText);
-              const retweets = parseCountInBrowser(retweetCountSpan?.innerText);
-              const replies = parseCountInBrowser(replyCountSpan?.innerText);
-
-              // 提取推文ID
-              const tweetId = tweetUrl.split('/status/')[1];
-
-              return {
-                text: tweetText,
-                time: dateTime,
-                url: tweetUrl,
-                id: tweetId,
-                author: author,
-                likes,
-                retweets,
-                replies,
-                hasMedia
-              };
-            } catch(e) {
-              return null;
-            }
-          })
-          .filter(tweet => tweet !== null);
-      }, X_SELECTORS);
+      // 提取推文数据
+      const tweetsOnPage = await dataExtractor.extractTweetsFromPage(page);
 
       // 添加唯一推文到集合
       let addedInAttempt = 0;
@@ -466,10 +247,10 @@ async function scrapeTwitter(options = {}) {
           await retryUtils.retryWithBackoff(
             async () => {
               await page.reload({ waitUntil: 'networkidle2', timeout: constants.NAVIGATION_TIMEOUT });
-              console.log(`[${platform.toUpperCase()}] 页面刷新成功，等待推文重新加载...`);
+              console.log(`[${platform.toUpperCase()}] Page refreshed, waiting for tweets to reload...`);
               // 增加刷新后的等待超时时间
-              await page.waitForSelector(X_SELECTORS.TWEET, { timeout: constants.WAIT_FOR_TWEETS_AFTER_REFRESH_TIMEOUT });
-              console.log(`[${platform.toUpperCase()}] 推文已重新加载`);
+              await page.waitForSelector(dataExtractor.X_SELECTORS.TWEET, { timeout: constants.WAIT_FOR_TWEETS_AFTER_REFRESH_TIMEOUT });
+              console.log(`[${platform.toUpperCase()}] Tweets reloaded successfully`);
             },
             {
               ...constants.REFRESH_RETRY_CONFIG,
@@ -498,27 +279,23 @@ async function scrapeTwitter(options = {}) {
 
       // 如果目标未达成且未超最大尝试次数，则滚动页面
       if (collectedTweets.length < config.limit && scrollAttempts < maxScrollAttempts) {
-        console.log(`[${platform.toUpperCase()}] 正在滚动以加载更多推文...`);
-        
+        console.log(`[${platform.toUpperCase()}] Scrolling to load more tweets...`);
+
         // 滚动到底部
-        await page.evaluate(() => {
-          window.scrollTo(0, document.body.scrollHeight);
-        });
+        await dataExtractor.scrollToBottom(page);
 
         // 随机延迟，避免被检测
         await throttle(constants.getScrollDelay());
 
         // 等待新推文加载
-        try {
-          await page.waitForFunction(
-            (selector, prevCount) => document.querySelectorAll(selector).length > prevCount,
-            { timeout: constants.WAIT_FOR_NEW_TWEETS_TIMEOUT },
-            X_SELECTORS.TWEET,
-            tweetsOnPage.length // 使用本次抓取前的数量判断是否有增长
-          );
-        } catch (e) {
-          // 注意：这里的超时不一定是坏事，可能只是没新推文
-          console.log(`[${platform.toUpperCase()}] 滚动后短时间内未检测到新推文元素（可能已无更多或加载慢）`);
+        const hasNewTweets = await dataExtractor.waitForNewTweets(
+          page,
+          tweetsOnPage.length,
+          constants.WAIT_FOR_NEW_TWEETS_TIMEOUT
+        );
+
+        if (!hasNewTweets) {
+          console.log(`[${platform.toUpperCase()}] No new tweets detected after scroll (might be no more content or slow loading)`);
         }
       }
     }
@@ -598,33 +375,14 @@ async function scrapeTwitter(options = {}) {
     };
 
   } catch (error) {
-    console.error(`[${platform.toUpperCase()}] 抓取失败:`, error.message);
+    console.error(`[${platform.toUpperCase()}] Scraping failed:`, error.message);
     return { success: false, tweets: [], error: error.message, runContext };
   } finally {
-    // 改进的浏览器清理逻辑，确保资源一定会被释放
-    if (browser) {
-      try {
-        // 尝试正常关闭浏览器
-        await browser.close();
-        console.log(`[${platform.toUpperCase()}] 浏览器已正常关闭`);
-      } catch (closeError) {
-        console.error(`[${platform.toUpperCase()}] 浏览器关闭失败: ${closeError.message}`);
-
-        // 如果正常关闭失败，尝试强制终止浏览器进程
-        try {
-          const browserProcess = browser.process();
-          if (browserProcess && browserProcess.pid) {
-            console.log(`[${platform.toUpperCase()}] 尝试强制终止浏览器进程 (PID: ${browserProcess.pid})...`);
-            process.kill(browserProcess.pid, 'SIGKILL');
-            console.log(`[${platform.toUpperCase()}] 浏览器进程已强制终止`);
-          }
-        } catch (killError) {
-          console.error(`[${platform.toUpperCase()}] 强制终止浏览器进程失败: ${killError.message}`);
-          // 即使强制终止失败，也继续执行，避免阻塞后续操作
-        }
-      }
+    // 关闭浏览器
+    if (browserManager) {
+      await browserManager.close();
     }
-    console.log(`[${platform.toUpperCase()}] 抓取周期结束`);
+    console.log(`[${platform.toUpperCase()}] Scraping cycle completed`);
   }
 }
 
