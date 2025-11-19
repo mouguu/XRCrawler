@@ -282,7 +282,8 @@ async function scrapeXFeed(options = {}) {
     runContext: options.runContext,
     outputDir: options.outputDir,
     mergeResults: options.mergeResults, // 传递合并选项
-    deleteMerged: options.deleteMerged // 传递删除选项
+    deleteMerged: options.deleteMerged, // 传递删除选项
+    clearCache: options.clearCache      // ← 传递清除缓存选项
   });
 }
 
@@ -390,8 +391,28 @@ async function scrapeTwitter(options = {}) {
   let browserManager = null;
   let page = null;
   let collectedTweets = [];
-  const scrapedUrls = new Set();
-  let seenUrls = await fileUtils.loadSeenUrls(cachePlatform, cacheIdentifier);
+  const scrapedUrls = new Set(); // URLs collected in the current session
+  let seenUrls; // This will hold the file-based cache
+
+  // 如果设置了 clearCache，先删除缓存文件
+  if (config.clearCache) {
+    const fs = require('fs');
+    // 使用 fileUtils 的统一路径函数，避免硬编码
+    const cacheFilePath = fileUtils.getCacheFilePath(cachePlatform, cacheIdentifier);
+    try {
+      if (fs.existsSync(cacheFilePath)) {
+        fs.unlinkSync(cacheFilePath);
+        console.log(`[${platform.toUpperCase()}] ✅ Cleared URL cache: ${cacheFilePath}`);
+      } else {
+        console.log(`[${platform.toUpperCase()}] ℹ️  No cache file found at: ${cacheFilePath}`);
+      }
+    } catch (err) {
+      console.warn(`[${platform.toUpperCase()}] Failed to clear cache: ${err.message}`);
+    }
+  }
+
+  // 加载缓存（如果没被清除）
+  seenUrls = await fileUtils.loadSeenUrls(cachePlatform, cacheIdentifier);
   let noNewTweetsConsecutiveAttempts = 0;
   let profileInfo = null;
 
@@ -436,42 +457,77 @@ async function scrapeTwitter(options = {}) {
       }
     }
 
-    // 导航到Twitter页面
+    // 导航到Twitter页面 - 带限流检测和 Cookie 轮换
     console.log(`[${platform.toUpperCase()}] Navigating to ${targetUrl}...`);
-    try {
-      await retryUtils.retryPageGoto(
-        page,
-        targetUrl,
-        { waitUntil: 'networkidle2', timeout: constants.NAVIGATION_TIMEOUT },
-        {
-          ...constants.NAVIGATION_RETRY_CONFIG,
-          onRetry: (error, attempt) => {
-            console.log(`[${platform.toUpperCase()}] Navigation failed (attempt ${attempt}/${constants.NAVIGATION_RETRY_CONFIG.maxRetries}): ${error.message}`);
+
+    let navigationSuccess = false;
+    let cookieRotationAttempts = 0;
+    const maxCookieRotationAttempts = 3;
+
+    while (!navigationSuccess && cookieRotationAttempts < maxCookieRotationAttempts) {
+      try {
+        // 尝试导航 - 使用更短的重试次数以快速检测限流
+        await retryUtils.retryPageGoto(
+          page,
+          targetUrl,
+          { waitUntil: 'networkidle2', timeout: 30000 }, // 缩短超时到 30 秒
+          {
+            maxRetries: 1, // 只重试 1 次，快速失败
+            baseDelay: 1000,
+            onRetry: (error, attempt) => {
+              console.log(`[${platform.toUpperCase()}] Navigation failed (attempt ${attempt}/1): ${error.message}`);
+            }
           }
+        );
+
+        // 等待推文加载 - 同样缩短时间
+        await retryUtils.retryWaitForSelector(
+          page,
+          dataExtractor.X_SELECTORS.TWEET,
+          { timeout: 25000 }, // 缩短到 25 秒
+          {
+            maxRetries: 1, // 只重试 1 次
+            baseDelay: 1000,
+            onRetry: (error, attempt) => {
+              console.log(`[${platform.toUpperCase()}] Waiting for tweets failed (attempt ${attempt}/1): ${error.message}`);
+            }
+          }
+        );
+
+        console.log(`[${platform.toUpperCase()}] Tweets loaded successfully`);
+        navigationSuccess = true;
+
+      } catch (error) {
+        // 检测是否是限流错误
+        const isRateLimited = error.message.includes('Waiting failed') ||
+          error.message.includes('timeout') ||
+          error.message.includes('exceeded') ||
+          error.message.includes('Waiting for selector') ||
+          error.message.includes('Navigation timeout');
+
+        if (isRateLimited && cookieRotationAttempts < maxCookieRotationAttempts - 1) {
+          cookieRotationAttempts++;
+          console.warn(`[${platform.toUpperCase()}] ⚠️  Rate limit detected! Rotating to next cookie account (attempt ${cookieRotationAttempts}/${maxCookieRotationAttempts})...`);
+
+          // 创建新的 CookieManager 实例并重新加载 cookie
+          const CookieManager = require('./core/cookie-manager');
+          const newCookieManager = new CookieManager();
+          const cookieData = await newCookieManager.load();
+          await newCookieManager.injectIntoPage(page);
+          console.log(`[${platform.toUpperCase()}] ✅ Switched to cookie: ${path.basename(cookieData.source)}`);
+
+          // 等待一小段时间再重试
+          await throttle(2000); // 缩短到 2 秒
+        } else {
+          // 不是限流错误，或者已经尝试了所有 cookie
+          console.error(`[${platform.toUpperCase()}] Navigation/loading failed after trying ${cookieRotationAttempts + 1} cookie accounts: ${error.message}`);
+          return { success: false, tweets: [], error: `All cookie accounts may be rate limited: ${error.message}` };
         }
-      );
-    } catch (navError) {
-      console.error(`[${platform.toUpperCase()}] Navigation failed (all retries failed): ${navError.message}`);
-      return { success: false, tweets: [], error: navError.message };
+      }
     }
 
-    // 等待推文加载
-    try {
-      await retryUtils.retryWaitForSelector(
-        page,
-        dataExtractor.X_SELECTORS.TWEET,
-        { timeout: constants.WAIT_FOR_TWEETS_TIMEOUT },
-        {
-          ...constants.SELECTOR_RETRY_CONFIG,
-          onRetry: (error, attempt) => {
-            console.log(`[${platform.toUpperCase()}] Waiting for tweets failed (attempt ${attempt}/${constants.SELECTOR_RETRY_CONFIG.maxRetries}): ${error.message}`);
-          }
-        }
-      );
-      console.log(`[${platform.toUpperCase()}] Tweets loaded successfully`);
-    } catch (waitError) {
-      console.error(`[${platform.toUpperCase()}] No tweets found (all retries failed):`, waitError.message);
-      return { success: false, tweets: [], error: waitError.message };
+    if (!navigationSuccess) {
+      return { success: false, tweets: [], error: 'Failed to navigate after trying all available cookie accounts' };
     }
 
     // 提取用户资料信息（如果是访问特定用户）
@@ -485,6 +541,8 @@ async function scrapeTwitter(options = {}) {
     // 滚动和抓取逻辑
     let scrollAttempts = 0;
     const maxScrollAttempts = Math.max(50, Math.ceil(config.limit / 5));
+    let refreshAttempts = 0; // 新增：刷新计数器
+    const maxRefreshAttempts = 3; // 新增：最大刷新次数
 
     // 首先尝试截取时间线截图（如果启用了截图功能）
     if (config.saveScreenshots) {
@@ -497,6 +555,19 @@ async function scrapeTwitter(options = {}) {
 
     while (collectedTweets.length < config.limit && scrollAttempts < maxScrollAttempts) {
       scrollAttempts++;
+
+      // Check for manual stop signal
+      try {
+        const server = require('./server');
+        if (server.getShouldStopScraping && server.getShouldStopScraping()) {
+          console.warn(`[${platform.toUpperCase()}] Manual stop signal received. Terminating scrape gracefully...`);
+          console.log(`[${platform.toUpperCase()}] Successfully collected ${collectedTweets.length} tweets before manual stop.`);
+          break; // Exit loop and save collected data
+        }
+      } catch (err) {
+        // Server module not available or function doesn't exist, continue normally
+      }
+
       console.log(`[${platform.toUpperCase()}] Scraping attempt ${scrollAttempts}...`);
 
       // 提取推文数据
@@ -519,17 +590,50 @@ async function scrapeTwitter(options = {}) {
 
       console.log(`[${platform.toUpperCase()}] Attempt ${scrollAttempts}: Found ${tweetsOnPage.length} tweets on page, added ${addedInAttempt} new tweets. Total: ${collectedTweets.length}`);
 
+      // 广播进度到前端（每5次尝试或有新推文时）
+      if (scrollAttempts % 5 === 0 || addedInAttempt > 0) {
+        try {
+          const server = require('./server');
+          if (server.broadcastProgress) {
+            server.broadcastProgress({
+              type: 'progress',
+              current: collectedTweets.length,
+              target: config.limit,
+              attempts: scrollAttempts
+            });
+          }
+        } catch (err) {
+          // Server module not available, ignore
+        }
+      }
+
       // 更新连续无新推文计数器
       if (addedInAttempt === 0) {
         noNewTweetsConsecutiveAttempts++;
         console.log(`[${platform.toUpperCase()}] Consecutive attempts with no new tweets: ${noNewTweetsConsecutiveAttempts}`);
+
+        // 早期退出机制：如果页面上推文很少（< 10）且连续2次无新推文，说明到底了
+        if (tweetsOnPage.length < 10 && noNewTweetsConsecutiveAttempts >= 2) {
+          console.warn(`[${platform.toUpperCase()}] ⚡ Early exit: Detected end of timeline (only ${tweetsOnPage.length} tweets visible + ${noNewTweetsConsecutiveAttempts} attempts with no new content)`);
+          console.log(`[${platform.toUpperCase()}] Successfully collected ${collectedTweets.length} tweets (target was ${config.limit}).`);
+          break; // 直接退出，不再刷新
+        }
       } else {
         noNewTweetsConsecutiveAttempts = 0;
+        refreshAttempts = 0; // 新增：如果有新推文，重置刷新计数器
       }
 
       // 检查是否需要刷新页面
       if (noNewTweetsConsecutiveAttempts >= constants.MAX_CONSECUTIVE_NO_NEW_TWEETS && collectedTweets.length < config.limit) {
-        console.warn(`[${platform.toUpperCase()}] ${noNewTweetsConsecutiveAttempts} consecutive attempts with no new tweets, refreshing page...`);
+        // 新增：检查是否已经刷新太多次
+        if (refreshAttempts >= maxRefreshAttempts) {
+          console.warn(`[${platform.toUpperCase()}] Reached maximum refresh attempts (${maxRefreshAttempts}). No more tweets available. Stopping scrape.`);
+          console.log(`[${platform.toUpperCase()}] Successfully collected ${collectedTweets.length} tweets (target was ${config.limit}).`);
+          break; // 退出循环，保存已抓取的数据
+        }
+
+        refreshAttempts++;
+        console.warn(`[${platform.toUpperCase()}] ${noNewTweetsConsecutiveAttempts} consecutive attempts with no new tweets, refreshing page (attempt ${refreshAttempts}/${maxRefreshAttempts})...`);
         try {
           // 使用重试机制刷新页面
           await retryUtils.retryWithBackoff(
@@ -567,10 +671,12 @@ async function scrapeTwitter(options = {}) {
 
       // 如果目标未达成且未超最大尝试次数，则滚动页面
       if (collectedTweets.length < config.limit && scrollAttempts < maxScrollAttempts) {
-        console.log(`[${platform.toUpperCase()}] Scrolling to load more tweets...`);
+        // 只在每 3 次尝试时打印一次滚动日志，减少冗余
+        if (scrollAttempts % 3 === 1 || addedInAttempt > 0) {
+          console.log(`[${platform.toUpperCase()}] Scrolling to load more tweets...`);
+        }
 
-        // 滚动到底部
-        await dataExtractor.scrollToBottom(page);
+        await dataExtractor.scrollToBottom(page); // scrollToBottom does not return a boolean, so scrollSuccess check is removed.
 
         // 随机延迟，避免被检测
         await throttle(constants.getScrollDelay());
@@ -722,7 +828,42 @@ async function scrapeTwitter(options = {}) {
 
   } catch (error) {
     console.error(`[${platform.toUpperCase()}] Scraping failed:`, error.message);
-    return { success: false, tweets: [], error: error.message, runContext };
+
+    // 即使失败，如果已经抓取了数据，也尝试保存
+    if (collectedTweets && collectedTweets.length > 0) {
+      console.log(`[${platform.toUpperCase()}] Attempting to save ${collectedTweets.length} collected tweets before exiting...`);
+      try {
+        // 保存为Markdown
+        if (config.saveMarkdown) {
+          await markdownUtils.saveTweetsAsMarkdown(collectedTweets, runContext);
+        }
+        // 导出为CSV
+        if (config.exportCsv) {
+          await exportUtils.exportToCsv(collectedTweets, runContext);
+        }
+        // 导出为JSON
+        if (config.exportJson) {
+          await exportUtils.exportToJson(collectedTweets, runContext);
+        }
+
+        // 生成元数据
+        const metadata = {
+          platform,
+          username: config.username || null,
+          runId: runContext.runId,
+          runTimestamp: runContext.runTimestamp,
+          tweetCount: collectedTweets.length,
+          error: error.message,
+          status: 'failed_partial'
+        };
+        await fs.promises.writeFile(runContext.metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
+
+      } catch (saveError) {
+        console.error(`[${platform.toUpperCase()}] Failed to save partial data:`, saveError.message);
+      }
+    }
+
+    return { success: false, tweets: collectedTweets || [], error: error.message, runContext };
   } finally {
     // 关闭浏览器
     if (browserManager) {

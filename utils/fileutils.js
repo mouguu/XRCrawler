@@ -247,6 +247,7 @@ module.exports = {
   createRunContext,
   loadSeenUrls,
   saveSeenUrls,
+  getCacheFilePath,
   getTodayString,
   getMarkdownFiles,
   sanitizeSegment

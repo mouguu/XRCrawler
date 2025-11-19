@@ -7,6 +7,10 @@ const fs = require('fs').promises;
 const path = require('path');
 const validation = require('../utils/validation');
 
+// Global rotation state
+let currentCookieIndex = 0;
+let availableCookieFiles = [];
+
 /**
  * Cookie 管理器类
  */
@@ -14,9 +18,53 @@ class CookieManager {
   constructor(options = {}) {
     this.primaryCookieFile = options.primaryCookieFile || path.join(process.cwd(), 'env.json');
     this.fallbackCookieFile = options.fallbackCookieFile || path.join(process.cwd(), 'cookies', 'twitter-cookies.json');
+    this.cookiesDir = options.cookiesDir || path.join(process.cwd(), 'cookies');
+    this.enableRotation = options.enableRotation !== false; // Default: enabled
     this.cookies = null;
     this.username = null;
     this.source = null;
+  }
+
+  /**
+   * 扫描 cookies 目录，获取所有可用的 cookie 文件
+   * @returns {Promise<Array<string>>} - Cookie 文件路径数组
+   */
+  async scanCookieFiles() {
+    try {
+      const files = await fs.readdir(this.cookiesDir);
+      const cookieFiles = files
+        .filter(file => file.endsWith('.json'))
+        .map(file => path.join(this.cookiesDir, file));
+      return cookieFiles;
+    } catch (error) {
+      console.warn(`[CookieManager] Failed to scan cookies directory: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * 获取下一个 cookie 文件（轮换逻辑）
+   * @returns {Promise<string>} - Cookie 文件路径
+   */
+  async getNextCookieFile() {
+    // 如果还没有扫描过，先扫描
+    if (availableCookieFiles.length === 0) {
+      availableCookieFiles = await this.scanCookieFiles();
+      if (availableCookieFiles.length === 0) {
+        // 如果没有找到任何 cookie 文件，回退到主文件
+        return this.primaryCookieFile;
+      }
+    }
+
+    // 获取当前索引的文件
+    const cookieFile = availableCookieFiles[currentCookieIndex];
+
+    // 更新索引（循环）
+    currentCookieIndex = (currentCookieIndex + 1) % availableCookieFiles.length;
+
+    console.log(`[CookieManager] Rotating to cookie file ${currentCookieIndex}/${availableCookieFiles.length}: ${path.basename(cookieFile)}`);
+
+    return cookieFile;
   }
 
   /**
@@ -27,22 +75,41 @@ class CookieManager {
     let envData = null;
     let cookieSource = null;
 
-    // 首先尝试主 Cookie 文件
-    try {
-      const cookiesString = await fs.readFile(this.primaryCookieFile, 'utf-8');
-      envData = JSON.parse(cookiesString);
-      cookieSource = this.primaryCookieFile;
-    } catch (primaryError) {
-      // 如果主文件失败，尝试备用文件
+    // 如果启用了轮换，使用轮换逻辑
+    if (this.enableRotation) {
       try {
-        const cookiesString = await fs.readFile(this.fallbackCookieFile, 'utf-8');
+        cookieSource = await this.getNextCookieFile();
+        const cookiesString = await fs.readFile(cookieSource, 'utf-8');
         envData = JSON.parse(cookiesString);
-        cookieSource = this.fallbackCookieFile;
-      } catch (fallbackError) {
-        throw new Error(
-          `Failed to load cookies from both primary (${this.primaryCookieFile}) and fallback (${this.fallbackCookieFile}) locations. ` +
-          `Primary error: ${primaryError.message}. Fallback error: ${fallbackError.message}`
-        );
+      } catch (rotationError) {
+        console.warn(`[CookieManager] Rotation failed: ${rotationError.message}, falling back to primary file`);
+        // 如果轮换失败，回退到主文件
+        try {
+          const cookiesString = await fs.readFile(this.primaryCookieFile, 'utf-8');
+          envData = JSON.parse(cookiesString);
+          cookieSource = this.primaryCookieFile;
+        } catch (primaryError) {
+          throw new Error(`Failed to load cookies: ${primaryError.message}`);
+        }
+      }
+    } else {
+      // 原有逻辑：不启用轮换
+      try {
+        const cookiesString = await fs.readFile(this.primaryCookieFile, 'utf-8');
+        envData = JSON.parse(cookiesString);
+        cookieSource = this.primaryCookieFile;
+      } catch (primaryError) {
+        // 如果主文件失败，尝试备用文件
+        try {
+          const cookiesString = await fs.readFile(this.fallbackCookieFile, 'utf-8');
+          envData = JSON.parse(cookiesString);
+          cookieSource = this.fallbackCookieFile;
+        } catch (fallbackError) {
+          throw new Error(
+            `Failed to load cookies from both primary (${this.primaryCookieFile}) and fallback (${this.fallbackCookieFile}) locations. ` +
+            `Primary error: ${primaryError.message}. Fallback error: ${fallbackError.message}`
+          );
+        }
       }
     }
 
@@ -52,10 +119,15 @@ class CookieManager {
       throw new Error(`Cookie validation failed: ${cookieValidation.error}`);
     }
 
-    // 存储验证后的数据
+    // 存储验证后的数据（使用过滤后的 cookies）
     this.cookies = cookieValidation.cookies;
     this.username = cookieValidation.username;
     this.source = cookieSource;
+
+    // 如果有过滤掉的 cookie，记录信息
+    if (cookieValidation.filteredCount > 0) {
+      console.log(`[CookieManager] Filtered out ${cookieValidation.filteredCount} expired cookie(s), using ${this.cookies.length} valid cookies`);
+    }
 
     return {
       cookies: this.cookies,

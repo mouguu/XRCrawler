@@ -81,26 +81,14 @@ function validateCookies(cookies) {
 
   // 检查每个 Cookie 的有效性
   const invalidCookies = [];
-  const expiredCookies = [];
-  const now = Date.now() / 1000; // 转换为秒
+  const initialValidCookies = [];
 
   for (let i = 0; i < cookies.length; i++) {
     const cookie = cookies[i];
-
     if (!isValidCookieObject(cookie)) {
       invalidCookies.push(i);
-      continue;
-    }
-
-    // 检查是否过期
-    if (cookie.expires && typeof cookie.expires === 'number') {
-      if (cookie.expires < now) {
-        expiredCookies.push({
-          index: i,
-          name: cookie.name,
-          expires: new Date(cookie.expires * 1000).toISOString()
-        });
-      }
+    } else {
+      initialValidCookies.push(cookie);
     }
   }
 
@@ -111,18 +99,53 @@ function validateCookies(cookies) {
     };
   }
 
+  // 检查过期时间并过滤
+  const now = Date.now() / 1000; // 当前时间（秒）
+  const expiredCookies = [];
+  const validCookies = [];
+
+  initialValidCookies.forEach(cookie => {
+    // 跳过值为 -1 或 0 的 expires（这些是 session cookies，永远不会过期）
+    if (cookie.expires && cookie.expires !== -1 && cookie.expires !== 0) {
+      if (cookie.expires < now) {
+        expiredCookies.push({
+          name: cookie.name,
+          expiredAt: new Date(cookie.expires * 1000).toISOString()
+        });
+      } else {
+        validCookies.push(cookie);
+      }
+    } else {
+      // Session cookie 或无过期时间，保留
+      validCookies.push(cookie);
+    }
+  });
+
+  // 如果有过期的 cookie，记录警告但不报错
   if (expiredCookies.length > 0) {
-    const expiredInfo = expiredCookies
-      .map(c => `${c.name} (过期于 ${c.expires})`)
-      .join(', ');
+    console.warn(`[Cookie Validation] Found ${expiredCookies.length} expired cookie(s), automatically filtering them out:`);
+    expiredCookies.forEach(c => {
+      console.warn(`  - ${c.name} (expired at ${c.expiredAt})`);
+    });
+  }
+
+  // 检查是否还有足够的有效 cookie（至少需要 auth_token 或 ct0）
+  const hasAuthToken = validCookies.some(c => c.name === 'auth_token');
+  const hasCt0 = validCookies.some(c => c.name === 'ct0');
+
+  if (!hasAuthToken && !hasCt0) {
     return {
       valid: false,
-      error: `发现 ${expiredCookies.length} 个已过期的 Cookie: ${expiredInfo}`,
-      expiredCookies
+      error: 'Missing critical authentication cookies (auth_token or ct0) after filtering expired cookies. Please update your cookies.'
     };
   }
 
-  return { valid: true, validCount: cookies.length };
+  return {
+    valid: true,
+    validCount: validCookies.length,
+    cookies: validCookies,
+    filteredCount: expiredCookies.length
+  };
 }
 
 /**

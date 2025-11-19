@@ -30,7 +30,7 @@ program
   .option('-o, --output <dir>', 'Output directory', './output')
   .option('-m, --merge', 'Merge all results into a single file', false)
   .option('--merge-file <filename>', 'Merge file name', 'merged')
-.option('--format <format>', 'Export format: md/json/csv', 'md');
+  .option('--format <format>', 'Export format: md/json/csv', 'md');
 
 // Twitter命令
 program
@@ -63,12 +63,12 @@ program
         console.error('Error: Please provide Twitter username, profile URL, file, --home, or --thread');
         process.exit(1);
       }
-      
+
       // 处理 Thread 模式（优先处理，因为它是独立的功能）
       if (options.thread) {
         console.log('🧵 Thread Mode ENABLED');
         const maxReplies = parseInt(options.maxReplies) || 100;
-        
+
         const threadOptions = {
           tweetUrl: options.thread,
           maxReplies: maxReplies,
@@ -79,9 +79,9 @@ program
           exportCsv: !!options.csv,
           generateAnalysis: true
         };
-        
+
         const result = await scraper.scrapeThread(threadOptions);
-        
+
         if (result.success) {
           console.log(`✅ Thread scraping completed!`);
           console.log(`   - Original tweet: ${result.originalTweet ? 'Found' : 'Not found'}`);
@@ -94,16 +94,16 @@ program
           console.error(`❌ Thread scraping failed: ${result.error}`);
           process.exit(1);
         }
-        
+
         return; // Thread 模式完成后直接返回
       }
-      
+
       options.count = parseInt(options.count);
       options.headless = options.headless === 'true';
       const outputDir = path.resolve(options.output || './output');
       const timezoneInput = options.timezone || timeUtils.getDefaultTimezone();
       const timezone = timeUtils.resolveTimezone(timezoneInput);
-      
+
       // 确保输出目录存在
       try {
         await fileUtils.ensureDirExists(outputDir);
@@ -114,7 +114,7 @@ program
 
       console.log('🚀 Starting Twitter scraping task...');
       console.log(`⏱️ Using timezone: ${timezone}`);
-      
+
       // 辅助函数: 归一化输入为用户名
       const normalizeToUsername = (input) => {
         if (!input) return null;
@@ -131,7 +131,7 @@ program
             // 取路径第一个非空段
             const seg = u.pathname.split('/').filter(Boolean)[0] || '';
             // 排除非用户路径
-            const blocked = new Set(['home','explore','i','notifications','messages','settings','search']);
+            const blocked = new Set(['home', 'explore', 'i', 'notifications', 'messages', 'settings', 'search']);
             if (!seg || blocked.has(seg.toLowerCase())) return null;
             return seg.replace(/^@/, '');
           } catch (_) {
@@ -169,17 +169,17 @@ program
         // 我们使用一个特殊的占位符，scrape-unified.js 会识别它
         // 但实际上 scrape-unified.js 的 scrapeTwitterUsers 是设计为遍历用户名的
         // 所以我们需要稍微调整一下调用逻辑，或者把 "home" 当作一个特殊用户处理
-        
+
         // 让我们看看 scrape-unified.js 的 scrapeTwitterUsers
         // 它接受一个数组。我们可以传入 [null] 或者 ['home'] 吗？
         // scrapeTwitterUsers 会用这个名字创建目录。
-        
+
         // 更好的方式：直接调用 scrapeXFeed 或者构造一个特殊的 username 列表
         // 但 scrapeTwitterUsers 内部有循环。
-        
+
         // 让我们修改 scrape-unified.js 来更好地支持 Home，现在先暂时用一个特殊标记
         // 如果我们传入 null，scrapeTwitter 会默认去 X_HOME_URL
-        usernames.push(null); 
+        usernames.push(null);
       }
 
       // Persona 模式自动配置
@@ -187,10 +187,10 @@ program
         console.log('🧠 Persona Analysis Mode ENABLED');
         console.log('   - Auto-enabling "with_replies" to capture interactions');
         withReplies = true;
-        
+
         if (options.count === 20) { // 如果用户使用的是默认值 (数字比较)
-           console.log('   - Bumping tweet count to 100 for better analysis depth');
-           options.count = 100;
+          console.log('   - Bumping tweet count to 100 for better analysis depth');
+          options.count = 100;
         }
       }
 
@@ -213,14 +213,14 @@ program
           withReplies = lines.some(line => isWithReplies(line));
         }
       }
-      
+
       if (usernames.length === 0) {
         console.error('No valid Twitter usernames/URLs');
         process.exit(1);
       }
 
       console.log(`Will scrape ${usernames.length} Twitter accounts, up to ${options.count} tweets per account`);
-      
+
       // 设置爬虫选项
       const scraperOptions = {
         outputDir,
@@ -236,7 +236,7 @@ program
         exportJson: !!options.json,
         timezone
       };
-      
+
       // 执行抓取（统一逻辑）
       const results = await scraper.scrapeTwitterUsers(usernames, scraperOptions);
 
@@ -250,10 +250,10 @@ program
             if (!options.username && !options.url && !options.file && options.home) {
               promptType = 'feed_analysis'; // 如果是 Home 模式，改为信息流分析
             }
-            
+
             await aiExportUtils.generatePersonaAnalysis(
-              result.tweets, 
-              result.profile, 
+              result.tweets,
+              result.profile,
               result.runContext,
               promptType // 传入类型
             );
@@ -308,11 +308,11 @@ program
         console.error(`Error: Config file ${options.config} does not exist`);
         process.exit(1);
       }
-      
+
       options.headless = options.headless === 'true';
       const intervalMinutes = parseInt(options.interval);
       const outputDir = path.resolve(options.parent.output);
-      
+
       // 确保输出目录存在
       try {
         await fileUtils.ensureDirExists(outputDir);
@@ -323,19 +323,19 @@ program
 
       // 调度逻辑
       console.log(`🕒 Starting scheduled task, running every ${intervalMinutes} minutes`);
-      
+
       // 第一次立即运行
       executeScheduledTask();
-      
+
       // 设置定时器
       setInterval(executeScheduledTask, intervalMinutes * 60 * 1000);
-      
+
       // 调度执行函数
       async function executeScheduledTask() {
         try {
           const now = new Date();
           console.log(`\n[${now.toISOString()}] Executing scheduled scraping task...`);
-          
+
           // 加载配置
           const config = JSON.parse(fs.readFileSync(options.config, 'utf8'));
 
@@ -345,7 +345,7 @@ program
             timeUtils.getDefaultTimezone();
           const timezone = timeUtils.resolveTimezone(timezoneInput);
           console.log(`Timezone for this run: ${timezone}`);
-          
+
           // 基本选项
           const scraperOptions = {
             outputDir,
@@ -355,7 +355,7 @@ program
             exportFormat: options.parent.format,
             timezone
           };
-          
+
           // 仅抓取Twitter
           if (config.twitter && (config.twitter.usernames || config.twitter.usernameFile)) {
             let usernames = [];
@@ -367,18 +367,18 @@ program
                 .map(line => line.trim())
                 .filter(line => line && !line.startsWith('#'));
             }
-            
+
             if (usernames.length > 0) {
               const twitterOptions = {
                 ...scraperOptions,
                 tweetCount: config.twitter.tweetCount || 20,
                 separateFiles: config.twitter.separateFiles || false
               };
-              
+
               await scraper.scrapeTwitterUsers(usernames, twitterOptions);
             }
           }
-          
+
           console.log(`✅ Scheduled task completed!`);
         } catch (schedulerError) {
           console.error(`❌ Scheduled task error: ${schedulerError.message}`);
@@ -388,13 +388,13 @@ program
           // 不退出进程，等待下一次调度
         }
       }
-      
+
       // 辅助函数 - 获取格式化日期
       function getFormattedDate() {
         const today = new Date();
         return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
       }
-      
+
       // 保持进程活跃
       console.log('Scheduler started, press Ctrl+C to exit...');
     } catch (error) {
