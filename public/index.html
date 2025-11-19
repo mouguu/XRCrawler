@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Twitter Crawler Pro</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="background-glow"></div>
+
+    <div class="container">
+        <header>
+            <div class="logo">
+                <svg viewBox="0 0 24 24" fill="currentColor" class="twitter-icon">
+                    <path
+                        d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z">
+                    </path>
+                </svg>
+                <h1>Twitter Crawler <span class="pro-badge">Pro</span></h1>
+            </div>
+            <p class="subtitle">Advanced data extraction & analysis tool</p>
+        </header>
+
+        <main>
+            <div class="card glass-panel">
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="profile">Profile</button>
+                    <button class="tab-btn" data-tab="thread">Thread</button>
+                    <button class="tab-btn" data-tab="search">Search / Hashtag</button>
+                </div>
+
+                <div class="tab-content active" id="profile">
+                    <div class="input-group">
+                        <label>Username or Profile URL</label>
+                        <input type="text" id="profile-input" placeholder="e.g. elonmusk or https://x.com/elonmusk">
+                    </div>
+                    <div class="options-row">
+                        <div class="input-group small">
+                            <label>Limit</label>
+                            <input type="number" id="profile-limit" value="50" min="10" max="500">
+                        </div>
+                        <div class="checkbox-group">
+                            <label class="checkbox-container">
+                                <input type="checkbox" id="profile-likes">
+                                <span class="checkmark"></span>
+                                Scrape Likes
+                            </label>
+                            <label class="checkbox-container" style="margin-top: 8px;">
+                                <input type="checkbox" id="profile-merge" checked>
+                                <span class="checkmark"></span>
+                                Merge Results
+                            </label>
+                            <label class="checkbox-container" style="margin-top: 8px;">
+                                <input type="checkbox" id="profile-delete" checked>
+                                <span class="checkmark"></span>
+                                Delete Individual Files
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-content" id="thread">
+                    <div class="input-group">
+                        <label>Tweet URL</label>
+                        <input type="text" id="thread-input" placeholder="e.g. https://x.com/username/status/123456789">
+                    </div>
+                    <div class="input-group small">
+                        <label>Max Replies</label>
+                        <input type="number" id="thread-limit" value="100" min="10" max="1000">
+                    </div>
+                </div>
+
+                <div class="tab-content" id="search">
+                    <div class="input-group">
+                        <label>Search Query</label>
+                        <input type="text" id="search-input" placeholder="e.g. #AI, 'SpaceX', or 'Tesla'">
+                    </div>
+                    <div class="input-group small">
+                        <label>Limit</label>
+                        <input type="number" id="search-limit" value="50" min="10" max="500">
+                    </div>
+                    <div class="checkbox-group" style="margin-left: 20px;">
+                        <label class="checkbox-container">
+                            <input type="checkbox" id="search-merge" checked>
+                            <span class="checkmark"></span>
+                            Merge Results
+                        </label>
+                        <label class="checkbox-container" style="margin-top: 8px;">
+                            <input type="checkbox" id="search-delete" checked>
+                            <span class="checkmark"></span>
+                            Delete Individual Files
+                        </label>
+                    </div>
+                </div>
+
+                <div class="action-area">
+                    <button id="scrape-btn" class="primary-btn">
+                        <span class="btn-text">Start Scraping</span>
+                        <div class="loader hidden"></div>
+                    </button>
+                </div>
+
+                <div id="status-area" class="status-area hidden">
+                    <div class="status-icon"></div>
+                    <div class="status-text">Processing...</div>
+                </div>
+
+                <div id="result-area" class="result-area hidden">
+                    <h3>Success!</h3>
+                    <p>Data has been scraped and converted to Markdown.</p>
+                    <a id="download-link" href="#" class="download-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Download Markdown
+                    </a>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p>Powered by Antigravity Agent</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+
+</html>

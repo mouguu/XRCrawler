@@ -14,6 +14,7 @@ const dataExtractor = require('./core/data-extractor');
 
 // 工具模块
 const fileUtils = require('./utils/fileutils');
+const mergeUtils = require('./utils/merge');
 const markdownUtils = require('./utils/markdown');
 const exportUtils = require('./utils/export');
 const screenshotUtils = require('./utils/screenshot');
@@ -258,7 +259,7 @@ async function scrapeXFeed(options = {}) {
   const username = options.username;
   const limit = options.limit || 50;
   const platform = 'x';
-  
+
   // 只有在非 Home 模式下才强制需要 username
   // 我们通过判断 username 是否存在来决定
   // 但调用者可能会传入 null
@@ -269,11 +270,49 @@ async function scrapeXFeed(options = {}) {
   // }
 
   console.log(`[${platform.toUpperCase()}] Starting to scrape tweets for user ${username}, limit=${limit}...`);
-  
+
   return scrapeTwitter({
     limit: limit,
     username: username,
     withReplies: options.withReplies || false,
+    exportCsv: options.exportCsv || false,
+    exportJson: options.exportJson || false,
+    saveMarkdown: options.saveMarkdown !== false,
+    saveScreenshots: options.saveScreenshots || false,
+    runContext: options.runContext,
+    outputDir: options.outputDir,
+    mergeResults: options.mergeResults, // 传递合并选项
+    deleteMerged: options.deleteMerged // 传递删除选项
+  });
+}
+
+/**
+ * 抓取 Twitter 搜索结果 (Hashtag/Keywords)
+ * @param {Object} options
+ * @param {string} options.query - 搜索关键词 (e.g. "#AI", "Elon Musk")
+ * @param {number} options.limit - 数量
+ */
+async function scrapeSearch(options = {}) {
+  const query = options.query;
+  const limit = options.limit || 50;
+  const platform = 'x';
+
+  if (!query) {
+    return { success: false, tweets: [], error: 'Search query is required' };
+  }
+
+  console.log(`[${platform.toUpperCase()}] Starting search scrape for "${query}", limit=${limit}...`);
+
+  // 复用 scrapeTwitter，但需要它支持 search 模式
+  // 我们通过传入特殊的 username 或者增加一个 mode 参数来实现
+  // 这里我们增加一个 searchMode 参数给 scrapeTwitter
+
+  return scrapeTwitter({
+    limit: limit,
+    searchQuery: query, // 传递搜索词
+    mode: 'search',     // 标记为搜索模式
+    mergeResults: options.mergeResults, // 传递合并选项
+    deleteMerged: options.deleteMerged, // 传递删除选项
     exportCsv: options.exportCsv || false,
     exportJson: options.exportJson || false,
     saveMarkdown: options.saveMarkdown !== false,
@@ -325,7 +364,7 @@ async function scrapeTwitter(options = {}) {
   console.log(`[${platform.toUpperCase()}] Starting timeline scrape, limit=${config.limit} tweets${config.withReplies ? ' (with_replies)' : ''}...`);
   console.log(`[${platform.toUpperCase()}] Options: ${JSON.stringify(config, null, 2)}`);
 
-  const identifierForRun = config.username || 'timeline';
+  const identifierForRun = config.mode === 'search' ? `search_${config.searchQuery}` : (config.username || 'timeline');
   let runContext = config.runContext;
   if (!runContext) {
     runContext = await fileUtils.createRunContext({
@@ -347,7 +386,7 @@ async function scrapeTwitter(options = {}) {
     includeMilliseconds: true,
     includeOffset: true
   }).iso;
-  
+
   let browserManager = null;
   let page = null;
   let collectedTweets = [];
@@ -373,9 +412,21 @@ async function scrapeTwitter(options = {}) {
       return { success: false, tweets: [], error: error.message };
     }
 
-    // 确定访问URL (是主页还是特定用户)
+    // 确定访问URL (是主页还是特定用户还是搜索)
     let targetUrl = X_HOME_URL;
-    if (config.username) {
+    if (config.mode === 'search' && config.searchQuery) {
+      // 构造搜索 URL
+      // src=typed_query&f=live 表示搜索最新推文 (Live)，如果想要热门可以去掉 &f=live
+      const encodedQuery = encodeURIComponent(config.searchQuery);
+      targetUrl = `https://x.com/search?q=${encodedQuery}&src=typed_query&f=live`;
+      // 搜索模式下的 identifier
+      if (!config.username) {
+        // 如果没有指定 username (通常搜索模式没有)，我们需要更新 runContext 的 identifier
+        // 但 runContext 可能已经创建了。
+        // 实际上 identifierForRun 在上面已经决定了。
+        // 如果是 search 模式，调用者应该在外面处理好 runContext 或者 identifier
+      }
+    } else if (config.username) {
       if (config.tab === 'likes') {
         targetUrl = `https://x.com/${config.username}/likes`;
       } else if (config.withReplies || config.tab === 'replies') {
@@ -384,7 +435,7 @@ async function scrapeTwitter(options = {}) {
         targetUrl = `https://x.com/${config.username}`;
       }
     }
-    
+
     // 导航到Twitter页面
     console.log(`[${platform.toUpperCase()}] Navigating to ${targetUrl}...`);
     try {
@@ -434,7 +485,7 @@ async function scrapeTwitter(options = {}) {
     // 滚动和抓取逻辑
     let scrollAttempts = 0;
     const maxScrollAttempts = Math.max(50, Math.ceil(config.limit / 5));
-    
+
     // 首先尝试截取时间线截图（如果启用了截图功能）
     if (config.saveScreenshots) {
       try {
@@ -443,7 +494,7 @@ async function scrapeTwitter(options = {}) {
         console.warn('Timeline screenshot failed:', error.message);
       }
     }
-    
+
     while (collectedTweets.length < config.limit && scrollAttempts < maxScrollAttempts) {
       scrollAttempts++;
       console.log(`[${platform.toUpperCase()}] Scraping attempt ${scrollAttempts}...`);
@@ -454,10 +505,10 @@ async function scrapeTwitter(options = {}) {
       // 添加唯一推文到集合
       let addedInAttempt = 0;
       for (const tweet of tweetsOnPage) {
-        if (collectedTweets.length < config.limit && 
-            !scrapedUrls.has(tweet.url) && 
-            !seenUrls.has(tweet.url)) {
-          
+        if (collectedTweets.length < config.limit &&
+          !scrapedUrls.has(tweet.url) &&
+          !seenUrls.has(tweet.url)) {
+
           collectedTweets.push(tweet);
           scrapedUrls.add(tweet.url);
           seenUrls.add(tweet.url);
@@ -465,7 +516,7 @@ async function scrapeTwitter(options = {}) {
         }
         if (collectedTweets.length >= config.limit) break;
       }
-      
+
       console.log(`[${platform.toUpperCase()}] Attempt ${scrollAttempts}: Found ${tweetsOnPage.length} tweets on page, added ${addedInAttempt} new tweets. Total: ${collectedTweets.length}`);
 
       // 更新连续无新推文计数器
@@ -552,17 +603,17 @@ async function scrapeTwitter(options = {}) {
     } else if (!config.saveMarkdown) {
       console.log(`[${platform.toUpperCase()}] Markdown saving is disabled`);
     }
-    
+
     // 导出为CSV（如果启用）
     if (config.exportCsv && collectedTweets.length > 0) {
       await exportUtils.exportToCsv(collectedTweets, runContext);
     }
-    
+
     // 导出为JSON（如果启用）
     if (config.exportJson && collectedTweets.length > 0) {
       await exportUtils.exportToJson(collectedTweets, runContext);
     }
-    
+
     // 截图（如果启用）
     let screenshotPaths = [];
     if (config.saveScreenshots && collectedTweets.length > 0) {
@@ -604,6 +655,54 @@ async function scrapeTwitter(options = {}) {
       }
     };
 
+    // 处理合并逻辑 (如果是单次运行且要求合并)
+    // 注意：通常 merge 是在 scrapeTwitterUsers 批量结束后做的
+    // 但如果用户只想跑这一个并且要合并（虽然只有一个文件合并没意义，但为了统一逻辑）
+    // 或者，我们只在 scrapeTwitterUsers 里做合并。
+    // 让我们看看 scrapeTwitterUsers。
+
+    // 实际上，scrapeTwitter 是针对单个用户的。
+    // 如果我们在 scrapeTwitterUsers 里循环调用 scrapeTwitter，
+    // 那么每个 scrapeTwitter 都会生成一个 runDir。
+    // 如果我们要合并，应该是合并这个 runDir 下的所有 markdown？
+    // 不，通常是把多个用户的推文合并到一个文件。
+
+    // 但是，根据用户的需求 "删除单个的md文件"，这通常是指：
+    // 抓取了一个用户 -> 生成了 tweets.md (或者多个分片) -> 合并成一个 -> 删除分片？
+    // 或者是：抓取了多个用户 -> 每个用户有自己的 md -> 合并所有用户 -> 删除每个用户的 md？
+
+    // 让我们看 mergeUtils.mergeMarkdownFiles 的定义：
+    // 它合并 sourceDir 下的所有 md 文件。
+
+    // 如果 config.mergeResults 为 true，且我们在 scrapeTwitter 内部：
+    // 这里的 collectedTweets 已经被 saveTweetsAsMarkdown 保存到了 runContext.markdownDir 下。
+    // 如果 saveTweetsAsMarkdown 生成了多个文件（比如按月分片），那么合并是有意义的。
+    // 如果只生成了一个 tweets.md，那合并就是复制一遍。
+
+    // 假设用户意图是：在 Web UI 上点 "Scrape"，抓取完后，得到一个 MD 文件。
+    // 现有的逻辑是：saveTweetsAsMarkdown 会生成 `tweets.md` (或者 `tweets_01.md` 等)。
+    // 如果我们启用了 merge，我们应该调用 mergeUtils。
+
+    if (config.mergeResults) {
+      console.log(`[DEBUG] scrapeTwitter: Calling mergeMarkdownFiles with deleteMerged=${config.deleteMerged}`);
+      const mergedPath = await mergeUtils.mergeMarkdownFiles(
+        runContext.markdownDir,
+        runContext.runDir,
+        platform,
+        config.deleteMerged // 传递删除标志
+      );
+      if (mergedPath) {
+        // 更新 metadata 指向合并后的文件
+        metadata.output.mergedPath = mergedPath;
+        // 如果删除了源文件，更新 metadata
+        if (config.deleteMerged) {
+          metadata.output.markdownDir = null; // 标记为已清理
+        }
+        // 让前端知道下载哪个文件
+        runContext.markdownIndexPath = mergedPath;
+      }
+    }
+
     try {
       await fs.promises.writeFile(runContext.metadataPath, JSON.stringify(metadata, null, 2), 'utf-8');
     } catch (metaError) {
@@ -612,8 +711,8 @@ async function scrapeTwitter(options = {}) {
 
     console.log(`[${platform.toUpperCase()}] Output directory for this scraping run: ${runContext.runDir}`);
 
-    return { 
-      success: true, 
+    return {
+      success: true,
       tweets: collectedTweets,
       count: collectedTweets.length,
       screenshotPaths,
@@ -653,8 +752,8 @@ async function scrapeTwitterUsers(usernames, options = {}) {
   for (let i = 0; i < usernames.length; i++) {
     const username = usernames[i];
     const displayName = username || 'home_timeline';
-    console.log(`[${i+1}/${usernames.length}] Scraping tweets from ${displayName}`);
-    
+    console.log(`[${i + 1}/${usernames.length}] Scraping tweets from ${displayName}`);
+
     try {
       const runContext = await fileUtils.createRunContext({
         platform: 'twitter',
@@ -668,12 +767,14 @@ async function scrapeTwitterUsers(usernames, options = {}) {
         timezone: resolvedTimezone,
         username: username, // 这里保留 null
         limit: options.tweetCount || 20,
+        mergeResults: options.mergeResults, // 传递合并选项
+        deleteMerged: options.deleteMerged, // 传递删除选项
         runContext
       };
-      
+
       // 1. 抓取主页/回复
       const result = await scrapeXFeed(userOptions);
-      
+
       // 2. 如果启用了 Likes 抓取，额外抓取 Likes
       let likesResult = null;
       if (options.scrapeLikes && username) { // 只有指定了用户才能抓 Like
@@ -681,27 +782,27 @@ async function scrapeTwitterUsers(usernames, options = {}) {
         // 复用同一个 runContext，但可能需要区分文件？
         // 为了简单，我们把 Likes 放在同一个 run 目录下，但文件名不同
         // 或者，我们可以把 Likes 视为一种特殊的 "tweets"
-        
+
         // 我们需要稍微修改 scrapeTwitter 让他知道这是 Likes
         // 但目前的架构是把所有东西都存为 tweets.json/md
         // 我们可以创建一个子目录或者前缀
-        
+
         // 实际上，为了 AI 分析方便，我们最好把 Likes 存到一个单独的变量里，最后合并
         // 但 scrapeXFeed 是直接写文件的。
-        
+
         // 方案：再次调用 scrapeXFeed，但是传入 tab='likes'
         // 并且修改 runContext 或者 output 路径，以免覆盖？
         // 不，我们可以让 scrapeTwitter 支持追加模式，或者我们接受覆盖（不推荐）
-        
+
         // 更好的方案：
         // 我们让 scrapeTwitter 返回 tweets 数组，我们在这一层做合并？
         // 不行，因为 scrapeTwitter 内部已经写文件了。
-        
+
         // 让我们简单点：
         // 如果抓取 Likes，我们生成一个单独的 markdown 文件 "likes.md"
         // 我们需要修改 scrapeTwitter 让它支持自定义输出文件名吗？
         // 或者我们只是把 Likes 的结果拿回来，手动处理 AI Export。
-        
+
         const likesOptions = {
           ...userOptions,
           tab: 'likes',
@@ -710,12 +811,12 @@ async function scrapeTwitterUsers(usernames, options = {}) {
           exportCsv: false,
           exportJson: false
         };
-        
+
         likesResult = await scrapeXFeed(likesOptions);
         if (likesResult.success) {
-           console.log(`[Likes] Successfully scraped ${likesResult.tweets.length} liked tweets.`);
-           // 标记这些推文为 [LIKED]
-           likesResult.tweets.forEach(t => t.isLiked = true);
+          console.log(`[Likes] Successfully scraped ${likesResult.tweets.length} liked tweets.`);
+          // 标记这些推文为 [LIKED]
+          likesResult.tweets.forEach(t => t.isLiked = true);
         }
       }
 
@@ -735,7 +836,7 @@ async function scrapeTwitterUsers(usernames, options = {}) {
           runDir: result.runContext?.runDir,
           runContext: result.runContext
         });
-        
+
         if (result.runContext?.runDir) {
           console.log(`Successfully scraped ${result.tweets.length} tweets from ${username ? '@' + username : 'Home Timeline'}, output directory: ${result.runContext.runDir}`);
         } else {
@@ -763,11 +864,11 @@ async function scrapeTwitterUsers(usernames, options = {}) {
     // 添加间隔，避免触发限流
     if (i < usernames.length - 1) {
       const delay = options.delay || constants.BATCH_USER_DELAY;
-      console.log(`Waiting ${delay/1000} seconds before continuing to next user...`);
+      console.log(`Waiting ${delay / 1000} seconds before continuing to next user...`);
       await throttle(delay);
     }
   }
-  
+
   return results;
 }
 
@@ -826,13 +927,13 @@ function startScheduler(options = {}) {
       isScraping = false;
     }
   }
-  
+
   // 立即执行一次
   performScrape();
-  
+
   // 设置定时器
   intervalId = setInterval(performScrape, config.interval);
-  
+
   // 返回控制对象
   return {
     stop: () => {
@@ -861,9 +962,10 @@ module.exports = {
   scrapeTwitter,
   scrapeXFeed,
   scrapeTwitterUsers,
+  scrapeSearch,
   scrapeThread, // 新增：线程抓取
 
   // 调度器功能
   startScheduler,
   runScheduler
-}; 
+};

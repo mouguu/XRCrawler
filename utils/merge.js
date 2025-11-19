@@ -28,11 +28,11 @@ async function getUsernameFromEnv() {
     }
     // 兼容旧格式或仅包含 cookie 的数组格式
     if (Array.isArray(envData)) {
-        // 尝试从 cookie 中找 'username' (不太可靠，但可以试试)
-        const usernameCookie = envData.find(c => c.name === 'username');
-        if (usernameCookie) {
-             return usernameCookie.value;
-        }
+      // 尝试从 cookie 中找 'username' (不太可靠，但可以试试)
+      const usernameCookie = envData.find(c => c.name === 'username');
+      if (usernameCookie) {
+        return usernameCookie.value;
+      }
     }
     console.warn("'username' field not found in env.json.");
     return null;
@@ -55,18 +55,19 @@ async function getUsernameFromEnv() {
 async function mergeMarkdownFiles(sourceDir, outputDir, platform, deleteSourceFiles = false) {
   // Validate required parameters
   if (!sourceDir || !outputDir || !platform) {
-      console.error('mergeMarkdownFiles missing required parameters: sourceDir, outputDir, platform');
-      return null;
+    console.error('mergeMarkdownFiles missing required parameters: sourceDir, outputDir, platform');
+    return null;
   }
 
   try {
     console.log(`[${platform.toUpperCase()}] Starting to merge Markdown files from ${sourceDir}...`);
+    console.log(`[DEBUG] mergeMarkdownFiles called with deleteSourceFiles=${deleteSourceFiles}`);
     await fileUtils.ensureBaseStructure(); // Ensures base dirs exist
     await fs.mkdir(outputDir, { recursive: true }); // Ensure specific output dir exists
-    
+
     // 获取所有符合条件的Markdown文件
     const mdFiles = await fileUtils.getMarkdownFiles(sourceDir); // Pass sourceDir
-    
+
     if (mdFiles.length === 0) {
       console.log(`[${platform.toUpperCase()}] No Markdown files found to merge in ${sourceDir}`);
       return null;
@@ -76,7 +77,7 @@ async function mergeMarkdownFiles(sourceDir, outputDir, platform, deleteSourceFi
     mdFiles.sort((a, b) => path.basename(b).localeCompare(path.basename(a)));
 
     console.log(`[${platform.toUpperCase()}] Found ${mdFiles.length} Markdown files ready to merge`);
-    
+
     // -- 开始构建元数据 --
     const mergeTime = new Date();
     const username = await getUsernameFromEnv(); // Username might be specific to platform if needed
@@ -93,25 +94,25 @@ async function mergeMarkdownFiles(sourceDir, outputDir, platform, deleteSourceFi
       username ? `accountUsername: ${username}` : '# accountUsername: (not found in env.json/medium-cookies.json)',
       `totalItemsMerged: ${mdFiles.length}`,
       '---',
-      '\n' 
+      '\n'
     ].join('\n');
     // -- 元数据构建结束 --
 
     // 读取所有文件内容并添加索引后拼接
     let allItemsContent = ''; // Renamed variable
-    const separator = '\n\n---\n\n'; 
+    const separator = '\n\n---\n\n';
     let itemIndex = 1; // Renamed variable
-    
+
     for (const file of mdFiles) {
       const content = await fs.readFile(file, 'utf-8');
       // Add index before the content of each file
       allItemsContent += `## ${itemIndex}.\n\n${content}${separator}`;
-      itemIndex++; 
+      itemIndex++;
     }
-    
+
     // 清理末尾多余的分隔符
     if (allItemsContent.endsWith(separator)) {
-        allItemsContent = allItemsContent.slice(0, -separator.length);
+      allItemsContent = allItemsContent.slice(0, -separator.length);
     }
 
     // 合并元数据和内容
@@ -129,8 +130,8 @@ async function mergeMarkdownFiles(sourceDir, outputDir, platform, deleteSourceFi
       for (const file of mdFiles) {
         // Safety check (redundant due to initial filter but safe)
         if (path.basename(file).startsWith('merged-') || path.basename(file).startsWith('digest-')) {
-            console.warn(`[${platform.toUpperCase()}] Skipping deletion of protected file: ${file}`);
-            continue;
+          console.warn(`[${platform.toUpperCase()}] Skipping deletion of protected file: ${file}`);
+          continue;
         }
         try {
           await fs.unlink(file);
@@ -205,8 +206,8 @@ function formatMediumForConvergence(article, index) {
  */
 async function mergeAllPlatforms(twitterResults = [], mediumResults = [], outputDir = DEFAULT_CONVERGENCE_DIR) {
   const allItems = [
-      ...twitterResults.map(item => ({ ...item, platform: 'x' })),
-      ...mediumResults.map(item => ({ ...item, platform: 'medium' }))
+    ...twitterResults.map(item => ({ ...item, platform: 'x' })),
+    ...mediumResults.map(item => ({ ...item, platform: 'medium' }))
   ];
 
   if (allItems.length === 0) {
@@ -216,9 +217,9 @@ async function mergeAllPlatforms(twitterResults = [], mediumResults = [], output
 
   // Sort all items by date (time for tweets, publishedDate or scrape time for articles)
   allItems.sort((a, b) => {
-      const dateA = new Date(a.time || a.publishedDate || Date.now()); // Fallback needed
-      const dateB = new Date(b.time || b.publishedDate || Date.now());
-      return dateB - dateA; // Sort descending (newest first)
+    const dateA = new Date(a.time || a.publishedDate || Date.now()); // Fallback needed
+    const dateB = new Date(b.time || b.publishedDate || Date.now());
+    return dateB - dateA; // Sort descending (newest first)
   });
 
   console.log(`[Convergence] Starting to merge ${allItems.length} items (from ${twitterResults.length} X, ${mediumResults.length} Medium)...`);
@@ -252,14 +253,14 @@ async function mergeAllPlatforms(twitterResults = [], mediumResults = [], output
   for (const item of allItems) {
     let formattedItem = '';
     if (item.platform === 'x') {
-        formattedItem = formatTweetForConvergence(item, itemIndex);
+      formattedItem = formatTweetForConvergence(item, itemIndex);
     } else if (item.platform === 'medium') {
-        formattedItem = formatMediumForConvergence(item, itemIndex);
+      formattedItem = formatMediumForConvergence(item, itemIndex);
     }
-    
+
     if (formattedItem) {
-        finalContent += formattedItem + separator;
-        itemIndex++;
+      finalContent += formattedItem + separator;
+      itemIndex++;
     }
   }
 
@@ -275,8 +276,8 @@ async function mergeAllPlatforms(twitterResults = [], mediumResults = [], output
     console.log(`[Convergence] ✅ Convergence file saved successfully: ${mergedFilename}`);
     return mergedFilePath;
   } catch (error) {
-      console.error(`[Convergence] Failed to save convergence file:`, error.message);
-      return null;
+    console.error(`[Convergence] Failed to save convergence file:`, error.message);
+    return null;
   }
 }
 
