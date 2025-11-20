@@ -3,7 +3,7 @@
  * 提供统一的时区格式化工具，确保输出符合用户所在时区。
  */
 
-const DEFAULT_TIMEZONE =
+const DEFAULT_TIMEZONE: string =
   process.env.TWITTER_CRAWLER_TIMEZONE ||
   process.env.TWITTER_CRAWLER_TZ ||
   process.env.TZ ||
@@ -11,10 +11,8 @@ const DEFAULT_TIMEZONE =
 
 /**
  * 判断给定字符串是否为有效的 IANA 时区。
- * @param {string} timezone
- * @returns {boolean}
  */
-function isValidTimezone(timezone) {
+export function isValidTimezone(timezone: string | null | undefined): boolean {
   try {
     if (!timezone) return false;
     // Intl 会在遇到非法时区时抛出异常
@@ -27,18 +25,15 @@ function isValidTimezone(timezone) {
 
 /**
  * 返回默认的时区配置。
- * @returns {string}
  */
-function getDefaultTimezone() {
+export function getDefaultTimezone(): string {
   return DEFAULT_TIMEZONE;
 }
 
 /**
  * 解析并返回有效的时区字符串，非法值会降级为默认时区。
- * @param {string} [timezone]
- * @returns {string}
  */
-function resolveTimezone(timezone) {
+export function resolveTimezone(timezone?: string): string {
   if (!timezone) {
     return DEFAULT_TIMEZONE;
   }
@@ -55,10 +50,8 @@ function resolveTimezone(timezone) {
 
 /**
  * 将 "GMT+9:30" 等偏移量转换为 "+09:30" 形式。
- * @param {string} rawOffset
- * @returns {string}
  */
-function normalizeOffset(rawOffset) {
+function normalizeOffset(rawOffset: string): string {
   if (!rawOffset) {
     return '+00:00';
   }
@@ -86,16 +79,26 @@ function normalizeOffset(rawOffset) {
   return `${sign}${hours}:${minutes}`;
 }
 
+interface FormatOptions {
+  includeMilliseconds?: boolean;
+  includeOffset?: boolean;
+}
+
+interface ZonedTimestamp {
+  iso: string;
+  fileSafe: string;
+  offset: string;
+  parts: Record<string, string>;
+}
+
 /**
  * 按时区格式化日期，返回 ISO 字符串以及适合文件名的版本。
- * @param {Date|string|number} dateInput
- * @param {string} [timezone]
- * @param {Object} [options]
- * @param {boolean} [options.includeMilliseconds=true]
- * @param {boolean} [options.includeOffset=true]
- * @returns {{ iso: string, fileSafe: string, offset: string, parts: Record<string,string> }}
  */
-function formatZonedTimestamp(dateInput, timezone, options = {}) {
+export function formatZonedTimestamp(
+  dateInput: Date | string | number,
+  timezone?: string,
+  options: FormatOptions = {}
+): ZonedTimestamp {
   const date =
     dateInput instanceof Date ? dateInput : new Date(dateInput ?? Date.now());
 
@@ -121,7 +124,7 @@ function formatZonedTimestamp(dateInput, timezone, options = {}) {
   });
 
   const parts = baseFormatter.formatToParts(date);
-  const partMap = {};
+  const partMap: Record<string, string> = {};
   parts.forEach(({ type, value }) => {
     if (type !== 'literal') {
       partMap[type] = value;
@@ -133,7 +136,7 @@ function formatZonedTimestamp(dateInput, timezone, options = {}) {
     : null;
 
   let iso = `${partMap.year}-${partMap.month}-${partMap.day}T${partMap.hour}:${partMap.minute}:${partMap.second}`;
-  if (includeMilliseconds) {
+  if (includeMilliseconds && millis) {
     iso += `.${millis}`;
   }
 
@@ -166,11 +169,8 @@ function formatZonedTimestamp(dateInput, timezone, options = {}) {
 
 /**
  * 生成易读的本地时间字符串，例如 "2025-10-21 13:19:52 (-04:00)"。
- * @param {Date|string|number} dateInput
- * @param {string} [timezone]
- * @returns {string}
  */
-function formatReadableLocal(dateInput, timezone) {
+export function formatReadableLocal(dateInput: Date | string | number, timezone?: string): string {
   const { iso, offset } = formatZonedTimestamp(dateInput, timezone, {
     includeMilliseconds: false,
     includeOffset: true
@@ -178,10 +178,3 @@ function formatReadableLocal(dateInput, timezone) {
   const base = iso.endsWith(offset) ? iso.slice(0, iso.length - offset.length) : iso;
   return `${base.replace('T', ' ')} (${offset})`;
 }
-
-module.exports = {
-  getDefaultTimezone,
-  resolveTimezone,
-  formatZonedTimestamp,
-  formatReadableLocal
-};

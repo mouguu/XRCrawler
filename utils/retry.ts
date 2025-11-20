@@ -3,28 +3,28 @@
  * 提供指数退避重试功能，用于处理网络请求和其他可能失败的操作
  */
 
+import { Page, WaitForSelectorOptions, GoToOptions } from 'puppeteer';
+
 /**
  * 延迟函数
- * @param {number} ms - 延迟毫秒数
- * @returns {Promise<void>}
  */
-function sleep(ms) {
+export function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export interface RetryOptions {
+  maxRetries?: number;
+  baseDelay?: number;
+  maxDelay?: number;
+  delay?: number;
+  onRetry?: (error: any, attempt: number) => void;
+  shouldRetry?: (error: any) => boolean;
 }
 
 /**
  * 使用指数退避策略重试异步函数
- * @param {Function} fn - 要执行的异步函数
- * @param {Object} options - 重试选项
- * @param {number} options.maxRetries - 最大重试次数，默认3次
- * @param {number} options.baseDelay - 基础延迟时间（毫秒），默认1000ms
- * @param {number} options.maxDelay - 最大延迟时间（毫秒），默认30000ms
- * @param {Function} options.onRetry - 重试时的回调函数，接收 (error, attempt) 参数
- * @param {Function} options.shouldRetry - 判断是否应该重试的函数，接收 error 参数，返回 boolean
- * @returns {Promise<any>} - 函数执行结果
- * @throws {Error} - 如果所有重试都失败，抛出最后一次的错误
  */
-async function retryWithBackoff(fn, options = {}) {
+export async function retryWithBackoff<T>(fn: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
   const {
     maxRetries = 3,
     baseDelay = 1000,
@@ -33,13 +33,13 @@ async function retryWithBackoff(fn, options = {}) {
     shouldRetry = null
   } = options;
 
-  let lastError;
+  let lastError: any;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       // 执行函数
       return await fn();
-    } catch (error) {
+    } catch (error: any) {
       lastError = error;
 
       // 检查是否应该重试
@@ -73,15 +73,8 @@ async function retryWithBackoff(fn, options = {}) {
 
 /**
  * 使用线性退避策略重试异步函数
- * @param {Function} fn - 要执行的异步函数
- * @param {Object} options - 重试选项
- * @param {number} options.maxRetries - 最大重试次数，默认3次
- * @param {number} options.delay - 每次重试的延迟时间（毫秒），默认1000ms
- * @param {Function} options.onRetry - 重试时的回调函数
- * @param {Function} options.shouldRetry - 判断是否应该重试的函数
- * @returns {Promise<any>}
  */
-async function retryWithLinearBackoff(fn, options = {}) {
+export async function retryWithLinearBackoff<T>(fn: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
   const {
     maxRetries = 3,
     delay = 1000,
@@ -89,12 +82,12 @@ async function retryWithLinearBackoff(fn, options = {}) {
     shouldRetry = null
   } = options;
 
-  let lastError;
+  let lastError: any;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
-    } catch (error) {
+    } catch (error: any) {
       lastError = error;
 
       if (shouldRetry && !shouldRetry(error)) {
@@ -119,10 +112,8 @@ async function retryWithLinearBackoff(fn, options = {}) {
 
 /**
  * 判断错误是否可以重试的辅助函数
- * @param {Error} error - 错误对象
- * @returns {boolean} - 是否应该重试
  */
-function isRetryableError(error) {
+export function isRetryableError(error: any): boolean {
   const message = error.message.toLowerCase();
 
   // 网络相关的错误
@@ -150,20 +141,20 @@ function isRetryableError(error) {
 
   // 检查是否包含可重试的错误信息
   const hasRetryableMessage = networkErrors.some(err => message.includes(err)) ||
-                              temporaryErrors.some(err => message.includes(err));
+    temporaryErrors.some(err => message.includes(err));
 
   return hasRetryableMessage;
 }
 
 /**
  * 包装 Puppeteer 页面导航的重试函数
- * @param {Object} page - Puppeteer 页面对象
- * @param {string} url - 要导航的 URL
- * @param {Object} navigationOptions - 导航选项
- * @param {Object} retryOptions - 重试选项
- * @returns {Promise<void>}
  */
-async function retryPageGoto(page, url, navigationOptions = {}, retryOptions = {}) {
+export async function retryPageGoto(
+  page: Page,
+  url: string,
+  navigationOptions: GoToOptions = {},
+  retryOptions: RetryOptions = {}
+): Promise<any> {
   return retryWithBackoff(
     () => page.goto(url, navigationOptions),
     {
@@ -180,13 +171,13 @@ async function retryPageGoto(page, url, navigationOptions = {}, retryOptions = {
 
 /**
  * 包装 Puppeteer 等待选择器的重试函数
- * @param {Object} page - Puppeteer 页面对象
- * @param {string} selector - 选择器
- * @param {Object} waitOptions - 等待选项
- * @param {Object} retryOptions - 重试选项
- * @returns {Promise<void>}
  */
-async function retryWaitForSelector(page, selector, waitOptions = {}, retryOptions = {}) {
+export async function retryWaitForSelector(
+  page: Page,
+  selector: string,
+  waitOptions: WaitForSelectorOptions = {},
+  retryOptions: RetryOptions = {}
+): Promise<any> {
   return retryWithBackoff(
     () => page.waitForSelector(selector, waitOptions),
     {
@@ -200,12 +191,3 @@ async function retryWaitForSelector(page, selector, waitOptions = {}, retryOptio
     }
   );
 }
-
-module.exports = {
-  sleep,
-  retryWithBackoff,
-  retryWithLinearBackoff,
-  isRetryableError,
-  retryPageGoto,
-  retryWaitForSelector
-};

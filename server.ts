@@ -1,7 +1,9 @@
-const express = require('express');
-const path = require('path');
-const fs = require('fs');
-const scraper = require('./scrape-unified');
+import express, { Request, Response } from 'express';
+import * as path from 'path';
+import * as fs from 'fs';
+import * as scraper from './scrape-unified';
+import eventBusInstance from './core/event-bus';
+import { ScrapeProgressData, LogMessageData } from './core/event-bus';
 
 const app = express();
 const PORT = 3000;
@@ -9,15 +11,13 @@ const PORT = 3000;
 // Global state for manual stop
 let isScrapingActive = false;
 let shouldStopScraping = false;
-let currentScrapingData = null;
-let progressClients = []; // SSE clients for progress updates
 
 // Middleware
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // API: Scrape
-app.post('/api/scrape', async (req, res) => {
+app.post('/api/scrape', async (req: Request, res: Response) => {
     try {
         const { type, input, limit = 50, likes = false, mergeResults = false, deleteMerged = false, clearCache = false } = req.body;
 
@@ -25,10 +25,6 @@ app.post('/api/scrape', async (req, res) => {
 
         // Handle cache clearing for specific target
         if (clearCache) {
-            // fs and path are already required at the top, but keeping these here as per instruction
-            const fs = require('fs');
-            const path = require('path');
-
             // Extract username from input
             let targetIdentifier = input;
             if (input.includes('x.com/') || input.includes('twitter.com/')) {
@@ -54,9 +50,8 @@ app.post('/api/scrape', async (req, res) => {
         // Reset stop flag and set active state
         shouldStopScraping = false;
         isScrapingActive = true;
-        currentScrapingData = null;
 
-        let result;
+        let result: any;
 
         if (type === 'profile') {
             // Profile Scrape
@@ -68,12 +63,8 @@ app.post('/api/scrape', async (req, res) => {
                 saveMarkdown: true,
                 mergeResults,
                 deleteMerged,
-                clearCache  // ← 添加 clearCache 参数
+                clearCache
             });
-            // scrapeXFeed returns an array of results (one per user)
-            if (Array.isArray(result) && result.length > 0) {
-                result = result[0]; // Take the first result
-            }
 
         } else if (type === 'thread') {
             // Thread Scrape
@@ -96,11 +87,7 @@ app.post('/api/scrape', async (req, res) => {
             return res.status(400).json({ error: 'Invalid scrape type' });
         }
 
-        if (result && (result.success || (Array.isArray(result) && result.length > 0))) {
-            // Determine the output file path
-            // The scraper logic puts files in ./output/twitter/<id>/run-XXX/
-            // We need to find the generated markdown file to send back to the frontend
-
+        if (result && result.success) {
             console.log('[DEBUG] Scrape result:', JSON.stringify({
                 success: result.success,
                 hasRunContext: !!result.runContext,
@@ -110,12 +97,7 @@ app.post('/api/scrape', async (req, res) => {
                 markdownIndexPath: result.runContext?.markdownIndexPath
             }, null, 2));
 
-            let runContext = result.runContext;
-            // For profile scrape, result is an object inside an array
-            if (!runContext && result.tweets) {
-                // It might be the object itself
-                runContext = result.runContext;
-            }
+            const runContext = result.runContext;
 
             if (runContext && runContext.markdownIndexPath) {
                 // Success
@@ -139,14 +121,14 @@ app.post('/api/scrape', async (req, res) => {
 
         } else {
             // Error
-            console.error('Scraping failed:', result.error || 'Unknown error');
+            console.error('Scraping failed:', result?.error || 'Unknown error');
             return res.status(500).json({
                 success: false,
-                error: result.error || 'Scraping failed'
+                error: result?.error || 'Scraping failed'
             });
         }
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('Server error:', error.message);
         res.status(500).json({
             success: false,
@@ -160,7 +142,7 @@ app.post('/api/scrape', async (req, res) => {
 });
 
 // API: Manual Stop
-app.post('/api/stop', (req, res) => {
+app.post('/api/stop', (req: Request, res: Response) => {
     console.log('Received manual stop request');
 
     if (!isScrapingActive) {
@@ -180,43 +162,49 @@ app.post('/api/stop', (req, res) => {
 });
 
 // API: Progress Stream (SSE)
-app.get('/api/progress', (req, res) => {
+app.get('/api/progress', (req: Request, res: Response) => {
     // Set SSE headers
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    // Add client to tracking list
-    progressClients.push(res);
-    console.log(`[SSE] Client connected. Total clients: ${progressClients.length}`);
-
     // Send initial message
     res.write(`data: ${JSON.stringify({ type: 'connected', message: 'Progress stream connected' })}\n\n`);
 
-    // Remove client on disconnect
+    // Listener for progress events
+    const onProgress = (data: ScrapeProgressData) => {
+        res.write(`data: ${JSON.stringify({ type: 'progress', ...data })}\n\n`);
+    };
+
+    const onLog = (data: LogMessageData) => {
+        res.write(`data: ${JSON.stringify({ type: 'log', ...data })}\n\n`);
+    };
+
+    const onError = (error: Error) => {
+        console.error('[Scraper Error]', error);
+        res.write(`data: ${JSON.stringify({ type: 'log', level: 'error', message: error.message })}\n\n`);
+    };
+
+    eventBusInstance.on('scrape:progress', onProgress);
+    eventBusInstance.on('log:message', onLog);
+    eventBusInstance.on('scrape:error', onError);
+
+    // Remove listeners on disconnect
     req.on('close', () => {
-        progressClients = progressClients.filter(client => client !== res);
-        console.log(`[SSE] Client disconnected. Total clients: ${progressClients.length}`);
+        eventBusInstance.off('scrape:progress', onProgress);
+        eventBusInstance.off('log:message', onLog);
+        eventBusInstance.off('scrape:error', onError);
+        console.log('[SSE] Client disconnected');
     });
 });
 
-// Helper function to broadcast progress
-function broadcastProgress(data) {
-    const message = `data: ${JSON.stringify(data)}\n\n`;
-    progressClients.forEach(client => {
-        try {
-            client.write(message);
-        } catch (error) {
-            console.error('[SSE] Error sending to client:', error.message);
-        }
-    });
+// Helper function to broadcast progress (Deprecated, kept for compatibility)
+export function broadcastProgress(data: ScrapeProgressData): void {
+    eventBusInstance.emitProgress(data);
 }
 
-// Export for use in scraper
-module.exports.broadcastProgress = broadcastProgress;
-
 // API: Get scraping status
-app.get('/api/status', (req, res) => {
+app.get('/api/status', (req: Request, res: Response) => {
     res.json({
         isActive: isScrapingActive,
         shouldStop: shouldStopScraping
@@ -224,17 +212,14 @@ app.get('/api/status', (req, res) => {
 });
 
 // API: Download
-app.get('/api/download', (req, res) => {
-    const filePath = req.query.path;
+app.get('/api/download', (req: Request, res: Response) => {
+    const filePath = req.query.path as string;
     if (!filePath || !fs.existsSync(filePath)) {
         return res.status(404).send('File not found');
     }
 
     // Generate a better filename
     const basename = path.basename(filePath);
-    // If it's a merged file, it already has a good name (merged-x-date-time.md)
-    // But user wants to avoid "index".
-    // If the file is "tweets.md" (default from saveTweetsAsMarkdown), we should rename it.
 
     let downloadName = basename;
     if (basename === 'tweets.md' || basename === 'index.md') {
@@ -251,6 +236,6 @@ app.listen(PORT, () => {
 });
 
 // Export stop flag for scraper to check
-module.exports = {
-    getShouldStopScraping: () => shouldStopScraping
-};
+export function getShouldStopScraping(): boolean {
+    return shouldStopScraping;
+}

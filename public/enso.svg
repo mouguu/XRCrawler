@@ -1,0 +1,14 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Organic Enso Circle -->
+  <path d="M54 32C54 19.8497 44.1503 10 32 10C19.8497 10 10 19.8497 10 32C10 44.1503 19.8497 54 32 54C39.5 54 46 50 50 44" 
+        stroke="#a65e4e" 
+        stroke-width="3" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"/>
+  <!-- Subtle inner detail -->
+  <path d="M48 32C48 23.1634 40.8366 16 32 16" 
+        stroke="#a65e4e" 
+        stroke-width="1" 
+        stroke-opacity="0.5"
+        stroke-linecap="round"/>
+</svg>

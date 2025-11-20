@@ -3,19 +3,24 @@
  * 在新的运行目录结构中导出 CSV 与 JSON
  */
 
-const fs = require('fs').promises;
-const path = require('path');
-const fileUtils = require('./fileutils');
+import { promises as fs } from 'fs';
+import * as path from 'path';
+import * as fileUtils from './fileutils';
+import { RunContext } from './fileutils';
+import { Tweet } from './markdown';
+
+export interface ExportOptions {
+  filename?: string;
+}
 
 /**
  * 导出推文数据为 CSV
- * @param {Array<Object>} tweets
- * @param {Object} runContext
- * @param {Object} [options]
- * @param {string} [options.filename='tweets.csv']
- * @returns {Promise<string|null>}
  */
-async function exportToCsv(tweets, runContext, options = {}) {
+export async function exportToCsv(
+  tweets: Tweet[],
+  runContext: RunContext,
+  options: ExportOptions = {}
+): Promise<string | null> {
   if (!Array.isArray(tweets) || tweets.length === 0) {
     console.log('No tweet data to export as CSV');
     return null;
@@ -60,13 +65,12 @@ async function exportToCsv(tweets, runContext, options = {}) {
 
 /**
  * 导出推文数据为 JSON
- * @param {Array<Object>} tweets
- * @param {Object} runContext
- * @param {Object} [options]
- * @param {string} [options.filename='tweets.json']
- * @returns {Promise<string|null>}
  */
-async function exportToJson(tweets, runContext, options = {}) {
+export async function exportToJson(
+  tweets: Tweet[],
+  runContext: RunContext,
+  options: ExportOptions = {}
+): Promise<string | null> {
   if (!Array.isArray(tweets) || tweets.length === 0) {
     console.log('No tweet data to export as JSON');
     return null;
@@ -87,8 +91,3 @@ async function exportToJson(tweets, runContext, options = {}) {
   console.log(`✅ JSON exported successfully: ${jsonPath}`);
   return jsonPath;
 }
-
-module.exports = {
-  exportToCsv,
-  exportToJson
-};

@@ -3,12 +3,16 @@
  * 提供输入验证、Cookie 验证等功能
  */
 
+interface ValidationResult {
+  valid: boolean;
+  error?: string;
+  normalized?: string;
+}
+
 /**
  * 验证 Twitter 用户名格式
- * @param {string} username - 用户名
- * @returns {Object} - { valid: boolean, error?: string, normalized?: string }
  */
-function validateTwitterUsername(username) {
+export function validateTwitterUsername(username: any): ValidationResult {
   if (!username) {
     return { valid: false, error: '用户名不能为空' };
   }
@@ -38,12 +42,18 @@ function validateTwitterUsername(username) {
   return { valid: true, normalized };
 }
 
+interface Cookie {
+  name: string;
+  value: string;
+  domain?: string;
+  expires?: number;
+  [key: string]: any;
+}
+
 /**
  * 验证 Cookie 对象的结构
- * @param {Object} cookie - Cookie 对象
- * @returns {boolean} - 是否有效
  */
-function isValidCookieObject(cookie) {
+export function isValidCookieObject(cookie: any): boolean {
   if (!cookie || typeof cookie !== 'object') {
     return false;
   }
@@ -65,12 +75,18 @@ function isValidCookieObject(cookie) {
   return true;
 }
 
+interface CookieValidationResult {
+  valid: boolean;
+  error?: string;
+  validCount?: number;
+  cookies?: Cookie[];
+  filteredCount?: number;
+}
+
 /**
  * 验证 Cookies 数组
- * @param {Array} cookies - Cookies 数组
- * @returns {Object} - { valid: boolean, error?: string, validCount?: number }
  */
-function validateCookies(cookies) {
+export function validateCookies(cookies: any): CookieValidationResult {
   if (!Array.isArray(cookies)) {
     return { valid: false, error: 'Cookies 必须是数组' };
   }
@@ -80,8 +96,8 @@ function validateCookies(cookies) {
   }
 
   // 检查每个 Cookie 的有效性
-  const invalidCookies = [];
-  const initialValidCookies = [];
+  const invalidCookies: number[] = [];
+  const initialValidCookies: Cookie[] = [];
 
   for (let i = 0; i < cookies.length; i++) {
     const cookie = cookies[i];
@@ -101,8 +117,8 @@ function validateCookies(cookies) {
 
   // 检查过期时间并过滤
   const now = Date.now() / 1000; // 当前时间（秒）
-  const expiredCookies = [];
-  const validCookies = [];
+  const expiredCookies: { name: string; expiredAt: string }[] = [];
+  const validCookies: Cookie[] = [];
 
   initialValidCookies.forEach(cookie => {
     // 跳过值为 -1 或 0 的 expires（这些是 session cookies，永远不会过期）
@@ -148,17 +164,24 @@ function validateCookies(cookies) {
   };
 }
 
+interface EnvCookieDataResult {
+  valid: boolean;
+  error?: string;
+  cookies?: Cookie[];
+  username?: string | null;
+  validCount?: number;
+  filteredCount?: number;
+}
+
 /**
  * 验证 env.json 格式的 Cookie 数据
- * @param {Object} envData - env.json 的内容
- * @returns {Object} - { valid: boolean, error?: string, cookies?: Array }
  */
-function validateEnvCookieData(envData) {
+export function validateEnvCookieData(envData: any): EnvCookieDataResult {
   if (!envData || typeof envData !== 'object') {
     return { valid: false, error: 'env.json 内容必须是对象' };
   }
 
-  let cookies;
+  let cookies: any;
 
   // 支持两种格式
   if (Array.isArray(envData)) {
@@ -177,22 +200,27 @@ function validateEnvCookieData(envData) {
   // 验证 Cookies
   const cookieValidation = validateCookies(cookies);
   if (!cookieValidation.valid) {
-    return cookieValidation;
+    return { valid: false, error: cookieValidation.error };
   }
 
   return {
     valid: true,
-    cookies,
+    cookies: cookieValidation.cookies,
     username: envData.username || null
   };
 }
 
+interface TwitterUrlResult {
+  valid: boolean;
+  error?: string;
+  username?: string | null;
+  withReplies?: boolean;
+}
+
 /**
  * 验证 Twitter URL
- * @param {string} url - URL 字符串
- * @returns {Object} - { valid: boolean, error?: string, username?: string, withReplies?: boolean }
  */
-function validateTwitterUrl(url) {
+export function validateTwitterUrl(url: any): TwitterUrlResult {
   if (!url || typeof url !== 'string') {
     return { valid: false, error: 'URL 必须是字符串' };
   }
@@ -230,18 +258,21 @@ function validateTwitterUrl(url) {
       username: usernameValidation.normalized,
       withReplies
     };
-  } catch (error) {
+  } catch (error: any) {
     return { valid: false, error: `无效的 URL 格式: ${error.message}` };
   }
 }
 
+interface ScraperConfigResult {
+  valid: boolean;
+  errors: string[];
+}
+
 /**
  * 验证配置对象
- * @param {Object} config - 配置对象
- * @returns {Object} - { valid: boolean, errors: Array<string> }
  */
-function validateScraperConfig(config) {
-  const errors = [];
+export function validateScraperConfig(config: any): ScraperConfigResult {
+  const errors: string[] = [];
 
   if (!config || typeof config !== 'object') {
     return { valid: false, errors: ['配置必须是对象'] };
@@ -288,14 +319,18 @@ function validateScraperConfig(config) {
   };
 }
 
+interface UsernameInputResult {
+  valid: boolean;
+  usernames: string[];
+  errors: string[];
+}
+
 /**
  * 清理和规范化用户名输入
- * @param {string|Array<string>} input - 用户名输入
- * @returns {Object} - { valid: boolean, usernames: Array<string>, errors: Array<string> }
  */
-function normalizeUsernameInput(input) {
-  const errors = [];
-  const usernames = [];
+export function normalizeUsernameInput(input: any): UsernameInputResult {
+  const errors: string[] = [];
+  const usernames: string[] = [];
 
   if (!input) {
     return { valid: false, usernames: [], errors: ['输入不能为空'] };
@@ -313,7 +348,7 @@ function normalizeUsernameInput(input) {
     // 清理和验证
     const validation = validateTwitterUsername(item);
     if (validation.valid) {
-      usernames.push(validation.normalized);
+      usernames.push(validation.normalized!);
     } else {
       errors.push(`"${item}": ${validation.error}`);
     }
@@ -325,13 +360,3 @@ function normalizeUsernameInput(input) {
     errors
   };
 }
-
-module.exports = {
-  validateTwitterUsername,
-  validateCookies,
-  validateEnvCookieData,
-  validateTwitterUrl,
-  validateScraperConfig,
-  normalizeUsernameInput,
-  isValidCookieObject
-};

@@ -3,9 +3,9 @@
  * 统一管理输出结构、缓存与目录创建
  */
 
-const fs = require('fs').promises;
-const path = require('path');
-const timeUtils = require('./time');
+import { promises as fs } from 'fs';
+import * as path from 'path';
+import * as timeUtils from './time';
 
 const DEFAULT_OUTPUT_ROOT = path.join(__dirname, '..', 'output');
 const CACHE_ROOT = path.join(__dirname, '..', '.cache');
@@ -15,10 +15,8 @@ const DEFAULT_IDENTIFIER = 'timeline';
 
 /**
  * 简单清理文件路径片段，避免非法字符
- * @param {string} segment
- * @returns {string}
  */
-function sanitizeSegment(segment = '') {
+export function sanitizeSegment(segment: string = ''): string {
   return String(segment)
     .trim()
     .toLowerCase()
@@ -29,10 +27,8 @@ function sanitizeSegment(segment = '') {
 
 /**
  * 确保目录存在
- * @param {string} dir
- * @returns {Promise<boolean>}
  */
-async function ensureDirExists(dir) {
+export async function ensureDirExists(dir: string): Promise<boolean> {
   if (!dir) {
     console.error('ensureDirExists requires directory path');
     return false;
@@ -40,7 +36,7 @@ async function ensureDirExists(dir) {
   try {
     await fs.mkdir(dir, { recursive: true });
     return true;
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Failed to create directory: ${dir}`, error.message);
     return false;
   }
@@ -49,7 +45,7 @@ async function ensureDirExists(dir) {
 /**
  * 确保基础输出与缓存目录存在
  */
-async function ensureBaseStructure() {
+export async function ensureBaseStructure(): Promise<boolean> {
   await Promise.all([
     ensureDirExists(DEFAULT_OUTPUT_ROOT),
     ensureDirExists(CACHE_ROOT)
@@ -60,20 +56,40 @@ async function ensureBaseStructure() {
 /**
  * 兼容旧函数名称，保留调用但现在只保证基础结构存在
  */
-async function ensureDirectories() {
+export async function ensureDirectories(): Promise<boolean> {
   return ensureBaseStructure();
+}
+
+export interface RunContextOptions {
+  platform?: string;
+  identifier?: string;
+  baseOutputDir?: string;
+  timestamp?: string;
+  timezone?: string;
+}
+
+export interface RunContext {
+  platform: string;
+  identifier: string;
+  outputRoot: string;
+  runId: string;
+  timezone: string;
+  runTimestamp: string;
+  runTimestampIso: string;
+  runTimestampUtc: string;
+  runDir: string;
+  markdownDir: string;
+  screenshotDir: string;
+  jsonPath: string;
+  csvPath: string;
+  markdownIndexPath: string;
+  metadataPath: string;
 }
 
 /**
  * 创建一次抓取任务的运行目录上下文
- * @param {Object} options
- * @param {string} [options.platform='twitter']
- * @param {string} [options.identifier='timeline'] 例如用户名
- * @param {string} [options.baseOutputDir] 自定义输出根目录
- * @param {string} [options.timestamp] 用于测试的固定时间戳
- * @returns {Promise<Object>} runContext
  */
-async function createRunContext(options = {}) {
+export async function createRunContext(options: RunContextOptions = {}): Promise<RunContext> {
   await ensureBaseStructure();
 
   const platform = sanitizeSegment(options.platform || DEFAULT_PLATFORM);
@@ -139,11 +155,8 @@ async function createRunContext(options = {}) {
 
 /**
  * 获取缓存文件路径
- * @param {string} platform
- * @param {string} identifier
- * @returns {string}
  */
-function getCacheFilePath(platform = DEFAULT_PLATFORM, identifier = DEFAULT_IDENTIFIER) {
+export function getCacheFilePath(platform: string = DEFAULT_PLATFORM, identifier: string = DEFAULT_IDENTIFIER): string {
   const safePlatform = sanitizeSegment(platform);
   const safeIdentifier = sanitizeSegment(identifier);
   return path.join(CACHE_ROOT, safePlatform, `${safeIdentifier}.json`);
@@ -151,11 +164,8 @@ function getCacheFilePath(platform = DEFAULT_PLATFORM, identifier = DEFAULT_IDEN
 
 /**
  * 加载已抓取URL集合
- * @param {string} platform
- * @param {string} identifier
- * @returns {Promise<Set<string>>}
  */
-async function loadSeenUrls(platform = DEFAULT_PLATFORM, identifier = DEFAULT_IDENTIFIER) {
+export async function loadSeenUrls(platform: string = DEFAULT_PLATFORM, identifier: string = DEFAULT_IDENTIFIER): Promise<Set<string>> {
   const cacheFile = getCacheFilePath(platform, identifier);
   await ensureDirExists(path.dirname(cacheFile));
   try {
@@ -166,7 +176,7 @@ async function loadSeenUrls(platform = DEFAULT_PLATFORM, identifier = DEFAULT_ID
       return new Set(parsed);
     }
     return new Set();
-  } catch (error) {
+  } catch (error: any) {
     if (error.code !== 'ENOENT') {
       console.warn(`[${platform}] Failed to load scraped URLs (${identifier}): ${error.message}`);
     }
@@ -176,12 +186,8 @@ async function loadSeenUrls(platform = DEFAULT_PLATFORM, identifier = DEFAULT_ID
 
 /**
  * 保存已抓取URL集合
- * @param {string} platform
- * @param {string} identifier
- * @param {Set<string>} urls
- * @returns {Promise<boolean>}
  */
-async function saveSeenUrls(platform = DEFAULT_PLATFORM, identifier = DEFAULT_IDENTIFIER, urls) {
+export async function saveSeenUrls(platform: string = DEFAULT_PLATFORM, identifier: string = DEFAULT_IDENTIFIER, urls: Set<string>): Promise<boolean> {
   if (!urls || !(urls instanceof Set)) {
     console.error('saveSeenUrls requires Set type urls');
     return false;
@@ -198,7 +204,7 @@ async function saveSeenUrls(platform = DEFAULT_PLATFORM, identifier = DEFAULT_ID
     );
     console.log(`[${platform}] Saved ${urls.size} scraped URLs (${identifier})`);
     return true;
-  } catch (error) {
+  } catch (error: any) {
     console.error(`[${platform}] Failed to save scraped URLs (${identifier}):`, error.message);
     return false;
   }
@@ -206,18 +212,15 @@ async function saveSeenUrls(platform = DEFAULT_PLATFORM, identifier = DEFAULT_ID
 
 /**
  * 生成今天的日期字符串，格式为 YYYY-MM-DD
- * @returns {string}
  */
-function getTodayString() {
+export function getTodayString(): string {
   return new Date().toISOString().split('T')[0];
 }
 
 /**
  * 获取目录中的 Markdown 文件（排除合并文件）
- * @param {string} dir
- * @returns {Promise<string[]>}
  */
-async function getMarkdownFiles(dir) {
+export async function getMarkdownFiles(dir: string): Promise<string[]> {
   if (!dir) {
     console.error('getMarkdownFiles requires directory path');
     return [];
@@ -227,7 +230,7 @@ async function getMarkdownFiles(dir) {
     return files
       .filter(file => file.endsWith('.md') && !file.startsWith('merged-') && !file.startsWith('digest-'))
       .map(file => path.join(dir, file));
-  } catch (error) {
+  } catch (error: any) {
     if (error.code === 'ENOENT') {
       console.warn(`Directory does not exist, cannot read Markdown files: ${dir}`);
       return [];
@@ -237,18 +240,7 @@ async function getMarkdownFiles(dir) {
   }
 }
 
-module.exports = {
+export {
   DEFAULT_OUTPUT_ROOT,
-  CACHE_ROOT,
-
-  ensureDirectories,
-  ensureDirExists,
-  ensureBaseStructure,
-  createRunContext,
-  loadSeenUrls,
-  saveSeenUrls,
-  getCacheFilePath,
-  getTodayString,
-  getMarkdownFiles,
-  sanitizeSegment
+  CACHE_ROOT
 };

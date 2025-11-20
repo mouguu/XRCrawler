@@ -3,19 +3,36 @@
  * 负责在新的运行目录结构中生成 Markdown 内容
  */
 
-const fs = require('fs').promises;
-const path = require('path');
-const fileUtils = require('./fileutils');
-const timeUtils = require('./time');
+import { promises as fs } from 'fs';
+import * as path from 'path';
+import * as fileUtils from './fileutils';
+import * as timeUtils from './time';
+import { RunContext } from './fileutils';
+
+export interface Tweet {
+  time?: string | number | Date;
+  text?: string;
+  url?: string;
+  likes?: number;
+  retweets?: number;
+  replies?: number;
+  hasMedia?: boolean;
+  [key: string]: any;
+}
+
+export interface SaveTweetsOptions {
+  batchSize?: number;
+}
+
+export interface SaveTweetsResult {
+  perTweetFiles: string[];
+  indexPath: string | null;
+}
 
 /**
  * 生成单条推文的 Markdown 文件
- * @param {Object} tweet
- * @param {Object} runContext
- * @param {number} index
- * @returns {Promise<string|null>}
  */
-async function saveTweetAsMarkdown(tweet, runContext, index = 0) {
+export async function saveTweetAsMarkdown(tweet: Tweet, runContext: RunContext, index: number = 0): Promise<string | null> {
   if (!tweet?.time || !tweet?.text || !tweet?.url) {
     console.warn('[X] Tweet missing required data, skipping save');
     return null;
@@ -25,14 +42,14 @@ async function saveTweetAsMarkdown(tweet, runContext, index = 0) {
   }
 
   const timezone = runContext?.timezone || timeUtils.getDefaultTimezone();
-  let tweetTimestampIso = tweet.time;
+  let tweetTimestampIso: string = String(tweet.time);
   try {
     const timestampInfo = timeUtils.formatZonedTimestamp(tweet.time, timezone, {
       includeMilliseconds: true,
       includeOffset: true
     });
     tweetTimestampIso = timestampInfo.iso;
-  } catch (error) {
+  } catch (error: any) {
     console.warn('[X] Failed to format tweet timestamp, falling back to raw value:', error.message);
     const fallback = new Date(tweet.time);
     if (!Number.isNaN(fallback.getTime())) {
@@ -73,13 +90,12 @@ async function saveTweetAsMarkdown(tweet, runContext, index = 0) {
 
 /**
  * 批量保存推文 Markdown，并生成 run 的索引文件
- * @param {Array<Object>} tweets
- * @param {Object} runContext
- * @param {Object} [options]
- * @param {number} [options.batchSize=10]
- * @returns {Promise<{perTweetFiles: string[], indexPath: string}>}
  */
-async function saveTweetsAsMarkdown(tweets, runContext, options = {}) {
+export async function saveTweetsAsMarkdown(
+  tweets: Tweet[],
+  runContext: RunContext,
+  options: SaveTweetsOptions = {}
+): Promise<SaveTweetsResult> {
   if (!Array.isArray(tweets) || tweets.length === 0) {
     console.log('[X] No tweets to save as Markdown');
     return { perTweetFiles: [], indexPath: null };
@@ -91,8 +107,8 @@ async function saveTweetsAsMarkdown(tweets, runContext, options = {}) {
   await fileUtils.ensureDirExists(runContext.markdownDir);
 
   const batchSize = options.batchSize || 10;
-  const savedFiles = [];
-  const aggregatedSections = [];
+  const savedFiles: string[] = [];
+  const aggregatedSections: string[] = [];
   const timezone = runContext?.timezone || timeUtils.getDefaultTimezone();
 
   for (let i = 0; i < tweets.length; i += batchSize) {
@@ -100,7 +116,7 @@ async function saveTweetsAsMarkdown(tweets, runContext, options = {}) {
     const results = await Promise.all(
       batch.map((tweet, localIdx) => saveTweetAsMarkdown(tweet, runContext, i + localIdx))
     );
-    savedFiles.push(...results.filter(Boolean));
+    savedFiles.push(...(results.filter(Boolean) as string[]));
     if (i + batchSize < tweets.length) {
       await new Promise(resolve => setTimeout(resolve, 50));
     }
@@ -165,8 +181,3 @@ async function saveTweetsAsMarkdown(tweets, runContext, options = {}) {
   console.log(`[X] Markdown written to directory: ${runContext.markdownDir}`);
   return { perTweetFiles: savedFiles, indexPath };
 }
-
-module.exports = {
-  saveTweetAsMarkdown,
-  saveTweetsAsMarkdown
-};

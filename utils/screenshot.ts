@@ -3,10 +3,19 @@
  * 根据新的运行目录结构存放截图
  */
 
-const path = require('path');
-const fileUtils = require('./fileutils');
+import * as path from 'path';
+import { Page } from 'puppeteer';
+import * as fileUtils from './fileutils';
+import { RunContext } from './fileutils';
+import { Tweet } from './markdown';
 
-function resolveScreenshotDir(runContext, fallbackDir) {
+export interface ScreenshotOptions {
+  runContext?: RunContext;
+  outputDir?: string;
+  filename?: string;
+}
+
+function resolveScreenshotDir(runContext?: RunContext, fallbackDir?: string): string {
   if (runContext?.screenshotDir) {
     return runContext.screenshotDir;
   }
@@ -18,14 +27,12 @@ function resolveScreenshotDir(runContext, fallbackDir) {
 
 /**
  * 截取单条推文截图
- * @param {Object} page
- * @param {string} tweetUrl
- * @param {Object} [options]
- * @param {Object} [options.runContext]
- * @param {string} [options.outputDir]
- * @returns {Promise<string|null>}
  */
-async function takeScreenshotOfTweet(page, tweetUrl, options = {}) {
+export async function takeScreenshotOfTweet(
+  page: Page,
+  tweetUrl: string,
+  options: ScreenshotOptions = {}
+): Promise<string | null> {
   if (!page || !tweetUrl) {
     console.warn('Missing required parameters, cannot take screenshot');
     return null;
@@ -38,7 +45,7 @@ async function takeScreenshotOfTweet(page, tweetUrl, options = {}) {
   try {
     console.log(`Taking screenshot of tweet: ${tweetUrl}`);
 
-    const tweetId = tweetUrl.split('/').pop().split('?')[0];
+    const tweetId = tweetUrl.split('/').pop()?.split('?')[0];
     const filename = tweetId ? `tweet-${tweetId}-${Date.now()}.png` : `tweet-${Date.now()}.png`;
     const screenshotPath = path.join(outputDir, filename);
 
@@ -54,7 +61,7 @@ async function takeScreenshotOfTweet(page, tweetUrl, options = {}) {
     await tweetElement.screenshot({ path: screenshotPath, omitBackground: true });
     console.log(`✅ Tweet screenshot saved: ${screenshotPath}`);
     return screenshotPath;
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Tweet screenshot failed (${tweetUrl}):`, error.message);
     return null;
   }
@@ -62,18 +69,18 @@ async function takeScreenshotOfTweet(page, tweetUrl, options = {}) {
 
 /**
  * 批量截取推文截图
- * @param {Object} page
- * @param {Array} tweets
- * @param {Object} [options]
- * @returns {Promise<Array<string>>}
  */
-async function takeScreenshotsOfTweets(page, tweets, options = {}) {
+export async function takeScreenshotsOfTweets(
+  page: Page,
+  tweets: Tweet[],
+  options: ScreenshotOptions = {}
+): Promise<string[]> {
   if (!page || !Array.isArray(tweets) || tweets.length === 0) {
     console.log('No tweets to screenshot');
     return [];
   }
 
-  const results = [];
+  const results: string[] = [];
   for (const tweet of tweets) {
     if (!tweet.url) continue;
     const shot = await takeScreenshotOfTweet(page, tweet.url, options);
@@ -86,14 +93,11 @@ async function takeScreenshotsOfTweets(page, tweets, options = {}) {
 
 /**
  * 截取时间线页面截图
- * @param {Object} page
- * @param {Object} [options]
- * @param {string} [options.filename]
- * @param {Object} [options.runContext]
- * @param {string} [options.outputDir]
- * @returns {Promise<string|null>}
  */
-async function takeTimelineScreenshot(page, options = {}) {
+export async function takeTimelineScreenshot(
+  page: Page,
+  options: ScreenshotOptions = {}
+): Promise<string | null> {
   if (!page) {
     console.warn('Missing page object, cannot take screenshot');
     return null;
@@ -109,14 +113,8 @@ async function takeTimelineScreenshot(page, options = {}) {
     await page.screenshot({ path: screenshotPath, fullPage: false });
     console.log(`✅ Timeline screenshot saved: ${screenshotPath}`);
     return screenshotPath;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Timeline screenshot failed:', error.message);
     return null;
   }
 }
-
-module.exports = {
-  takeScreenshotOfTweet,
-  takeScreenshotsOfTweets,
-  takeTimelineScreenshot
-};
