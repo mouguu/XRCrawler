@@ -1,53 +1,37 @@
+"use strict";
 /**
  * Twitter/X Scraper Module (Refactored)
  * Delegates to ScraperEngine
  */
-
-import { ScraperEngine, ScrapeTimelineConfig, ScrapeTimelineResult, ScrapeThreadOptions, ScrapeThreadResult } from './core/scraper-engine';
-import { getShouldStopScraping } from './server';
-import * as markdownUtils from './utils/markdown';
-import * as exportUtils from './utils/export';
-
-export interface ScrapeXFeedOptions extends Omit<ScrapeTimelineConfig, 'mode'> {
-    scrapeLikes?: boolean;
-    mergeResults?: boolean;
-    deleteMerged?: boolean;
-    clearCache?: boolean;
-}
-
-export interface ScrapeSearchOptions extends Omit<ScrapeTimelineConfig, 'mode' | 'searchQuery'> {
-    query: string;
-    mergeResults?: boolean;
-    deleteMerged?: boolean;
-}
-
-export async function scrapeXFeed(options: ScrapeXFeedOptions = {}): Promise<ScrapeTimelineResult> {
-    const engine = new ScraperEngine(getShouldStopScraping);
-
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.scrapeXFeed = scrapeXFeed;
+exports.scrapeSearch = scrapeSearch;
+exports.scrapeThread = scrapeThread;
+const scraper_engine_1 = require("./core/scraper-engine");
+const server_1 = require("./server");
+async function scrapeXFeed(options = {}) {
+    const engine = new scraper_engine_1.ScraperEngine(server_1.getShouldStopScraping);
     try {
         await engine.init();
         const cookiesLoaded = await engine.loadCookies();
         if (!cookiesLoaded) {
             throw new Error('Failed to load cookies');
         }
-
-        // Direct scrape without cache/merge logic
-        const result = await engine.scrapeTimeline({
+        return await engine.scrapeTimeline({
             ...options,
             mode: 'timeline'
         });
-
-        return result;
-    } catch (error: any) {
+    }
+    catch (error) {
         console.error('Scrape failed:', error);
         return { success: false, tweets: [], error: error.message };
-    } finally {
+    }
+    finally {
         await engine.close();
     }
 }
-
-export async function scrapeSearch(options: ScrapeSearchOptions): Promise<ScrapeTimelineResult> {
-    const engine = new ScraperEngine(getShouldStopScraping);
+async function scrapeSearch(options) {
+    const engine = new scraper_engine_1.ScraperEngine(server_1.getShouldStopScraping);
     try {
         await engine.init();
         const cookiesLoaded = await engine.loadCookies();
@@ -59,16 +43,17 @@ export async function scrapeSearch(options: ScrapeSearchOptions): Promise<Scrape
             mode: 'search',
             searchQuery: options.query
         });
-    } catch (error: any) {
+    }
+    catch (error) {
         console.error('Search scrape failed:', error);
         return { success: false, tweets: [], error: error.message };
-    } finally {
+    }
+    finally {
         await engine.close();
     }
 }
-
-export async function scrapeThread(options: ScrapeThreadOptions): Promise<ScrapeThreadResult> {
-    const engine = new ScraperEngine(getShouldStopScraping);
+async function scrapeThread(options) {
+    const engine = new scraper_engine_1.ScraperEngine(server_1.getShouldStopScraping);
     try {
         await engine.init();
         const cookiesLoaded = await engine.loadCookies();
@@ -76,10 +61,12 @@ export async function scrapeThread(options: ScrapeThreadOptions): Promise<Scrape
             throw new Error('Failed to load cookies');
         }
         return await engine.scrapeThread(options);
-    } catch (error: any) {
+    }
+    catch (error) {
         console.error('Thread scrape failed:', error);
         return { success: false, tweets: [], error: error.message };
-    } finally {
+    }
+    finally {
         await engine.close();
     }
 }

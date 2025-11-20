@@ -20,33 +20,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 // API: Scrape
 app.post('/api/scrape', async (req: Request, res: Response) => {
     try {
-        const { type, input, limit = 50, likes = false, mergeResults = false, deleteMerged = false, clearCache = false } = req.body;
+        const { type, input, limit = 50, likes = false, mergeResults = false, deleteMerged = false } = req.body;
 
-        console.log(`Received scrape request: Type=${type}, Input=${input}, Limit=${limit}, ClearCache=${clearCache}`);
-
-        // Handle cache clearing for specific target
-        if (clearCache) {
-            // Extract username from input
-            let targetIdentifier = input;
-            if (input.includes('x.com/') || input.includes('twitter.com/')) {
-                const urlMatch = input.match(/(?:x\.com|twitter\.com)\/([^/\?]+)/);
-                if (urlMatch) targetIdentifier = urlMatch[1];
-            }
-
-            // Remove status URL part if it's a thread
-            if (targetIdentifier.includes('/status/')) {
-                targetIdentifier = targetIdentifier.split('/status/')[0];
-            }
-
-            const cacheFile = path.join(__dirname, '.cache', `${targetIdentifier}.json`);
-
-            if (fs.existsSync(cacheFile)) {
-                fs.unlinkSync(cacheFile);
-                console.log(`[Cache] Cleared cache for: ${targetIdentifier}`);
-            } else {
-                console.log(`[Cache] No cache file found for: ${targetIdentifier}`);
-            }
-        }
+        console.log(`Received scrape request: Type=${type}, Input=${input}, Limit=${limit}`);
 
         // Reset stop flag and set active state
         shouldStopScraping = false;
@@ -64,8 +40,7 @@ app.post('/api/scrape', async (req: Request, res: Response) => {
                 scrapeLikes: likes,
                 saveMarkdown: true,
                 mergeResults,
-                deleteMerged,
-                clearCache
+                deleteMerged
             });
 
         } else if (type === 'thread') {

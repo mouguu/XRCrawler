@@ -26,11 +26,12 @@ function App() {
     const [scrapeLikes, setScrapeLikes] = useState(false);
     const [mergeResults, setMergeResults] = useState(true);
     const [deleteMerged, setDeleteMerged] = useState(true);
-    const [clearCache, setClearCache] = useState(false);
 
     // Monitor Options
     const [lookbackHours, setLookbackHours] = useState(24);
     const [keywords, setKeywords] = useState('');
+
+
 
     const logEndRef = useRef<HTMLDivElement>(null);
 
@@ -71,8 +72,7 @@ function App() {
                 limit,
                 likes: scrapeLikes,
                 mergeResults,
-                deleteMerged,
-                clearCache
+                deleteMerged
             };
 
             if (activeTab === 'monitor') {
@@ -250,14 +250,6 @@ function App() {
                                             </label>
                                         </>
                                     )}
-
-                                    <label className="flex items-center gap-4 cursor-pointer group select-none">
-                                        <div className="w-6 h-6 border border-stone rounded-full flex items-center justify-center group-hover:border-rust transition-colors">
-                                            <div className={cn("w-3 h-3 bg-rust rounded-full transition-opacity checkbox-indicator", clearCache ? "opacity-100" : "opacity-0")}></div>
-                                        </div>
-                                        <input type="checkbox" checked={clearCache} onChange={(e) => setClearCache(e.target.checked)} className="hidden" />
-                                        <span className="font-serif text-xl text-stone group-hover:text-charcoal transition-colors">Clear Cache</span>
-                                    </label>
                                 </div>
                             </div>
                         ) : (
@@ -289,6 +281,7 @@ function App() {
                                 </div>
                             </div>
                         )}
+
                     </div>
                 </div>
 
