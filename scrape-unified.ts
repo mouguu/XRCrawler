@@ -4,6 +4,7 @@
  */
 
 import { ScraperEngine, ScrapeTimelineConfig, ScrapeTimelineResult, ScrapeThreadOptions, ScrapeThreadResult } from './core/scraper-engine';
+import { getShouldStopScraping } from './server';
 
 export interface ScrapeXFeedOptions extends Omit<ScrapeTimelineConfig, 'mode'> {
     scrapeLikes?: boolean;
@@ -19,7 +20,7 @@ export interface ScrapeSearchOptions extends Omit<ScrapeTimelineConfig, 'mode' |
 }
 
 export async function scrapeXFeed(options: ScrapeXFeedOptions = {}): Promise<ScrapeTimelineResult> {
-    const engine = new ScraperEngine();
+    const engine = new ScraperEngine(getShouldStopScraping);
     try {
         await engine.init();
         const cookiesLoaded = await engine.loadCookies();
@@ -39,7 +40,7 @@ export async function scrapeXFeed(options: ScrapeXFeedOptions = {}): Promise<Scr
 }
 
 export async function scrapeSearch(options: ScrapeSearchOptions): Promise<ScrapeTimelineResult> {
-    const engine = new ScraperEngine();
+    const engine = new ScraperEngine(getShouldStopScraping);
     try {
         await engine.init();
         const cookiesLoaded = await engine.loadCookies();
@@ -60,7 +61,7 @@ export async function scrapeSearch(options: ScrapeSearchOptions): Promise<Scrape
 }
 
 export async function scrapeThread(options: ScrapeThreadOptions): Promise<ScrapeThreadResult> {
-    const engine = new ScraperEngine();
+    const engine = new ScraperEngine(getShouldStopScraping);
     try {
         await engine.init();
         const cookiesLoaded = await engine.loadCookies();

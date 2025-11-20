@@ -64,14 +64,16 @@ export class ScraperEngine {
     private browserManager: BrowserManager | null;
     private page: Page | null;
     private stopSignal: boolean;
+    private shouldStopFunction?: () => boolean;
 
-    constructor() {
+    constructor(shouldStopFunction?: () => boolean) {
         this.eventBus = eventBusInstance;
         this.navigationService = new NavigationService(this.eventBus);
         this.rateLimitManager = new RateLimitManager(this.eventBus);
         this.browserManager = null;
         this.page = null;
         this.stopSignal = false;
+        this.shouldStopFunction = shouldStopFunction;
     }
 
     setStopSignal(value: boolean): void {
@@ -167,7 +169,7 @@ export class ScraperEngine {
         let noNewTweetsConsecutiveAttempts = 0;
 
         while (collectedTweets.length < limit && scrollAttempts < maxScrollAttempts) {
-            if (this.stopSignal) {
+            if (this.stopSignal || (this.shouldStopFunction && this.shouldStopFunction())) {
                 this.eventBus.emitLog('Manual stop signal received.');
                 break;
             }
@@ -280,7 +282,7 @@ export class ScraperEngine {
             const maxScrollAttempts = Math.max(50, Math.ceil(maxReplies / 5));
 
             while (allReplies.length < maxReplies && scrollAttempts < maxScrollAttempts) {
-                if (this.stopSignal) break;
+                if (this.stopSignal || (this.shouldStopFunction && this.shouldStopFunction())) break;
 
                 scrollAttempts++;
                 await dataExtractor.scrollToBottom(this.page);

@@ -11,6 +11,7 @@ const PORT = 3000;
 // Global state for manual stop
 let isScrapingActive = false;
 let shouldStopScraping = false;
+let lastDownloadUrl: string | null = null;
 
 // Middleware
 app.use(express.json());
@@ -50,6 +51,7 @@ app.post('/api/scrape', async (req: Request, res: Response) => {
         // Reset stop flag and set active state
         shouldStopScraping = false;
         isScrapingActive = true;
+        lastDownloadUrl = null; // Clear previous result
 
         let result: any;
 
@@ -101,11 +103,13 @@ app.post('/api/scrape', async (req: Request, res: Response) => {
 
             if (runContext && runContext.markdownIndexPath) {
                 // Success
+                const downloadUrl = `/api/download?path=${encodeURIComponent(runContext.markdownIndexPath)}`;
+                lastDownloadUrl = downloadUrl; // Save for later retrieval
                 console.log('[DEBUG] Sending success response with downloadUrl:', runContext.markdownIndexPath);
                 return res.json({
                     success: true,
                     message: 'Scraping completed successfully!',
-                    downloadUrl: `/api/download?path=${encodeURIComponent(runContext.markdownIndexPath)}`,
+                    downloadUrl,
                     stats: {
                         count: result.tweets ? result.tweets.length : 0
                     }
@@ -208,6 +212,14 @@ app.get('/api/status', (req: Request, res: Response) => {
     res.json({
         isActive: isScrapingActive,
         shouldStop: shouldStopScraping
+    });
+});
+
+// API: Get result (download URL after scraping completes)
+app.get('/api/result', (req: Request, res: Response) => {
+    res.json({
+        isActive: isScrapingActive,
+        downloadUrl: lastDownloadUrl
     });
 });
 

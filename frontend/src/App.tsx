@@ -91,6 +91,35 @@ function App() {
     const handleStop = async () => {
         await fetch('/api/stop', { method: 'POST' });
         setLogs(prev => [...prev, `🛑 Stop signal sent...`]);
+
+        // Poll for result after stopping
+        const pollInterval = setInterval(async () => {
+            try {
+                const response = await fetch('/api/result');
+                const data = await response.json();
+
+                if (!data.isActive && data.downloadUrl) {
+                    // Scraping has stopped and we have a download URL
+                    setDownloadUrl(data.downloadUrl);
+                    setLogs(prev => [...prev, `✅ Scraping stopped! Download available.`]);
+                    setIsScraping(false);
+                    clearInterval(pollInterval);
+                } else if (!data.isActive) {
+                    // Scraping stopped but no result
+                    setLogs(prev => [...prev, `⚠️ Scraping stopped without generating output.`]);
+                    setIsScraping(false);
+                    clearInterval(pollInterval);
+                }
+            } catch (error) {
+                console.error('Error polling result:', error);
+            }
+        }, 500); // Poll every 500ms
+
+        // Timeout after 10 seconds
+        setTimeout(() => {
+            clearInterval(pollInterval);
+            setIsScraping(false);
+        }, 10000);
     };
 
     return (
