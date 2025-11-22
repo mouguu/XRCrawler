@@ -15,9 +15,9 @@ export default {
                 'rust': '#a65e4e',
             },
             fontFamily: {
-                serif: ['"Cormorant Garamond"', 'serif'],
-                display: ['"Zen Old Mincho"', 'serif'],
-                sans: ['"Inter"', 'sans-serif'],
+                serif: ['"Source Sans 3"', 'sans-serif'],
+                display: ['"Sora"', 'sans-serif'],
+                sans: ['"Source Sans 3"', 'sans-serif'],
             },
             animation: {
                 'drift': 'drift 20s infinite linear',

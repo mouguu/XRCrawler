@@ -21,6 +21,7 @@ function App() {
     const [logs, setLogs] = useState<string[]>([]);
     const [progress, setProgress] = useState<Progress>({ current: 0, target: 0 });
     const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+    const [apiKey, setApiKey] = useState<string>('');
 
     // Options
     const [scrapeLikes, setScrapeLikes] = useState(false);
@@ -35,8 +36,29 @@ function App() {
 
     const logEndRef = useRef<HTMLDivElement>(null);
 
+    // Load saved API key
     useEffect(() => {
-        const eventSource = new EventSource('/api/progress');
+        const storedKey = localStorage.getItem('apiKey');
+        if (storedKey) {
+            setApiKey(storedKey);
+        }
+    }, []);
+
+    // Persist API key
+    useEffect(() => {
+        if (apiKey) {
+            localStorage.setItem('apiKey', apiKey);
+        } else {
+            localStorage.removeItem('apiKey');
+        }
+    }, [apiKey]);
+
+    useEffect(() => {
+        const url = apiKey
+            ? `/api/progress?api_key=${encodeURIComponent(apiKey)}`
+            : '/api/progress';
+
+        const eventSource = new EventSource(url);
 
         eventSource.onmessage = (event) => {
             const data = JSON.parse(event.data);
@@ -51,12 +73,23 @@ function App() {
         return () => {
             eventSource.close();
         };
-    }, []);
+    }, [apiKey]);
 
     // Auto-scroll removed as per user request
     // useEffect(() => {
     //     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
     // }, [logs]);
+
+    const buildHeaders = (hasBody: boolean = false) => {
+        const headers: Record<string, string> = {};
+        if (hasBody) {
+            headers['Content-Type'] = 'application/json';
+        }
+        if (apiKey) {
+            headers['x-api-key'] = apiKey;
+        }
+        return headers;
+    };
 
     const handleScrape = async () => {
         setIsScraping(true);
@@ -86,7 +119,7 @@ function App() {
 
             const response = await fetch(endpoint, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: buildHeaders(true),
                 body: JSON.stringify(body)
             });
 
@@ -106,13 +139,13 @@ function App() {
     };
 
     const handleStop = async () => {
-        await fetch('/api/stop', { method: 'POST' });
+        await fetch('/api/stop', { method: 'POST', headers: buildHeaders() });
         setLogs(prev => [...prev, `🛑 Stop signal sent...`]);
 
         // Poll for result after stopping
         const pollInterval = setInterval(async () => {
             try {
-                const response = await fetch('/api/result');
+                const response = await fetch('/api/result', { headers: buildHeaders() });
                 const data = await response.json();
 
                 if (!data.isActive && data.downloadUrl) {
@@ -151,7 +184,19 @@ function App() {
                         <h1 className="text-3xl md:text-4xl mb-2 font-display text-charcoal">Mono no Aware</h1>
                         <p className="text-stone text-sm uppercase tracking-widest font-serif">Twitter Archiver</p>
                     </div>
-                    <a href="#results" className="text-sm uppercase tracking-widest hover:text-rust transition-colors duration-300 font-serif text-charcoal">Logs</a>
+                    <div className="flex items-center gap-4">
+                        <div className="relative">
+                            <input
+                                type="text"
+                                value={apiKey}
+                                onChange={(e) => setApiKey(e.target.value)}
+                                placeholder="API Key"
+                                className="bg-transparent border-b border-stone py-2 focus:outline-none focus:border-rust transition-colors text-sm font-mono text-charcoal placeholder-stone/50 w-40"
+                            />
+                            <label className="absolute left-0 -top-5 text-[10px] uppercase tracking-[0.2em] text-stone/50 font-sans">API Key</label>
+                        </div>
+                        <a href="#results" className="text-sm uppercase tracking-widest hover:text-rust transition-colors duration-300 font-serif text-charcoal">Logs</a>
+                    </div>
                 </div>
             </header>
 
