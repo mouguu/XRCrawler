@@ -410,11 +410,11 @@ function App() {
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         {/* Logs Column */}
                         <div className="lg:col-span-2">
-                            <h3 className="text-[10px] uppercase tracking-[0.2em] text-stone/40 mb-3 font-sans">System Journal</h3>
-                            <div className="font-mono text-[10px] leading-relaxed text-stone/70 space-y-1 h-[180px] overflow-y-auto p-4 border border-white/5 rounded-sm bg-black/20 scrollbar-thin scrollbar-thumb-stone/20 backdrop-blur-sm transition-all hover:border-white/10">
-                                {logs.length === 0 && <p className="opacity-20 italic">Waiting for command input...</p>}
+                            <h3 className="text-[10px] uppercase tracking-[0.2em] text-stone/30 mb-3 font-sans">System Journal</h3>
+                            <div className="font-mono text-[11px] leading-relaxed text-stone/10 space-y-1 h-[180px] overflow-y-auto p-4 border border-white/10 rounded-sm bg-white/5 scrollbar-thin scrollbar-thumb-stone/30 backdrop-blur-sm transition-all hover:border-white/20">
+                                {logs.length === 0 && <p className="opacity-70 italic text-stone">Waiting for command input...</p>}
                                 {logs.map((log, i) => (
-                                    <div key={i} className="break-all border-l border-transparent hover:border-rust/50 pl-2 transition-colors duration-200">
+                                    <div key={i} className="break-all border-l border-transparent hover:border-rust/60 pl-2 transition-colors duration-200 text-washi">
                                         {log}
                                     </div>
                                 ))}
