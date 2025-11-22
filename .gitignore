@@ -5,3 +5,4 @@ output
 cookies/*
 !cookies/.gitkeep
 .DS_Store
+dist/
