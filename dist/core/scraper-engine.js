@@ -184,9 +184,12 @@ class ScraperEngine {
             }
             catch (error) {
                 if (this.rateLimitManager.isRateLimitError(error)) {
-                    const rotated = await this.rateLimitManager.handleRateLimit(this.page, attempts, error);
+                    const rotated = await this.rateLimitManager.handleRateLimit(this.page, attempts, error, this.currentSession?.id);
                     if (!rotated)
                         throw error;
+                    // Reset attempts after rotating to give the new session full retry budget
+                    attempts = 0;
+                    continue;
                 }
                 else {
                     throw error;

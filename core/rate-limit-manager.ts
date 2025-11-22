@@ -16,7 +16,7 @@ export class RateLimitManager {
         this.maxRotationAttempts = 3;
     }
 
-    async handleRateLimit(page: Page, currentAttempt: number, error: Error): Promise<boolean> {
+    async handleRateLimit(page: Page, currentAttempt: number, error: Error, currentSessionId?: string): Promise<boolean> {
         if (currentAttempt >= this.maxRotationAttempts) {
             this._log(`Rate limit handling failed after ${currentAttempt} attempts: ${error.message}`, 'error');
             return false;
@@ -31,7 +31,13 @@ export class RateLimitManager {
             // The original code just did `new CookieManager().load()`.
 
             const newCookieManager = new CookieManager();
-            const cookieData = await newCookieManager.load(); // This needs to be smart enough to load a *different* one if possible, or just next one
+            let cookieData = await newCookieManager.load(); // This needs to be smart enough to load a *different* one if possible, or just next one
+
+            // If we picked the same cookie as current, try the next one (avoid rotating to self)
+            if (currentSessionId && cookieData.source && cookieData.source.includes(currentSessionId)) {
+                this._log(`Selected same session (${currentSessionId}), trying next cookie...`, 'warn');
+                cookieData = await newCookieManager.load();
+            }
 
             await newCookieManager.injectIntoPage(page);
             this._log(`✅ Switched to cookie: ${path.basename(cookieData.source || 'unknown')}`);
