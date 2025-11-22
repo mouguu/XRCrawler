@@ -56,6 +56,7 @@ program
   .option('-m, --merge', 'Merge all results into a single file', false)
   .option('--merge-file <filename>', 'Merge file name', 'merged')
   .option('--format <format>', 'Export format: md/json/csv', 'md')
+  .option('--session <filename>', 'Cookie file to use (e.g., account2.json)')
   .action(async (options) => {
     try {
       // 验证并初始化选项
@@ -78,7 +79,8 @@ program
           exportJson: !!options.json,
           exportCsv: !!options.csv,
           generateAnalysis: true,
-          headless: options.headless
+          headless: options.headless,
+          sessionId: options.session
         };
 
         const result = await scraper.scrapeThread(threadOptions);
@@ -235,7 +237,8 @@ program
         scrapeLikes: !!options.likes,
         exportCsv: !!options.csv,
         exportJson: !!options.json,
-        timezone
+        timezone,
+        sessionId: options.session
       };
 
       // 执行抓取（统一逻辑）

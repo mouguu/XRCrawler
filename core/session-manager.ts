@@ -60,9 +60,14 @@ export class SessionManager {
     /**
      * 获取下一个可用 Session (轮询策略)
      */
-    getSession(): Session | null {
+    getSession(preferredId?: string): Session | null {
         const activeSessions = this.sessions.filter(s => !s.isRetired);
         if (activeSessions.length === 0) return null;
+
+        if (preferredId) {
+            const preferred = activeSessions.find(s => s.id === preferredId.replace('.json', ''));
+            if (preferred) return preferred;
+        }
 
         // 简单的轮询
         const session = activeSessions[this.currentSessionIndex % activeSessions.length];

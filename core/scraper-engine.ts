@@ -24,6 +24,7 @@ const throttle = (ms: number): Promise<void> => new Promise(resolve => setTimeou
 export interface ScraperEngineOptions {
     headless?: boolean;
     browserOptions?: BrowserLaunchOptions;
+    sessionId?: string;
 }
 
 export interface ScrapeTimelineConfig {
@@ -61,6 +62,7 @@ export interface ScrapeThreadOptions {
     exportJson?: boolean;
     outputDir?: string;
     headless?: boolean;
+    sessionId?: string;
 }
 
 export interface ScrapeThreadResult {
@@ -86,6 +88,7 @@ export class ScraperEngine {
     private stopSignal: boolean;
     private shouldStopFunction?: () => boolean;
     private browserOptions: BrowserLaunchOptions;
+    private preferredSessionId?: string;
 
     constructor(shouldStopFunction?: () => boolean, options: ScraperEngineOptions = {}) {
         this.eventBus = eventBusInstance;
@@ -103,6 +106,7 @@ export class ScraperEngine {
             headless: options.headless ?? true,
             ...(options.browserOptions || {})
         };
+        this.preferredSessionId = options.sessionId;
     }
 
     setStopSignal(value: boolean): void {
@@ -130,7 +134,7 @@ export class ScraperEngine {
 
         if (!this.page) {
             // Get current session (cookie file)
-            this.currentSession = this.sessionManager.getSession();
+            this.currentSession = this.sessionManager.getSession(this.preferredSessionId);
             if (!this.currentSession) {
                 this.eventBus.emitError(new Error('No active sessions available'));
                 return false;
@@ -154,7 +158,7 @@ export class ScraperEngine {
         }
 
         // 1. Try to get a session from SessionManager
-        this.currentSession = this.sessionManager.getSession();
+        this.currentSession = this.sessionManager.getSession(this.preferredSessionId);
 
         if (this.currentSession) {
             try {

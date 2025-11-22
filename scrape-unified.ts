@@ -22,6 +22,7 @@ export interface ScrapeXFeedOptions extends Omit<ScrapeTimelineConfig, 'mode'> {
     deleteMerged?: boolean;
     clearCache?: boolean;
     headless?: boolean;
+    sessionId?: string;
 }
 
 export interface ScrapeSearchOptions extends Omit<ScrapeTimelineConfig, 'mode' | 'searchQuery'> {
@@ -29,6 +30,7 @@ export interface ScrapeSearchOptions extends Omit<ScrapeTimelineConfig, 'mode' |
     mergeResults?: boolean;
     deleteMerged?: boolean;
     headless?: boolean;
+    sessionId?: string;
 }
 
 export interface ScrapeTwitterUsersOptions {
@@ -44,6 +46,7 @@ export interface ScrapeTwitterUsersOptions {
     exportCsv?: boolean;
     exportJson?: boolean;
     timezone?: string;
+    sessionId?: string;
 }
 
 export interface ScrapeTwitterUserResult {
@@ -55,7 +58,7 @@ export interface ScrapeTwitterUserResult {
 }
 
 export async function scrapeXFeed(options: ScrapeXFeedOptions = {}): Promise<ScrapeTimelineResult> {
-    const engine = new ScraperEngine(getShouldStopScraping, { headless: options.headless });
+    const engine = new ScraperEngine(getShouldStopScraping, { headless: options.headless, sessionId: options.sessionId });
 
     try {
         await engine.init();
@@ -80,7 +83,7 @@ export async function scrapeXFeed(options: ScrapeXFeedOptions = {}): Promise<Scr
 }
 
 export async function scrapeSearch(options: ScrapeSearchOptions): Promise<ScrapeTimelineResult> {
-    const engine = new ScraperEngine(getShouldStopScraping, { headless: options.headless });
+    const engine = new ScraperEngine(getShouldStopScraping, { headless: options.headless, sessionId: options.sessionId });
     try {
         await engine.init();
         const cookiesLoaded = await engine.loadCookies();
@@ -101,7 +104,7 @@ export async function scrapeSearch(options: ScrapeSearchOptions): Promise<Scrape
 }
 
 export async function scrapeThread(options: ScrapeThreadOptions): Promise<ScrapeThreadResult> {
-    const engine = new ScraperEngine(getShouldStopScraping, { headless: options.headless });
+    const engine = new ScraperEngine(getShouldStopScraping, { headless: options.headless, sessionId: (options as any).sessionId });
     try {
         await engine.init();
         const cookiesLoaded = await engine.loadCookies();
@@ -129,7 +132,7 @@ export async function scrapeTwitterUsers(
         return [];
     }
 
-    const engine = new ScraperEngine(getShouldStopScraping, { headless: options.headless });
+    const engine = new ScraperEngine(getShouldStopScraping, { headless: options.headless, sessionId: options.sessionId });
     const results: ScrapeTwitterUserResult[] = [];
 
     try {
