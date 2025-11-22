@@ -21,7 +21,8 @@ function App() {
     const [logs, setLogs] = useState<string[]>([]);
     const [progress, setProgress] = useState<Progress>({ current: 0, target: 0 });
     const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
-    const [apiKey, setApiKey] = useState<string>('');
+    const [apiKey, setApiKey] = useState<string>(''); // applied key
+    const [apiKeyInput, setApiKeyInput] = useState<string>(''); // input buffer
 
     // Options
     const [scrapeLikes, setScrapeLikes] = useState(false);
@@ -41,6 +42,7 @@ function App() {
         const storedKey = localStorage.getItem('apiKey');
         if (storedKey) {
             setApiKey(storedKey);
+            setApiKeyInput(storedKey);
         }
     }, []);
 
@@ -80,6 +82,14 @@ function App() {
     //     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
     // }, [logs]);
 
+    const appendApiKey = (url: string | null): string | null => {
+        if (!url) return null;
+        if (!apiKey) return url;
+        const hasQuery = url.includes('?');
+        const separator = hasQuery ? '&' : '?';
+        return `${url}${separator}api_key=${encodeURIComponent(apiKey)}`;
+    };
+
     const buildHeaders = (hasBody: boolean = false) => {
         const headers: Record<string, string> = {};
         if (hasBody) {
@@ -89,6 +99,10 @@ function App() {
             headers['x-api-key'] = apiKey;
         }
         return headers;
+    };
+
+    const applyApiKey = () => {
+        setApiKey(apiKeyInput.trim());
     };
 
     const handleScrape = async () => {
@@ -185,15 +199,26 @@ function App() {
                         <p className="text-stone text-sm uppercase tracking-widest font-serif">Twitter Archiver</p>
                     </div>
                     <div className="flex items-center gap-4">
-                        <div className="relative">
-                            <input
-                                type="text"
-                                value={apiKey}
-                                onChange={(e) => setApiKey(e.target.value)}
-                                placeholder="API Key"
-                                className="bg-transparent border-b border-stone py-2 focus:outline-none focus:border-rust transition-colors text-sm font-mono text-charcoal placeholder-stone/50 w-40"
-                            />
-                            <label className="absolute left-0 -top-5 text-[10px] uppercase tracking-[0.2em] text-stone/50 font-sans">API Key</label>
+                        <div className="relative flex items-center gap-2">
+                            <div className="relative">
+                                <input
+                                    type="password"
+                                    value={apiKeyInput}
+                                    onChange={(e) => setApiKeyInput(e.target.value)}
+                                    placeholder="API Key"
+                                    className="bg-transparent border-b border-stone py-2 focus:outline-none focus:border-rust transition-colors text-sm font-mono text-charcoal placeholder-stone/50 w-44"
+                                />
+                                <label className="absolute left-0 -top-5 text-[10px] uppercase tracking-[0.2em] text-stone/50 font-sans">API Key</label>
+                            </div>
+                            <button
+                                onClick={applyApiKey}
+                                className="px-3 py-2 border border-charcoal rounded-full text-[10px] uppercase tracking-[0.15em] hover:bg-charcoal hover:text-washi transition-colors"
+                            >
+                                Apply
+                            </button>
+                            {apiKey && (
+                                <span className="text-[10px] uppercase tracking-[0.2em] text-moss font-sans">Applied</span>
+                            )}
                         </div>
                         <a href="#results" className="text-sm uppercase tracking-widest hover:text-rust transition-colors duration-300 font-serif text-charcoal">Logs</a>
                     </div>
@@ -410,7 +435,7 @@ function App() {
                                             <p className="text-stone/60 font-serif text-xs italic">Your archive is ready.</p>
                                         </div>
                                         <a
-                                            href={downloadUrl}
+                                            href={appendApiKey(downloadUrl) || undefined}
                                             className="block w-full py-3 bg-stone/10 border border-stone/20 text-stone hover:bg-rust hover:border-rust hover:text-washi transition-all duration-300 uppercase tracking-widest text-[10px] font-sans"
                                         >
                                             Download Artifact

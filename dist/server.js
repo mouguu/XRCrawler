@@ -47,14 +47,51 @@ const path_utils_1 = require("./utils/path-utils");
 const api_key_1 = require("./middleware/api-key");
 const app = (0, express_1.default)();
 const PORT = 3000;
-const OUTPUT_ROOT = path.resolve(process.cwd(), 'output');
+// Align with utils/fileutils (dist/output) while keeping legacy root/output compatibility
+const OUTPUT_ROOT = path.resolve(__dirname, 'output');
+const LEGACY_OUTPUT_ROOT = path.resolve(process.cwd(), 'output');
+const STATIC_DIR = path.resolve(process.cwd(), 'public');
 // Global state for manual stop
 let isScrapingActive = false;
 let lastDownloadUrl = null;
 // Middleware
 app.use(express_1.default.json());
-app.use(express_1.default.static(path.join(__dirname, 'public')));
+app.use(express_1.default.static(STATIC_DIR));
 app.use('/api', api_key_1.apiKeyMiddleware);
+function getSafePathInfo(resolvedPath) {
+    // Determine which output root this path belongs to
+    const relPrimary = path.relative(OUTPUT_ROOT, resolvedPath);
+    const relLegacy = path.relative(LEGACY_OUTPUT_ROOT, resolvedPath);
+    let relPath = relPrimary.startsWith('..') ? relLegacy : relPrimary;
+    if (relPath.startsWith('..'))
+        return {};
+    const parts = relPath.split(path.sep).filter(Boolean);
+    // expected: platform / identifier / run-xxxx / file
+    if (parts.length < 3)
+        return {};
+    const identifier = parts[1];
+    const runId = parts[2];
+    let runTimestamp;
+    const match = runId.match(/run-(.+)/);
+    if (match && match[1]) {
+        runTimestamp = match[1];
+    }
+    // Try to read tweet count from sibling tweets.json
+    try {
+        const dir = path.dirname(resolvedPath);
+        const tweetsJsonPath = path.join(dir, 'tweets.json');
+        if (fs.existsSync(tweetsJsonPath)) {
+            const data = JSON.parse(fs.readFileSync(tweetsJsonPath, 'utf-8'));
+            if (Array.isArray(data)) {
+                return { identifier, runTimestamp, tweetCount: data.length };
+            }
+        }
+    }
+    catch {
+        // ignore parse errors
+    }
+    return { identifier, runTimestamp };
+}
 // API: Scrape
 app.post('/api/scrape', async (req, res) => {
     try {
@@ -272,7 +309,9 @@ app.get('/api/result', (req, res) => {
 app.get('/api/download', (req, res) => {
     const filePathParam = typeof req.query.path === 'string' ? req.query.path : '';
     const resolvedPath = path.resolve(filePathParam);
-    if (!filePathParam || !(0, path_utils_1.isPathInsideBase)(resolvedPath, OUTPUT_ROOT)) {
+    const inPrimary = (0, path_utils_1.isPathInsideBase)(resolvedPath, OUTPUT_ROOT);
+    const inLegacy = (0, path_utils_1.isPathInsideBase)(resolvedPath, LEGACY_OUTPUT_ROOT);
+    if (!filePathParam || (!inPrimary && !inLegacy)) {
         return res.status(400).send('Invalid file path');
     }
     if (!fs.existsSync(resolvedPath)) {
@@ -282,10 +321,21 @@ app.get('/api/download', (req, res) => {
     const basename = path.basename(resolvedPath);
     let downloadName = basename;
     if (basename === 'tweets.md' || basename === 'index.md') {
-        const timestamp = new Date().toISOString().split('T')[0];
-        downloadName = `twitter-scrape-${timestamp}.md`;
+        const { identifier, runTimestamp, tweetCount } = getSafePathInfo(resolvedPath);
+        const timestamp = runTimestamp || new Date().toISOString().split('T')[0];
+        const countSegment = typeof tweetCount === 'number' ? `-${tweetCount}tweets` : '';
+        const idSegment = identifier || 'twitter';
+        downloadName = `${idSegment}-timeline-${timestamp}${countSegment}.md`;
     }
     res.download(resolvedPath, downloadName);
+});
+// Frontend entry (allows visiting "/" directly). Exclude /api routes.
+app.get(/^(?!\/api).*/, (req, res) => {
+    const indexPath = path.join(STATIC_DIR, 'index.html');
+    if (fs.existsSync(indexPath)) {
+        return res.sendFile(indexPath);
+    }
+    res.status(404).send('Not found');
 });
 // Start Server
 app.listen(PORT, () => {
