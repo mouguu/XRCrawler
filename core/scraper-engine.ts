@@ -3,7 +3,6 @@ import { Page } from 'puppeteer';
 import { BrowserLaunchOptions, BrowserManager } from './browser-manager';
 import { CookieManager } from './cookie-manager';
 import { SessionManager, Session } from './session-manager';
-import { RequestQueue } from './request-queue'; // Import RequestQueue
 import { ErrorSnapshotter } from './error-snapshotter';
 import { FingerprintManager } from './fingerprint-manager';
 import * as dataExtractor from './data-extractor';
@@ -80,7 +79,6 @@ export class ScraperEngine {
     private navigationService: NavigationService;
     private rateLimitManager: RateLimitManager;
     private sessionManager: SessionManager;
-    private requestQueue: RequestQueue; // Add RequestQueue
     private errorSnapshotter: ErrorSnapshotter;
     private fingerprintManager: FingerprintManager;
     private currentSession: Session | null = null;
@@ -96,7 +94,6 @@ export class ScraperEngine {
         this.navigationService = new NavigationService(this.eventBus);
         this.sessionManager = new SessionManager(undefined, this.eventBus);
         this.rateLimitManager = new RateLimitManager(this.sessionManager, this.eventBus);
-        this.requestQueue = new RequestQueue(); // Initialize RequestQueue
         this.errorSnapshotter = new ErrorSnapshotter();
         this.fingerprintManager = new FingerprintManager();
         this.browserManager = null;
@@ -147,7 +144,6 @@ export class ScraperEngine {
 
         // Initialize Managers
         await this.sessionManager.init();
-        // RequestQueue auto-loads state in constructor
 
         this.eventBus.emitLog('Browser launched and configured');
     }
@@ -183,10 +179,10 @@ export class ScraperEngine {
         // This ensures backward compatibility if no multi-session files are found
         try {
             const cookieManager = new CookieManager();
-            const cookieInfo = await cookieManager.loadAndInject(this.page);
+            const cookieInfo = await cookieManager.loadAndInject(this.page!);
             const fallbackSessionId = cookieInfo.source ? path.basename(cookieInfo.source) : 'legacy-cookies';
 
-            await this.fingerprintManager.injectFingerprint(this.page, fallbackSessionId);
+            await this.fingerprintManager.injectFingerprint(this.page!, fallbackSessionId);
             this.currentSession = {
                 id: fallbackSessionId,
                 cookies: cookieInfo.cookies,
@@ -328,9 +324,39 @@ export class ScraperEngine {
             if (addedInAttempt === 0) {
                 noNewTweetsConsecutiveAttempts++;
 
-                // If 2 consecutive attempts with no new tweets, assume we've reached the end
-                if (noNewTweetsConsecutiveAttempts >= 2) {
-                    this.eventBus.emitLog(`No new tweets detected after 2 attempts. Collected ${collectedTweets.length} tweets (target was ${limit}). Finishing...`);
+                // After 3 consecutive attempts with no new tweets, try session rotation
+                if (noNewTweetsConsecutiveAttempts >= 3) {
+                    // Check if we have other sessions to try
+                    const nextSession = this.sessionManager.getNextSession(undefined, this.currentSession?.id);
+                    
+                    if (nextSession && nextSession.id !== this.currentSession?.id) {
+                        this.eventBus.emitLog(`No new tweets after ${noNewTweetsConsecutiveAttempts} attempts. Rotating to session: ${nextSession.id}`, 'warn');
+                        
+                        // Mark current session as potentially rate-limited
+                        if (this.currentSession) {
+                            this.sessionManager.markBad(this.currentSession.id, 'soft-rate-limit');
+                        }
+                        
+                        // Switch session
+                        try {
+                            await this.sessionManager.injectSession(this.page!, nextSession);
+                            await this.fingerprintManager.injectFingerprint(this.page!, nextSession.id);
+                            this.currentSession = nextSession;
+                            
+                            // Re-navigate to the page
+                            await this.navigationService.navigateToUrl(this.page!, targetUrl);
+                            await this.navigationService.waitForTweets(this.page!);
+                            
+                            noNewTweetsConsecutiveAttempts = 0;
+                            this.eventBus.emitLog(`Switched to session ${nextSession.id}, continuing scrape...`);
+                            continue;
+                        } catch (switchError: any) {
+                            this.eventBus.emitLog(`Failed to switch session: ${switchError.message}`, 'error');
+                        }
+                    }
+                    
+                    // No more sessions or switch failed, stop
+                    this.eventBus.emitLog(`No new tweets detected after ${noNewTweetsConsecutiveAttempts} attempts. Collected ${collectedTweets.length} tweets (target was ${limit}). Finishing...`);
                     break;
                 }
             } else {
@@ -338,9 +364,8 @@ export class ScraperEngine {
             }
 
             // Scroll
-            // Use very short timeouts when no new tweets to speed up detection
             const scrollTimeout = noNewTweetsConsecutiveAttempts > 0 ? 1000 : constants.WAIT_FOR_NEW_TWEETS_TIMEOUT;
-            const domWaitTimeout = noNewTweetsConsecutiveAttempts > 0 ? 500 : 2000;
+            const domWaitTimeout = noNewTweetsConsecutiveAttempts > 0 ? 500 : 1500;
 
             await dataExtractor.scrollToBottomSmart(this.page, scrollTimeout);
             await dataExtractor.waitForNewTweets(this.page, tweetsOnPage.length, domWaitTimeout);

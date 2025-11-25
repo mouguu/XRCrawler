@@ -285,6 +285,7 @@ function App() {
                                         type="number"
                                         value={limit}
                                         onChange={(e) => setLimit(parseInt(e.target.value))}
+                                        onWheel={(e) => e.currentTarget.blur()}
                                         min="10"
                                         max="1000"
                                         className="peer w-full bg-transparent border-b border-stone py-2 focus:outline-none focus:border-rust transition-colors text-xl font-serif text-charcoal"
@@ -333,6 +334,7 @@ function App() {
                                         type="number"
                                         value={lookbackHours}
                                         onChange={(e) => setLookbackHours(parseInt(e.target.value))}
+                                        onWheel={(e) => e.currentTarget.blur()}
                                         min="1"
                                         max="168"
                                         className="peer w-full bg-transparent border-b border-stone py-2 focus:outline-none focus:border-rust transition-colors text-xl font-serif text-charcoal"

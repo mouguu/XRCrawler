@@ -204,7 +204,8 @@ app.post('/api/scrape', async (req: Request, res: Response) => {
                         deleteMerged
                     });
                 } else {
-                    return res.status(400).json({ error: 'Invalid scrape type' });
+                    res.status(400).json({ error: 'Invalid scrape type' });
+                    return;
                 }
 
                 if (result && result.success) {
@@ -224,7 +225,7 @@ app.post('/api/scrape', async (req: Request, res: Response) => {
                         const downloadUrl = `/api/download?path=${encodeURIComponent(runContext.markdownIndexPath)}`;
                         lastDownloadUrl = downloadUrl; // Save for later retrieval
                         console.log('[DEBUG] Sending success response with downloadUrl:', runContext.markdownIndexPath);
-                        return res.json({
+                        res.json({
                             success: true,
                             message: 'Scraping completed successfully!',
                             downloadUrl,
@@ -235,7 +236,7 @@ app.post('/api/scrape', async (req: Request, res: Response) => {
                     } else {
                         // No file path found
                         console.error('[DEBUG] No markdownIndexPath found in runContext');
-                        return res.status(500).json({
+                        res.status(500).json({
                             success: false,
                             error: 'Scraping finished but output file not found.'
                         });
@@ -244,7 +245,7 @@ app.post('/api/scrape', async (req: Request, res: Response) => {
                 } else {
                     // Error
                     console.error('Scraping failed:', result?.error || 'Unknown error');
-                    return res.status(500).json({
+                    res.status(500).json({
                         success: false,
                         error: result?.error || 'Scraping failed'
                     });
@@ -283,7 +284,8 @@ app.post('/api/monitor', async (req: Request, res: Response) => {
         try {
             const { users, lookbackHours, keywords } = req.body;
             if (!users || !Array.isArray(users) || users.length === 0) {
-                return res.status(400).json({ error: 'Invalid users list' });
+                res.status(400).json({ error: 'Invalid users list' });
+                return;
             }
 
             console.log(`Received monitor request for: ${users.join(', ')}`);
@@ -301,7 +303,8 @@ app.post('/api/monitor', async (req: Request, res: Response) => {
 
             if (!success) {
                 await engine.close();
-                return res.status(500).json({ error: 'Failed to load cookies' });
+                res.status(500).json({ error: 'Failed to load cookies' });
+                return;
             }
 
             const monitor = new MonitorService(engine);
