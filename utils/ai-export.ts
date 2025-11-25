@@ -1,35 +1,34 @@
-/**
- * AI Export Utilities
- * 专门用于生成适合喂给 LLM (ChatGPT/Claude) 进行分析的 Prompt 和数据格式
- */
+import { promises as fs } from 'fs';
+import * as path from 'path';
+import { RunContext } from './fileutils';
+import { Tweet } from './markdown';
+import { ProfileInfo } from '../core/data-extractor';
 
-const fs = require('fs').promises;
-const path = require('path');
+type AnalysisType = 'persona' | 'feed_analysis';
 
-/**
- * 生成人物画像分析的 Prompt 文件
- * @param {Array} tweets - 推文列表
- * @param {Object} profile - 用户资料
- * @param {Object} runContext - 运行上下文
- * @param {string} type - 分析类型 ('persona' | 'feed_analysis')
- */
-async function generatePersonaAnalysis(tweets, profile, runContext, type = 'persona') {
-  if (!tweets || tweets.length === 0) return;
-
-  const filename = `ai_analysis_prompt_${runContext.identifier}.md`;
-  // 使用 runDir 作为输出目录
-  const outputDir = runContext.runDir || runContext.outputDir;
+const buildSafeOutputPath = (runContext: RunContext | undefined, filename: string): string | null => {
+  const outputDir = runContext?.runDir || (runContext as any)?.outputDir; // fallback for legacy shape
   if (!outputDir) {
     console.error('Error: runContext.runDir is undefined');
-    return;
+    return null;
   }
-  const filePath = path.join(outputDir, filename);
+  return path.join(outputDir, filename);
+};
 
-  // 1. 构建系统提示词 (System Prompt)
+export async function generatePersonaAnalysis(
+  tweets: Tweet[],
+  profile: ProfileInfo | null | undefined,
+  runContext: RunContext,
+  type: AnalysisType = 'persona'
+): Promise<string | void> {
+  if (!tweets || tweets.length === 0) return;
+
+  const filePath = buildSafeOutputPath(runContext, `ai_analysis_prompt_${runContext.identifier}.md`);
+  if (!filePath) return;
+
   let systemPrompt = '';
 
   if (type === 'feed_analysis') {
-    // Home Feed 分析模板
     systemPrompt = `
 # Role
 You are an expert social media algorithm analyst and content strategist.
@@ -51,7 +50,6 @@ Please provide the analysis in the following structure:
 - Source: Home Timeline (For You / Following)
 `;
   } else {
-    // 默认：人物画像分析模板 (Persona)
     systemPrompt = `
 # Role
 You are an expert psychologist and social media analyst specializing in "Digital Persona Profiling".
@@ -75,26 +73,22 @@ Please provide the analysis in the following structure:
 `;
   }
 
-  // 2. 格式化推文数据 (Data Section)
-  // 移除冗余信息，保留时间、文本、互动数、媒体标记
-  const formattedTweets = tweets.map((t, index) => {
-    const date = t.time ? new Date(t.time).toISOString().split('T')[0] : 'Unknown Date';
-    let type = t.isReply ? '[REPLY]' : '[POST]';
-    if (t.isLiked) type = '[LIKED]'; // 优先标记为点赞
-    
-    const metrics = `(❤️${t.likes || 0} 🔁${t.retweets || 0})`;
-    const media = t.hasMedia ? '[HAS_MEDIA]' : '';
-    
-    // 简单的清洗，移除多余换行
-    const cleanText = t.text.replace(/\n+/g, ' ').trim();
-    
-    let line = `${index + 1}. ${date} ${type} ${metrics} ${media}: "${cleanText}"`;
-    
-    if (t.quotedContent) {
-      const cleanQuote = t.quotedContent.replace(/\n+/g, ' ').trim();
+  const formattedTweets = tweets.map((tweet, index) => {
+    const date = tweet.time ? new Date(tweet.time).toISOString().split('T')[0] : 'Unknown Date';
+    let typeLabel = tweet.isReply ? '[REPLY]' : '[POST]';
+    if ((tweet as any).isLiked) typeLabel = '[LIKED]';
+
+    const metrics = `(❤️${tweet.likes || 0} 🔁${tweet.retweets || 0})`;
+    const media = tweet.hasMedia ? '[HAS_MEDIA]' : '';
+
+    const cleanText = (tweet.text || '').toString().replace(/\n+/g, ' ').trim();
+    let line = `${index + 1}. ${date} ${typeLabel} ${metrics} ${media}: "${cleanText}"`;
+
+    if ((tweet as any).quotedContent) {
+      const cleanQuote = (tweet as any).quotedContent.replace(/\n+/g, ' ').trim();
       line += `\n    [QUOTING]: "${cleanQuote}"`;
     }
-    
+
     return line;
   }).join('\n');
 
@@ -102,29 +96,17 @@ Please provide the analysis in the following structure:
 
   await fs.writeFile(filePath, fileContent, 'utf-8');
   console.log(`\n🤖 AI Analysis Prompt generated: ${filePath}`);
-  console.log(`   (Copy the content of this file to ChatGPT/Claude for instant analysis)`);
-  
+  console.log('   (Copy the content of this file to ChatGPT/Claude for instant analysis)');
+
   return filePath;
 }
 
-/**
- * 生成线程分析的 Prompt 文件
- * @param {Array} tweets - 推文列表（包含原推和所有回复）
- * @param {Object} originalTweet - 原推文对象
- * @param {Object} runContext - 运行上下文
- */
-async function generateThreadAnalysis(tweets, originalTweet, runContext) {
+export async function generateThreadAnalysis(tweets: Tweet[], originalTweet: Tweet | undefined, runContext: RunContext): Promise<string | void> {
   if (!tweets || tweets.length === 0) return;
 
-  const filename = `ai_analysis_prompt_${runContext.identifier}.md`;
-  const outputDir = runContext.runDir || runContext.outputDir;
-  if (!outputDir) {
-    console.error('Error: runContext.runDir is undefined');
-    return;
-  }
-  const filePath = path.join(outputDir, filename);
+  const filePath = buildSafeOutputPath(runContext, `ai_analysis_prompt_${runContext.identifier}.md`);
+  if (!filePath) return;
 
-  // 构建系统提示词
   const systemPrompt = `
 # Role
 You are an expert social media conversation analyst and discourse researcher.
@@ -152,29 +134,28 @@ Please provide the analysis in the following structure:
 - Total Items in Thread: ${tweets.length}
 `;
 
-  // 格式化推文数据
-  const formattedTweets = tweets.map((t, index) => {
-    const date = t.time ? new Date(t.time).toISOString().split('T')[0] : 'Unknown Date';
-    let type = '[REPLY]';
-    if (originalTweet && t.id === originalTweet.id) {
-      type = '[ORIGINAL]';
-    } else if (t.isLiked) {
-      type = '[LIKED]';
+  const formattedTweets = tweets.map((tweet, index) => {
+    const date = tweet.time ? new Date(tweet.time).toISOString().split('T')[0] : 'Unknown Date';
+    let typeLabel = '[REPLY]';
+    if (originalTweet && tweet.id === originalTweet.id) {
+      typeLabel = '[ORIGINAL]';
+    } else if ((tweet as any).isLiked) {
+      typeLabel = '[LIKED]';
     }
-    
-    const metrics = `(❤️${t.likes || 0} 🔁${t.retweets || 0} 💬${t.replies || 0})`;
-    const media = t.hasMedia ? '[HAS_MEDIA]' : '';
-    const author = t.author ? `@${t.author}` : 'Unknown';
-    
-    const cleanText = t.text.replace(/\n+/g, ' ').trim();
-    
-    let line = `${index + 1}. ${date} ${type} ${author} ${metrics} ${media}: "${cleanText}"`;
-    
-    if (t.quotedContent) {
-      const cleanQuote = t.quotedContent.replace(/\n+/g, ' ').trim();
+
+    const metrics = `(❤️${tweet.likes || 0} 🔁${tweet.retweets || 0} 💬${tweet.replies || 0})`;
+    const media = tweet.hasMedia ? '[HAS_MEDIA]' : '';
+    const author = (tweet as any).author ? `@${(tweet as any).author}` : 'Unknown';
+
+    const cleanText = (tweet.text || '').toString().replace(/\n+/g, ' ').trim();
+
+    let line = `${index + 1}. ${date} ${typeLabel} ${author} ${metrics} ${media}: "${cleanText}"`;
+
+    if ((tweet as any).quotedContent) {
+      const cleanQuote = (tweet as any).quotedContent.replace(/\n+/g, ' ').trim();
       line += `\n    [QUOTING]: "${cleanQuote}"`;
     }
-    
+
     return line;
   }).join('\n');
 
@@ -182,13 +163,7 @@ Please provide the analysis in the following structure:
 
   await fs.writeFile(filePath, fileContent, 'utf-8');
   console.log(`\n🤖 Thread Analysis Prompt generated: ${filePath}`);
-  console.log(`   (Copy the content of this file to ChatGPT/Claude for instant analysis)`);
-  
+  console.log('   (Copy the content of this file to ChatGPT/Claude for instant analysis)');
+
   return filePath;
 }
-
-module.exports = {
-  generatePersonaAnalysis,
-  generateThreadAnalysis // 新增
-};
-

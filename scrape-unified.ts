@@ -15,6 +15,7 @@ import * as markdownUtils from './utils/markdown';
 import * as exportUtils from './utils/export';
 import * as fileUtils from './utils/fileutils';
 import { Tweet } from './utils/markdown';
+import { ProfileInfo } from './core/data-extractor';
 
 export interface ScrapeXFeedOptions extends Omit<ScrapeTimelineConfig, 'mode'> {
     scrapeLikes?: boolean;
@@ -54,7 +55,7 @@ export interface ScrapeTwitterUserResult {
     tweetCount: number;
     tweets: Tweet[];
     runContext?: fileUtils.RunContext;
-    profile?: any;
+    profile?: ProfileInfo | null;
 }
 
 export async function scrapeXFeed(options: ScrapeXFeedOptions = {}): Promise<ScrapeTimelineResult> {
@@ -104,7 +105,7 @@ export async function scrapeSearch(options: ScrapeSearchOptions): Promise<Scrape
 }
 
 export async function scrapeThread(options: ScrapeThreadOptions): Promise<ScrapeThreadResult> {
-    const engine = new ScraperEngine(getShouldStopScraping, { headless: options.headless, sessionId: (options as any).sessionId });
+    const engine = new ScraperEngine(getShouldStopScraping, { headless: options.headless, sessionId: options.sessionId });
     try {
         await engine.init();
         const cookiesLoaded = await engine.loadCookies();

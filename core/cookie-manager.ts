@@ -8,10 +8,6 @@ import * as path from 'path';
 import { Page, Protocol } from 'puppeteer';
 import * as validation from '../utils/validation';
 
-// Global rotation state
-let currentCookieIndex = 0;
-let availableCookieFiles: string[] = [];
-
 export interface CookieManagerOptions {
   cookiesDir?: string;
   enableRotation?: boolean;
@@ -32,6 +28,8 @@ export class CookieManager {
   private cookies: Protocol.Network.CookieParam[] | null;
   private username: string | null;
   private source: string | null;
+  private cookieFiles: string[];
+  private currentCookieIndex: number;
 
   constructor(options: CookieManagerOptions = {}) {
     this.cookiesDir = options.cookiesDir || path.join(process.cwd(), 'cookies');
@@ -39,6 +37,8 @@ export class CookieManager {
     this.cookies = null;
     this.username = null;
     this.source = null;
+    this.cookieFiles = [];
+    this.currentCookieIndex = 0;
   }
 
   /**
@@ -55,10 +55,10 @@ export class CookieManager {
       }
 
       const files = await fs.readdir(this.cookiesDir);
-      const cookieFiles = files
+      this.cookieFiles = files
         .filter(file => file.endsWith('.json'))
         .map(file => path.join(this.cookiesDir, file));
-      return cookieFiles;
+      return [...this.cookieFiles];
     } catch (error: any) {
       console.warn(`[CookieManager] Failed to scan cookies directory: ${error.message}`);
       return [];
@@ -66,60 +66,83 @@ export class CookieManager {
   }
 
   /**
+   * Ensure we have an up-to-date list of cookie files before rotating.
+   */
+  private async ensureCookieFiles(): Promise<void> {
+    if (this.cookieFiles.length === 0) {
+      await this.scanCookieFiles();
+    }
+
+    if (this.cookieFiles.length === 0) {
+      throw new Error(`No cookie files found in ${this.cookiesDir}. Please place your exported cookie JSON files there.`);
+    }
+  }
+
+  /**
    * 获取下一个 cookie 文件（轮换逻辑）
    */
-  async getNextCookieFile(): Promise<string> {
-    // 如果还没有扫描过，或者列表为空，重新扫描
-    if (availableCookieFiles.length === 0) {
-      availableCookieFiles = await this.scanCookieFiles();
-      if (availableCookieFiles.length === 0) {
-        throw new Error(`No cookie files found in ${this.cookiesDir}. Please place your exported cookie JSON files there.`);
+  async getNextCookieFile(excludePath?: string): Promise<string> {
+    await this.ensureCookieFiles();
+
+    // Skip the excluded file if possible
+    if (excludePath && this.cookieFiles.length > 1) {
+      const normalizedExclude = path.resolve(excludePath);
+      let safety = 0;
+      while (
+        path.resolve(this.cookieFiles[this.currentCookieIndex]) === normalizedExclude &&
+        safety < this.cookieFiles.length
+      ) {
+        this.currentCookieIndex = (this.currentCookieIndex + 1) % this.cookieFiles.length;
+        safety++;
       }
     }
 
-    // 获取当前索引的文件
-    const cookieFile = availableCookieFiles[currentCookieIndex];
+    const cookieFile = this.cookieFiles[this.currentCookieIndex];
 
-    // 更新索引（循环）
-    if (this.enableRotation && availableCookieFiles.length > 1) {
-       currentCookieIndex = (currentCookieIndex + 1) % availableCookieFiles.length;
-       console.log(`[CookieManager] Rotating to cookie file ${currentCookieIndex + 1}/${availableCookieFiles.length}: ${path.basename(cookieFile)}`);
+    if (this.enableRotation && this.cookieFiles.length > 1) {
+      this.currentCookieIndex = (this.currentCookieIndex + 1) % this.cookieFiles.length;
+      console.log(`[CookieManager] Rotating to cookie file ${this.currentCookieIndex + 1}/${this.cookieFiles.length}: ${path.basename(cookieFile)}`);
     } else {
-       // Single file mode or rotation disabled
-       console.log(`[CookieManager] Using cookie file: ${path.basename(cookieFile)}`);
+      console.log(`[CookieManager] Using cookie file: ${path.basename(cookieFile)}`);
     }
 
     return cookieFile;
   }
 
   /**
+   * 从指定文件加载 Cookie（不改变轮换状态）
+   */
+  async loadFromFile(cookieFile: string): Promise<CookieLoadResult> {
+    try {
+      const cookiesString = await fs.readFile(cookieFile, 'utf-8');
+      const envData = JSON.parse(cookiesString);
+      return this.parseCookieData(envData, cookieFile);
+    } catch (error: any) {
+      throw new Error(`Failed to load cookies from ${cookieFile}: ${error.message}`);
+    }
+  }
+
+  /**
    * 从文件加载 Cookie
    */
   async load(): Promise<CookieLoadResult> {
-    let envData: any = null;
-    let cookieSource: string | null = null;
+    const cookieSource = await this.getNextCookieFile();
+    return this.loadFromFile(cookieSource);
+  }
 
-    try {
-      // Always try to get a file from the directory
-      cookieSource = await this.getNextCookieFile();
-      const cookiesString = await fs.readFile(cookieSource, 'utf-8');
-      envData = JSON.parse(cookiesString);
-    } catch (error: any) {
-      throw new Error(`Failed to load cookies: ${error.message}`);
-    }
-
-    // 验证 Cookie 数据
+  /**
+   * 解析 Cookie 文件内容并进行验证
+   */
+  private parseCookieData(envData: any, sourcePath: string): CookieLoadResult {
     const cookieValidation = validation.validateEnvCookieData(envData);
     if (!cookieValidation.valid) {
-      throw new Error(`Cookie validation failed for ${cookieSource ? path.basename(cookieSource) : 'unknown file'}: ${cookieValidation.error}`);
+      throw new Error(`Cookie validation failed for ${path.basename(sourcePath)}: ${cookieValidation.error}`);
     }
 
-    // 存储验证后的数据（使用过滤后的 cookies）
     this.cookies = cookieValidation.cookies || [];
     this.username = cookieValidation.username || null;
-    this.source = cookieSource;
+    this.source = sourcePath;
 
-    // 如果有过滤掉的 cookie，记录信息
     if (cookieValidation.filteredCount && cookieValidation.filteredCount > 0) {
       console.log(`[CookieManager] Filtered out ${cookieValidation.filteredCount} expired cookie(s), using ${this.cookies?.length || 0} valid cookies`);
     }

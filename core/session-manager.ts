@@ -1,22 +1,28 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { Page } from 'puppeteer';
+import { Page, Protocol } from 'puppeteer';
+import { CookieManager } from './cookie-manager';
+import { ScraperEventBus } from './event-bus';
 
 export interface Session {
     id: string;
-    cookies: any[];
+    cookies: Protocol.Network.CookieParam[];
     usageCount: number;
     errorCount: number;
     isRetired: boolean;
     filePath: string;
+    username?: string | null;
 }
 
 export class SessionManager {
     private sessions: Session[] = [];
     private currentSessionIndex: number = 0;
     private maxErrorCount: number = 3;
+    private cookieManager: CookieManager;
 
-    constructor(private cookieDir: string = './cookies') { }
+    constructor(private cookieDir: string = './cookies', private eventBus?: ScraperEventBus) {
+        this.cookieManager = new CookieManager({ cookiesDir: this.cookieDir, enableRotation: false });
+    }
 
     /**
      * 初始化：加载所有 Cookie 文件
@@ -30,48 +36,57 @@ export class SessionManager {
         const files = fs.readdirSync(this.cookieDir).filter(f => f.endsWith('.json'));
 
         for (const file of files) {
+            const filePath = path.join(this.cookieDir, file);
             try {
-                const filePath = path.join(this.cookieDir, file);
-                const content = fs.readFileSync(filePath, 'utf-8');
-                const parsed = JSON.parse(content);
-
-                // Support both array format and object format with "cookies" key
-                let cookies = Array.isArray(parsed) ? parsed : parsed.cookies;
-
-                // 简单的验证：必须是数组且有内容
-                if (Array.isArray(cookies) && cookies.length > 0) {
-                    this.sessions.push({
-                        id: file.replace('.json', ''),
-                        cookies,
-                        usageCount: 0,
-                        errorCount: 0,
-                        isRetired: false,
-                        filePath
-                    });
-                }
-            } catch (e) {
-                console.error(`[SessionManager] Failed to load cookie file ${file}:`, e);
+                const cookieInfo = await this.cookieManager.loadFromFile(filePath);
+                this.sessions.push({
+                    id: file.replace('.json', ''),
+                    cookies: cookieInfo.cookies,
+                    username: cookieInfo.username,
+                    usageCount: 0,
+                    errorCount: 0,
+                    isRetired: false,
+                    filePath
+                });
+            } catch (e: any) {
+                this._log(`Failed to load cookie file ${file}: ${e.message}`, 'error');
             }
         }
 
-        console.log(`[SessionManager] Loaded ${this.sessions.length} sessions.`);
+        this._log(`[SessionManager] Loaded ${this.sessions.length} sessions.`);
+    }
+
+    hasActiveSession(): boolean {
+        return this.sessions.some(s => !s.isRetired);
+    }
+
+    getSessionById(id: string): Session | undefined {
+        return this.sessions.find(s => s.id === id);
     }
 
     /**
      * 获取下一个可用 Session (轮询策略)
      */
-    getSession(preferredId?: string): Session | null {
+    getNextSession(preferredId?: string, excludeId?: string): Session | null {
         const activeSessions = this.sessions.filter(s => !s.isRetired);
         if (activeSessions.length === 0) return null;
 
-        if (preferredId) {
-            const preferred = activeSessions.find(s => s.id === preferredId.replace('.json', ''));
+        const normalizedPreferred = preferredId ? preferredId.replace('.json', '') : undefined;
+        if (normalizedPreferred) {
+            const preferred = activeSessions.find(s => s.id === normalizedPreferred);
             if (preferred) return preferred;
         }
 
-        // 简单的轮询
-        const session = activeSessions[this.currentSessionIndex % activeSessions.length];
-        this.currentSessionIndex++;
+        const eligibleSessions = excludeId
+            ? activeSessions.filter(s => s.id !== excludeId.replace('.json', ''))
+            : activeSessions;
+
+        if (eligibleSessions.length === 0) {
+            return null;
+        }
+
+        const session = eligibleSessions[this.currentSessionIndex % eligibleSessions.length];
+        this.currentSessionIndex = (this.currentSessionIndex + 1) % eligibleSessions.length;
 
         return session;
     }
@@ -80,11 +95,11 @@ export class SessionManager {
      * 标记 Session 为“坏” (遇到错误)
      * 如果错误次数过多，将自动退休该 Session
      */
-    markBad(sessionId: string) {
+    markBad(sessionId: string, reason: string = 'unknown error'): void {
         const session = this.sessions.find(s => s.id === sessionId);
         if (session) {
             session.errorCount++;
-            console.warn(`[SessionManager] Session ${sessionId} error count: ${session.errorCount}`);
+            this._log(`Session ${sessionId} error count: ${session.errorCount} (${reason})`, 'warn');
 
             if (session.errorCount >= this.maxErrorCount) {
                 this.retire(sessionId);
@@ -95,7 +110,7 @@ export class SessionManager {
     /**
      * 标记 Session 为“好” (成功抓取)
      */
-    markGood(sessionId: string) {
+    markGood(sessionId: string): void {
         const session = this.sessions.find(s => s.id === sessionId);
         if (session) {
             session.usageCount++;
@@ -107,19 +122,36 @@ export class SessionManager {
     /**
      * 退休 Session (不再使用)
      */
-    retire(sessionId: string) {
+    retire(sessionId: string): void {
         const session = this.sessions.find(s => s.id === sessionId);
         if (session) {
             session.isRetired = true;
-            console.error(`[SessionManager] Session ${sessionId} has been RETIRED due to too many errors.`);
+            this._log(`Session ${sessionId} has been RETIRED due to too many errors.`, 'error');
         }
     }
 
     /**
      * 将 Session 注入到 Page
      */
-    async injectSession(page: Page, session: Session): Promise<void> {
-        console.log(`[SessionManager] Injecting session: ${session.id}`);
+    async injectSession(page: Page, session: Session, clearExistingCookies: boolean = true): Promise<void> {
+        this._log(`Injecting session: ${session.id}`);
+        if (clearExistingCookies) {
+            const existingCookies = await page.cookies();
+            if (existingCookies.length > 0) {
+                await page.deleteCookie(...existingCookies);
+            }
+        }
         await page.setCookie(...session.cookies);
+    }
+
+    private _log(message: string, level: 'info' | 'warn' | 'error' = 'info'): void {
+        if (this.eventBus) {
+            this.eventBus.emitLog(message, level);
+        } else {
+            const prefix = '[SessionManager]';
+            if (level === 'error') console.error(prefix, message);
+            else if (level === 'warn') console.warn(prefix, message);
+            else console.log(prefix, message);
+        }
     }
 }

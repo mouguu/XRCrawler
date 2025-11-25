@@ -7,8 +7,8 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as timeUtils from './time';
 
-const DEFAULT_OUTPUT_ROOT = path.join(__dirname, '..', 'output');
-const CACHE_ROOT = path.join(__dirname, '..', '.cache');
+const DEFAULT_OUTPUT_ROOT = path.resolve(process.cwd(), 'output');
+const CACHE_ROOT = path.resolve(process.cwd(), '.cache');
 
 const DEFAULT_PLATFORM = 'twitter';
 const DEFAULT_IDENTIFIER = 'timeline';
@@ -58,6 +58,10 @@ export async function ensureBaseStructure(): Promise<boolean> {
  */
 export async function ensureDirectories(): Promise<boolean> {
   return ensureBaseStructure();
+}
+
+export function getDefaultOutputRoot(): string {
+  return DEFAULT_OUTPUT_ROOT;
 }
 
 export interface RunContextOptions {

@@ -33,6 +33,9 @@ function App() {
     const [lookbackHours, setLookbackHours] = useState(24);
     const [keywords, setKeywords] = useState('');
 
+    const trimmedInput = input.trim();
+    const canSubmit = !isScraping && trimmedInput.length > 0;
+
 
 
     const logEndRef = useRef<HTMLDivElement>(null);
@@ -106,6 +109,7 @@ function App() {
     };
 
     const handleScrape = async () => {
+        if (isScraping) return;
         setIsScraping(true);
         setLogs([]);
         setDownloadUrl(null);
@@ -360,7 +364,7 @@ function App() {
                     {!isScraping ? (
                         <button
                             onClick={handleScrape}
-                            disabled={!input}
+                            disabled={!canSubmit}
                             className="group px-10 py-4 border border-charcoal rounded-full hover:bg-charcoal hover:text-washi transition-all duration-500 uppercase tracking-widest text-sm flex items-center gap-4 disabled:opacity-50 disabled:cursor-not-allowed font-serif"
                         >
                             <span className="group-hover:translate-x-1 transition-transform duration-300">

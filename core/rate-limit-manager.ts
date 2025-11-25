@@ -1,62 +1,69 @@
-import * as path from 'path';
 import { Page } from 'puppeteer';
-import { CookieManager } from './cookie-manager';
 import { ScraperEventBus } from './event-bus';
+import { SessionManager, Session } from './session-manager';
 
 const throttle = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
 export class RateLimitManager {
     private eventBus: ScraperEventBus | undefined;
-    private cookieManager: CookieManager;
+    private sessionManager: SessionManager;
     private maxRotationAttempts: number;
 
-    constructor(eventBus?: ScraperEventBus) {
+    constructor(sessionManager: SessionManager, eventBus?: ScraperEventBus) {
         this.eventBus = eventBus;
-        this.cookieManager = new CookieManager();
+        this.sessionManager = sessionManager;
         this.maxRotationAttempts = 3;
     }
 
-    async handleRateLimit(page: Page, currentAttempt: number, error: Error, currentSessionId?: string): Promise<boolean> {
+    async handleRateLimit(_page: Page, currentAttempt: number, error: Error, currentSessionId?: string): Promise<Session | null> {
         if (currentAttempt >= this.maxRotationAttempts) {
             this._log(`Rate limit handling failed after ${currentAttempt} attempts: ${error.message}`, 'error');
-            return false;
+            return null;
         }
 
         this._log(`⚠️ Rate limit detected! Rotating to next cookie account (attempt ${currentAttempt + 1}/${this.maxRotationAttempts})...`, 'warn');
 
         try {
-            // Create a new instance to ensure fresh state or use existing one if designed to handle rotation
-            // Assuming CookieManager has logic to pick a *different* cookie or we need to implement that logic.
-            // For now, we'll reload and inject. In a real scenario, CookieManager should track used cookies.
-            // The original code just did `new CookieManager().load()`.
-
-            const newCookieManager = new CookieManager();
-            let cookieData = await newCookieManager.load(); // This needs to be smart enough to load a *different* one if possible, or just next one
-
-            // If we picked the same cookie as current, try the next one (avoid rotating to self)
-            if (currentSessionId && cookieData.source && cookieData.source.includes(currentSessionId)) {
-                this._log(`Selected same session (${currentSessionId}), trying next cookie...`, 'warn');
-                cookieData = await newCookieManager.load();
+            if (currentSessionId) {
+                this.sessionManager.markBad(currentSessionId, 'rate-limit');
             }
 
-            await newCookieManager.injectIntoPage(page);
-            this._log(`✅ Switched to cookie: ${path.basename(cookieData.source || 'unknown')}`);
+            const nextSession = this.sessionManager.getNextSession(undefined, currentSessionId);
+            if (!nextSession) {
+                this._log('No additional sessions available to rotate into.', 'error');
+                return null;
+            }
 
+            this._log(`✅ Selected fallback session: ${nextSession.id}${nextSession.username ? ` (${nextSession.username})` : ''}`);
             await throttle(2000);
-            return true;
+            return nextSession;
         } catch (err: any) {
             this._log(`Failed to rotate cookie: ${err.message}`, 'error');
-            return false;
+            return null;
         }
     }
 
     isRateLimitError(error: Error): boolean {
-        const msg = error.message || '';
-        return msg.includes('Waiting failed') ||
-            msg.includes('timeout') ||
-            msg.includes('exceeded') ||
-            msg.includes('Waiting for selector') ||
-            msg.includes('Navigation timeout');
+        const msg = (error.message || '').toLowerCase();
+        if ((error as any).name === 'TimeoutError' && msg.includes('navigation')) {
+            return true;
+        }
+
+        const rateLimitHints = [
+            'too many requests',
+            'rate limit',
+            'rate-limited',
+            '429',
+            'exceeded',
+            'something went wrong',
+            'guest token',
+            'waiting failed',
+            'waiting for selector',
+            'navigation timeout',
+            'timeout exceeded'
+        ];
+
+        return rateLimitHints.some(hint => msg.includes(hint));
     }
 
     private _log(message: string, level: string = 'info'): void {

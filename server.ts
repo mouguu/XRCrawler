@@ -6,18 +6,101 @@ import eventBusInstance from './core/event-bus';
 import { ScrapeProgressData, LogMessageData } from './core/event-bus';
 import { getShouldStopScraping, resetShouldStopScraping, setShouldStopScraping } from './core/stop-signal';
 import { isPathInsideBase } from './utils/path-utils';
+import * as fileUtils from './utils/fileutils';
 import { apiKeyMiddleware } from './middleware/api-key';
+import { RequestQueue, RequestTask } from './core/request-queue';
 
 const app = express();
 const PORT = 3000;
-// Align with utils/fileutils (dist/output) while keeping legacy root/output compatibility
-const OUTPUT_ROOT = path.resolve(__dirname, 'output');
-const LEGACY_OUTPUT_ROOT = path.resolve(process.cwd(), 'output');
+// Align with utils/fileutils (process.cwd()/output) while keeping legacy dist/output compatibility
+const OUTPUT_ROOT = fileUtils.getDefaultOutputRoot();
+const LEGACY_OUTPUT_ROOT = path.resolve(__dirname, 'output');
 const STATIC_DIR = path.resolve(process.cwd(), 'public');
 
 // Global state for manual stop
 let isScrapingActive = false;
 let lastDownloadUrl: string | null = null;
+let isShuttingDown = false;
+const activeTasks = new Set<Promise<unknown>>();
+const requestQueue = new RequestQueue({ persistIntervalMs: 0 });
+type QueuedHandler = { handler: () => Promise<void>; resolve: () => void; reject: (error: any) => void };
+const queuedHandlers = new Map<string, QueuedHandler>();
+let isProcessingQueue = false;
+
+async function trackTask<T>(fn: () => Promise<T>): Promise<T> {
+    const taskPromise = fn();
+    activeTasks.add(taskPromise);
+    try {
+        return await taskPromise;
+    } finally {
+        activeTasks.delete(taskPromise);
+    }
+}
+
+function rejectIfShuttingDown(res: Response): boolean {
+    if (isShuttingDown) {
+        res.status(503).json({ error: 'Server is shutting down' });
+        return true;
+    }
+    return false;
+}
+
+async function enqueueSequentialTask(
+    taskInfo: Omit<RequestTask, 'id' | 'uniqueKey' | 'retryCount'> & { uniqueKey?: string },
+    handler: () => Promise<void>
+): Promise<void> {
+    const queuedTask = await requestQueue.addRequest({
+        ...taskInfo,
+        uniqueKey: taskInfo.uniqueKey || `${taskInfo.type}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    });
+
+    if (!queuedTask) {
+        throw new Error('Task is already queued or was handled recently');
+    }
+
+    const completion = new Promise<void>((resolve, reject) => {
+        queuedHandlers.set(queuedTask.id, { handler, resolve, reject });
+    });
+
+    processQueue();
+    return completion;
+}
+
+async function processQueue(): Promise<void> {
+    if (isProcessingQueue) return;
+    isProcessingQueue = true;
+
+    try {
+        let nextTask: RequestTask | null;
+        while ((nextTask = requestQueue.fetchNextRequest())) {
+            const entry = queuedHandlers.get(nextTask.id);
+            if (!entry) {
+                await requestQueue.markRequestHandled(nextTask);
+                continue;
+            }
+
+            if (isShuttingDown) {
+                await requestQueue.markRequestHandled(nextTask);
+                entry.reject(new Error('Server shutting down'));
+                queuedHandlers.delete(nextTask.id);
+                continue;
+            }
+
+            try {
+                await entry.handler();
+                await requestQueue.markRequestHandled(nextTask);
+                entry.resolve();
+            } catch (error) {
+                await requestQueue.markRequestHandled(nextTask);
+                entry.reject(error);
+            } finally {
+                queuedHandlers.delete(nextTask.id);
+            }
+        }
+    } finally {
+        isProcessingQueue = false;
+    }
+}
 
 // Middleware
 app.use(express.json());
@@ -64,165 +147,202 @@ function getSafePathInfo(resolvedPath: string): { identifier?: string; runTimest
 
 // API: Scrape
 app.post('/api/scrape', async (req: Request, res: Response) => {
+    if (rejectIfShuttingDown(res)) return;
+
+    const queueType: RequestTask['type'] = req.body?.type === 'thread'
+        ? 'thread'
+        : req.body?.type === 'search'
+            ? 'search'
+            : 'timeline';
+    const queueKey = typeof req.body?.input === 'string' && req.body.input
+        ? req.body.input
+        : queueType;
+
     try {
-        const { type, input, limit = 50, likes = false, mergeResults = false, deleteMerged = false } = req.body;
+        await enqueueSequentialTask(
+            { url: queueKey, type: queueType, priority: 1 },
+            () => trackTask(async () => {
+            try {
+                const { type, input, limit = 50, likes = false, mergeResults = false, deleteMerged = false } = req.body;
 
-        console.log(`Received scrape request: Type=${type}, Input=${input}, Limit=${limit}`);
+                console.log(`Received scrape request: Type=${type}, Input=${input}, Limit=${limit}`);
 
-        // Reset stop flag and set active state
-        resetShouldStopScraping();
-        isScrapingActive = true;
-        lastDownloadUrl = null; // Clear previous result
+                // Reset stop flag and set active state
+                resetShouldStopScraping();
+                isScrapingActive = true;
+                lastDownloadUrl = null; // Clear previous result
 
-        let result: any;
+                let result: scraper.ScrapeTimelineResult | scraper.ScrapeThreadResult | undefined;
 
-        if (type === 'profile') {
-            // Profile Scrape
-            const username = input.replace('@', '').replace('https://x.com/', '').replace('/', '');
-            result = await scraper.scrapeXFeed({
-                username,
-                limit: parseInt(limit),
-                scrapeLikes: likes,
-                saveMarkdown: true,
-                mergeResults,
-                deleteMerged
-            });
+                if (type === 'profile') {
+                    // Profile Scrape
+                    const username = input.replace('@', '').replace('https://x.com/', '').replace('/', '');
+                    result = await scraper.scrapeXFeed({
+                        username,
+                        limit: parseInt(limit),
+                        scrapeLikes: likes,
+                        saveMarkdown: true,
+                        mergeResults,
+                        deleteMerged
+                    });
 
-        } else if (type === 'thread') {
-            // Thread Scrape
-            result = await scraper.scrapeThread({
-                tweetUrl: input,
-                maxReplies: parseInt(limit),
-                saveMarkdown: true
-            });
+                } else if (type === 'thread') {
+                    // Thread Scrape
+                    result = await scraper.scrapeThread({
+                        tweetUrl: input,
+                        maxReplies: parseInt(limit),
+                        saveMarkdown: true
+                    });
 
-        } else if (type === 'search') {
-            // Search Scrape
-            result = await scraper.scrapeSearch({
-                query: input,
-                limit: parseInt(limit),
-                saveMarkdown: true,
-                mergeResults,
-                deleteMerged
-            });
-        } else {
-            return res.status(400).json({ error: 'Invalid scrape type' });
-        }
+                } else if (type === 'search') {
+                    // Search Scrape
+                    result = await scraper.scrapeSearch({
+                        query: input,
+                        limit: parseInt(limit),
+                        saveMarkdown: true,
+                        mergeResults,
+                        deleteMerged
+                    });
+                } else {
+                    return res.status(400).json({ error: 'Invalid scrape type' });
+                }
 
-        if (result && result.success) {
-            console.log('[DEBUG] Scrape result:', JSON.stringify({
-                success: result.success,
-                hasRunContext: !!result.runContext,
-                hasTweets: !!result.tweets,
-                tweetsCount: result.tweets?.length,
-                runContextKeys: result.runContext ? Object.keys(result.runContext) : [],
-                markdownIndexPath: result.runContext?.markdownIndexPath
-            }, null, 2));
+                if (result && result.success) {
+                    console.log('[DEBUG] Scrape result:', JSON.stringify({
+                        success: result.success,
+                        hasRunContext: !!result.runContext,
+                        hasTweets: !!result.tweets,
+                        tweetsCount: result.tweets?.length,
+                        runContextKeys: result.runContext ? Object.keys(result.runContext) : [],
+                        markdownIndexPath: result.runContext?.markdownIndexPath
+                    }, null, 2));
 
-            const runContext = result.runContext;
+                    const runContext = result.runContext;
 
-            if (runContext && runContext.markdownIndexPath) {
-                // Success
-                const downloadUrl = `/api/download?path=${encodeURIComponent(runContext.markdownIndexPath)}`;
-                lastDownloadUrl = downloadUrl; // Save for later retrieval
-                console.log('[DEBUG] Sending success response with downloadUrl:', runContext.markdownIndexPath);
-                return res.json({
-                    success: true,
-                    message: 'Scraping completed successfully!',
-                    downloadUrl,
-                    stats: {
-                        count: result.tweets ? result.tweets.length : 0
+                    if (runContext && runContext.markdownIndexPath) {
+                        // Success
+                        const downloadUrl = `/api/download?path=${encodeURIComponent(runContext.markdownIndexPath)}`;
+                        lastDownloadUrl = downloadUrl; // Save for later retrieval
+                        console.log('[DEBUG] Sending success response with downloadUrl:', runContext.markdownIndexPath);
+                        return res.json({
+                            success: true,
+                            message: 'Scraping completed successfully!',
+                            downloadUrl,
+                            stats: {
+                                count: result.tweets ? result.tweets.length : 0
+                            }
+                        });
+                    } else {
+                        // No file path found
+                        console.error('[DEBUG] No markdownIndexPath found in runContext');
+                        return res.status(500).json({
+                            success: false,
+                            error: 'Scraping finished but output file not found.'
+                        });
                     }
-                });
-            } else {
-                // No file path found
-                console.error('[DEBUG] No markdownIndexPath found in runContext');
-                return res.status(500).json({
+
+                } else {
+                    // Error
+                    console.error('Scraping failed:', result?.error || 'Unknown error');
+                    return res.status(500).json({
+                        success: false,
+                        error: result?.error || 'Scraping failed'
+                    });
+                }
+
+            } catch (error: any) {
+                console.error('Server error:', error.message);
+                res.status(500).json({
                     success: false,
-                    error: 'Scraping finished but output file not found.'
+                    error: error.message
                 });
+            } finally {
+                // Reset scraping state
+                isScrapingActive = false;
+                resetShouldStopScraping();
             }
-
-        } else {
-            // Error
-            console.error('Scraping failed:', result?.error || 'Unknown error');
-            return res.status(500).json({
-                success: false,
-                error: result?.error || 'Scraping failed'
-            });
-        }
-
+            })
+        );
     } catch (error: any) {
-        console.error('Server error:', error.message);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    } finally {
-        // Reset scraping state
-        isScrapingActive = false;
-        resetShouldStopScraping();
+        console.error('Queue error:', error.message);
+        const shuttingDown = isShuttingDown || (error?.message || '').includes('shutting down');
+        res.status(shuttingDown ? 503 : 429).json({ success: false, error: shuttingDown ? 'Server is shutting down' : 'Another task is already queued or running' });
     }
 });
 
 // API: Monitor
 app.post('/api/monitor', async (req: Request, res: Response) => {
+    if (rejectIfShuttingDown(res)) return;
+
+    const queueKey = Array.isArray(req.body?.users) ? req.body.users.join(',') : 'monitor';
+
     try {
-        const { users, lookbackHours, keywords } = req.body;
-        if (!users || !Array.isArray(users) || users.length === 0) {
-            return res.status(400).json({ error: 'Invalid users list' });
-        }
+        await enqueueSequentialTask(
+            { url: queueKey || 'monitor', type: 'monitor', priority: 1 },
+            () => trackTask(async () => {
+        try {
+            const { users, lookbackHours, keywords } = req.body;
+            if (!users || !Array.isArray(users) || users.length === 0) {
+                return res.status(400).json({ error: 'Invalid users list' });
+            }
 
-        console.log(`Received monitor request for: ${users.join(', ')}`);
+            console.log(`Received monitor request for: ${users.join(', ')}`);
 
-        isScrapingActive = true;
-        resetShouldStopScraping();
+            isScrapingActive = true;
+            resetShouldStopScraping();
 
-        // Dynamic import to avoid circular dependencies or initialization issues
-        const { ScraperEngine } = require('./core/scraper-engine');
-        const { MonitorService } = require('./core/monitor-service');
+            // Dynamic import to avoid circular dependencies or initialization issues
+            const { ScraperEngine } = require('./core/scraper-engine');
+            const { MonitorService } = require('./core/monitor-service');
 
-        const engine = new ScraperEngine(() => getShouldStopScraping());
-        await engine.init();
-        const success = await engine.loadCookies();
+            const engine = new ScraperEngine(() => getShouldStopScraping());
+            await engine.init();
+            const success = await engine.loadCookies();
 
-        if (!success) {
+            if (!success) {
+                await engine.close();
+                return res.status(500).json({ error: 'Failed to load cookies' });
+            }
+
+            const monitor = new MonitorService(engine);
+            await monitor.runMonitor(users, {
+                lookbackHours: lookbackHours ? parseFloat(lookbackHours) : undefined,
+                keywords: keywords ? keywords.split(',').map((k: string) => k.trim()).filter(Boolean) : undefined
+            });
+
             await engine.close();
-            return res.status(500).json({ error: 'Failed to load cookies' });
+
+            // Check for report file
+            const dateStr = new Date().toISOString().split('T')[0];
+        const reportPath = path.join(OUTPUT_ROOT, 'reports', `daily_report_${dateStr}.md`);
+            let downloadUrl = null;
+
+            if (fs.existsSync(reportPath)) {
+                downloadUrl = `/api/download?path=${encodeURIComponent(reportPath)}`;
+            }
+
+            res.json({
+                success: true,
+                message: 'Monitor run completed',
+                downloadUrl
+            });
+
+        } catch (error: any) {
+            console.error('Monitor error:', error.message);
+            res.status(500).json({
+                success: false,
+                error: error.message
+            });
+        } finally {
+            isScrapingActive = false;
+            resetShouldStopScraping();
         }
-
-        const monitor = new MonitorService(engine);
-        await monitor.runMonitor(users, {
-            lookbackHours: lookbackHours ? parseFloat(lookbackHours) : undefined,
-            keywords: keywords ? keywords.split(',').map((k: string) => k.trim()).filter(Boolean) : undefined
-        });
-
-        await engine.close();
-
-        // Check for report file
-        const dateStr = new Date().toISOString().split('T')[0];
-        const reportPath = path.join(process.cwd(), 'output', 'reports', `daily_report_${dateStr}.md`);
-        let downloadUrl = null;
-
-        if (fs.existsSync(reportPath)) {
-            downloadUrl = `/api/download?path=${encodeURIComponent(reportPath)}`;
-        }
-
-        res.json({
-            success: true,
-            message: 'Monitor run completed',
-            downloadUrl
-        });
-
+            })
+        );
     } catch (error: any) {
-        console.error('Monitor error:', error.message);
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    } finally {
-        isScrapingActive = false;
-        resetShouldStopScraping();
+        console.error('Queue error:', error.message);
+        const shuttingDown = isShuttingDown || (error?.message || '').includes('shutting down');
+        res.status(shuttingDown ? 503 : 429).json({ success: false, error: shuttingDown ? 'Server is shutting down' : 'Another task is already queued or running' });
     }
 });
 
@@ -345,6 +465,32 @@ app.get(/^(?!\/api).*/, (req: Request, res: Response) => {
 });
 
 // Start Server
-app.listen(PORT, () => {
+const serverInstance = app.listen(PORT, () => {
     console.log(`Server running at http://localhost:${PORT}`);
+});
+
+const SHUTDOWN_TIMEOUT_MS = 12000;
+async function gracefulShutdown(signal: string) {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+
+    console.log(`[Shutdown] Received ${signal}. Waiting for active tasks to finish...`);
+    setShouldStopScraping(true);
+
+    try {
+        await Promise.race([
+            Promise.allSettled(Array.from(activeTasks)),
+            new Promise(resolve => setTimeout(resolve, SHUTDOWN_TIMEOUT_MS))
+        ]);
+    } finally {
+        serverInstance.close(() => {
+            console.log('[Shutdown] HTTP server closed');
+            process.exit(0);
+        });
+        setTimeout(() => process.exit(0), SHUTDOWN_TIMEOUT_MS + 2000).unref();
+    }
+}
+
+['SIGINT', 'SIGTERM'].forEach(signal => {
+    process.on(signal as NodeJS.Signals, () => gracefulShutdown(signal));
 });

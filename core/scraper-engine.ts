@@ -25,6 +25,7 @@ export interface ScraperEngineOptions {
     headless?: boolean;
     browserOptions?: BrowserLaunchOptions;
     sessionId?: string;
+    eventBus?: ScraperEventBus;
 }
 
 export interface ScrapeTimelineConfig {
@@ -91,10 +92,10 @@ export class ScraperEngine {
     private preferredSessionId?: string;
 
     constructor(shouldStopFunction?: () => boolean, options: ScraperEngineOptions = {}) {
-        this.eventBus = eventBusInstance;
+        this.eventBus = options.eventBus || eventBusInstance;
         this.navigationService = new NavigationService(this.eventBus);
-        this.rateLimitManager = new RateLimitManager(this.eventBus);
-        this.sessionManager = new SessionManager();
+        this.sessionManager = new SessionManager(undefined, this.eventBus);
+        this.rateLimitManager = new RateLimitManager(this.sessionManager, this.eventBus);
         this.requestQueue = new RequestQueue(); // Initialize RequestQueue
         this.errorSnapshotter = new ErrorSnapshotter();
         this.fingerprintManager = new FingerprintManager();
@@ -111,6 +112,31 @@ export class ScraperEngine {
 
     setStopSignal(value: boolean): void {
         this.stopSignal = value;
+    }
+
+    private async ensurePage(): Promise<Page> {
+        if (!this.browserManager) {
+            throw new Error('BrowserManager not initialized');
+        }
+        if (!this.page) {
+            this.page = await this.browserManager.newPage(this.browserOptions);
+        }
+        return this.page;
+    }
+
+    private async applySession(session: Session, options: { refreshFingerprint?: boolean; clearExistingCookies?: boolean } = {}): Promise<void> {
+        if (!this.page) {
+            throw new Error('Page not initialized');
+        }
+
+        const sessionId = path.basename(session.filePath);
+        if (options.refreshFingerprint !== false) {
+            await this.fingerprintManager.injectFingerprint(this.page, sessionId);
+        }
+
+        await this.sessionManager.injectSession(this.page, session, options.clearExistingCookies !== false);
+        this.currentSession = session;
+        this.eventBus.emitLog(`Loaded session: ${session.id}${session.username ? ` (${session.username})` : ''}`);
     }
 
     async init(): Promise<void> {
@@ -132,42 +158,23 @@ export class ScraperEngine {
             return false;
         }
 
-        if (!this.page) {
-            // Get current session (cookie file)
-            this.currentSession = this.sessionManager.getSession(this.preferredSessionId);
-            if (!this.currentSession) {
-                this.eventBus.emitError(new Error('No active sessions available'));
-                return false;
-            }
-            this.eventBus.emitLog(`Using session: ${path.basename(this.currentSession.filePath)}`, 'info');
-
-            // Create page
-            const page = await this.browserManager.newPage();
-            this.page = page;
-
-            // Inject Fingerprint
-            // We use the cookie file name as the session ID to ensure the same account gets the same fingerprint
-            const sessionId = path.basename(this.currentSession.filePath);
-            this.eventBus.emitLog(`Injecting fingerprint for session: ${sessionId}`, 'info');
-            await this.fingerprintManager.injectFingerprint(page, sessionId);
-
-            // Load cookies
-            await this.browserManager.loadCookies(page, this.currentSession.filePath);
-            this.eventBus.emitLog(`Loaded session: ${this.currentSession.id}`);
-            return true;
+        try {
+            await this.ensurePage();
+        } catch (error: any) {
+            this.eventBus.emitError(new Error(`Failed to create page: ${error.message}`));
+            return false;
         }
 
         // 1. Try to get a session from SessionManager
-        this.currentSession = this.sessionManager.getSession(this.preferredSessionId);
+        const nextSession = this.sessionManager.getNextSession(this.preferredSessionId);
 
-        if (this.currentSession) {
+        if (nextSession) {
             try {
-                await this.sessionManager.injectSession(this.page, this.currentSession);
-                this.eventBus.emitLog(`Loaded session: ${this.currentSession.id}`);
+                await this.applySession(nextSession, { refreshFingerprint: true, clearExistingCookies: true });
                 return true;
             } catch (error: any) {
-                this.eventBus.emitError(new Error(`Failed to inject session ${this.currentSession.id}: ${error.message}`));
-                this.sessionManager.markBad(this.currentSession.id);
+                this.eventBus.emitError(new Error(`Failed to inject session ${nextSession.id}: ${error.message}`));
+                this.sessionManager.markBad(nextSession.id);
                 return false;
             }
         }
@@ -177,6 +184,18 @@ export class ScraperEngine {
         try {
             const cookieManager = new CookieManager();
             const cookieInfo = await cookieManager.loadAndInject(this.page);
+            const fallbackSessionId = cookieInfo.source ? path.basename(cookieInfo.source) : 'legacy-cookies';
+
+            await this.fingerprintManager.injectFingerprint(this.page, fallbackSessionId);
+            this.currentSession = {
+                id: fallbackSessionId,
+                cookies: cookieInfo.cookies,
+                usageCount: 0,
+                errorCount: 0,
+                isRetired: false,
+                filePath: cookieInfo.source || fallbackSessionId,
+                username: cookieInfo.username
+            };
             this.eventBus.emitLog(`Loaded legacy cookies from ${cookieInfo.source}`);
             return true;
         } catch (error: any) {
@@ -235,8 +254,10 @@ export class ScraperEngine {
                 navigationSuccess = true;
             } catch (error: any) {
                 if (this.rateLimitManager.isRateLimitError(error)) {
-                    const rotated = await this.rateLimitManager.handleRateLimit(this.page, attempts, error, this.currentSession?.id);
-                    if (!rotated) throw error;
+                    const rotatedSession = await this.rateLimitManager.handleRateLimit(this.page, attempts, error, this.currentSession?.id);
+                    if (!rotatedSession) throw error;
+
+                    await this.applySession(rotatedSession, { refreshFingerprint: true, clearExistingCookies: true });
                     // Reset attempts after rotating to give the new session full retry budget
                     attempts = 0;
                     continue;
@@ -333,6 +354,10 @@ export class ScraperEngine {
             if (saveScreenshots) await screenshotUtils.takeScreenshotsOfTweets(this.page, collectedTweets, { runContext });
         }
 
+        if (this.currentSession) {
+            this.sessionManager.markGood(this.currentSession.id);
+        }
+
         return { success: true, tweets: collectedTweets, runContext, profile: profileInfo };
     }
 
@@ -418,6 +443,10 @@ export class ScraperEngine {
                 if (saveMarkdown) await markdownUtils.saveTweetsAsMarkdown(allTweets, runContext);
                 if (exportCsv) await exportUtils.exportToCsv(allTweets, runContext);
                 if (exportJson) await exportUtils.exportToJson(allTweets, runContext);
+            }
+
+            if (this.currentSession) {
+                this.sessionManager.markGood(this.currentSession.id);
             }
 
             return {

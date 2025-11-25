@@ -54,4 +54,8 @@ export class ScraperEventBus extends EventEmitter {
     }
 }
 
+export function createEventBus(): ScraperEventBus {
+    return new ScraperEventBus();
+}
+
 export default new ScraperEventBus();

@@ -6,7 +6,7 @@ export interface RequestTask {
     id: string;
     url: string;
     uniqueKey: string;
-    type: 'timeline' | 'thread' | 'search';
+    type: 'timeline' | 'thread' | 'search' | 'monitor';
     priority: number; // Higher number = higher priority
     retryCount: number;
     payload?: any; // Extra data (e.g. maxTweets, search query)
@@ -53,18 +53,18 @@ export class RequestQueue {
     /**
      * Add a request to the queue
      */
-    async addRequest(task: Omit<RequestTask, 'id' | 'uniqueKey' | 'retryCount'> & { uniqueKey?: string }): Promise<void> {
+    async addRequest(task: Omit<RequestTask, 'id' | 'uniqueKey' | 'retryCount'> & { uniqueKey?: string }): Promise<RequestTask | null> {
         const uniqueKey = task.uniqueKey || this.computeUniqueKey(task.url);
 
         // Deduplication check
         if (this.handled.has(uniqueKey)) {
             // Already handled, skip
-            return;
+            return null;
         }
 
         // Check if already in queue
         if (this.queue.some(t => t.uniqueKey === uniqueKey)) {
-            return;
+            return null;
         }
 
         const newTask: RequestTask = {
@@ -80,6 +80,7 @@ export class RequestQueue {
         this.queue.sort((a, b) => b.priority - a.priority);
 
         console.log(`[RequestQueue] Added task: ${task.url} (Priority: ${newTask.priority})`);
+        return newTask;
     }
 
     /**
