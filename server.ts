@@ -231,7 +231,8 @@ app.post('/api/scrape', async (req: Request, res: Response) => {
                             downloadUrl,
                             stats: {
                                 count: result.tweets ? result.tweets.length : 0
-                            }
+                            },
+                            performance: result.performance || null
                         });
                     } else {
                         // No file path found
@@ -376,31 +377,42 @@ app.get('/api/progress', (req: Request, res: Response) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
+    const sendEvent = (event: string, payload: Record<string, any>) => {
+        res.write(`event: ${event}\n`);
+        res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    };
+
     // Send initial message
-    res.write(`data: ${JSON.stringify({ type: 'connected', message: 'Progress stream connected' })}\n\n`);
+    sendEvent('connected', { type: 'connected', message: 'Progress stream connected' });
 
     // Listener for progress events
     const onProgress = (data: ScrapeProgressData) => {
-        res.write(`data: ${JSON.stringify({ type: 'progress', ...data })}\n\n`);
+        sendEvent('progress', { type: 'progress', ...data });
     };
 
     const onLog = (data: LogMessageData) => {
-        res.write(`data: ${JSON.stringify({ type: 'log', ...data })}\n\n`);
+        sendEvent('log', { type: 'log', ...data });
+    };
+
+    const onPerformance = (data: any) => {
+        sendEvent('performance', { type: 'performance', ...data });
     };
 
     const onError = (error: Error) => {
         console.error('[Scraper Error]', error);
-        res.write(`data: ${JSON.stringify({ type: 'log', level: 'error', message: error.message })}\n\n`);
+        sendEvent('log', { type: 'log', level: 'error', message: error.message });
     };
 
     eventBusInstance.on('scrape:progress', onProgress);
     eventBusInstance.on('log:message', onLog);
+    eventBusInstance.on('performance:update', onPerformance);
     eventBusInstance.on('scrape:error', onError);
 
     // Remove listeners on disconnect
     req.on('close', () => {
         eventBusInstance.off('scrape:progress', onProgress);
         eventBusInstance.off('log:message', onLog);
+        eventBusInstance.off('performance:update', onPerformance);
         eventBusInstance.off('scrape:error', onError);
         console.log('[SSE] Client disconnected');
     });

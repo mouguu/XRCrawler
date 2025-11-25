@@ -9,6 +9,7 @@ import * as dataExtractor from './data-extractor';
 import { ProfileInfo } from './data-extractor';
 import { NavigationService } from './navigation-service';
 import { RateLimitManager } from './rate-limit-manager';
+import { PerformanceMonitor, PerformanceStats } from './performance-monitor';
 import eventBusInstance, { ScraperEventBus } from './event-bus';
 import * as fileUtils from '../utils/fileutils';
 import { RunContext } from '../utils/fileutils';
@@ -51,6 +52,7 @@ export interface ScrapeTimelineResult {
     runContext?: RunContext;
     profile?: ProfileInfo | null;
     error?: string;
+    performance?: PerformanceStats;
 }
 
 export interface ScrapeThreadOptions {
@@ -72,6 +74,7 @@ export interface ScrapeThreadResult {
     replies?: Tweet[];
     runContext?: RunContext;
     error?: string;
+    performance?: PerformanceStats;
 }
 
 export class ScraperEngine {
@@ -81,6 +84,8 @@ export class ScraperEngine {
     private sessionManager: SessionManager;
     private errorSnapshotter: ErrorSnapshotter;
     private fingerprintManager: FingerprintManager;
+    private performanceMonitor: PerformanceMonitor;
+    private lastPerformanceEmit: number = 0;
     private currentSession: Session | null = null;
     private browserManager: BrowserManager | null;
     private page: Page | null;
@@ -96,6 +101,7 @@ export class ScraperEngine {
         this.rateLimitManager = new RateLimitManager(this.sessionManager, this.eventBus);
         this.errorSnapshotter = new ErrorSnapshotter();
         this.fingerprintManager = new FingerprintManager();
+        this.performanceMonitor = new PerformanceMonitor();
         this.browserManager = null;
         this.page = null;
         this.stopSignal = false;
@@ -134,6 +140,21 @@ export class ScraperEngine {
         await this.sessionManager.injectSession(this.page, session, options.clearExistingCookies !== false);
         this.currentSession = session;
         this.eventBus.emitLog(`Loaded session: ${session.id}${session.username ? ` (${session.username})` : ''}`);
+    }
+
+    private emitPerformanceUpdate(force: boolean = false): void {
+        const now = Date.now();
+        if (!force && now - this.lastPerformanceEmit < 1000) {
+            return;
+        }
+
+        this.lastPerformanceEmit = now;
+        try {
+            const stats = this.performanceMonitor.getStats();
+            this.eventBus.emitPerformance({ stats });
+        } catch (error: any) {
+            this.eventBus.emitLog(`Performance emit failed: ${error.message}`, 'warn');
+        }
     }
 
     async init(): Promise<void> {
@@ -205,6 +226,11 @@ export class ScraperEngine {
             return { success: false, tweets: [], error: 'Page not initialized' };
         }
 
+        // Start performance monitoring
+        this.performanceMonitor.reset();
+        this.performanceMonitor.start();
+        this.emitPerformanceUpdate(true);
+
         let {
             username, limit = 50, mode = 'timeline', searchQuery,
             runContext, saveMarkdown = true, saveScreenshots = false,
@@ -243,6 +269,7 @@ export class ScraperEngine {
         // Navigation with Retry & Rate Limit Handling
         let navigationSuccess = false;
         let attempts = 0;
+        this.performanceMonitor.startPhase('navigation');
         while (!navigationSuccess && attempts < 3) {
             try {
                 await this.navigationService.navigateToUrl(this.page, targetUrl);
@@ -250,9 +277,11 @@ export class ScraperEngine {
                 navigationSuccess = true;
             } catch (error: any) {
                 if (this.rateLimitManager.isRateLimitError(error)) {
+                    this.performanceMonitor.recordRateLimit();
                     const rotatedSession = await this.rateLimitManager.handleRateLimit(this.page, attempts, error, this.currentSession?.id);
                     if (!rotatedSession) throw error;
 
+                    this.performanceMonitor.recordSessionSwitch();
                     await this.applySession(rotatedSession, { refreshFingerprint: true, clearExistingCookies: true });
                     // Reset attempts after rotating to give the new session full retry budget
                     attempts = 0;
@@ -263,6 +292,8 @@ export class ScraperEngine {
             }
             attempts++;
         }
+        this.performanceMonitor.endPhase();
+        this.emitPerformanceUpdate();
 
         // Scraping Loop
         let scrollAttempts = 0;
@@ -285,7 +316,12 @@ export class ScraperEngine {
             }
 
             scrollAttempts++;
+            
+            // Extract tweets
+            this.performanceMonitor.startPhase('extraction');
             const tweetsOnPage = await dataExtractor.extractTweetsFromPage(this.page);
+            this.performanceMonitor.endPhase();
+            
             let addedInAttempt = 0;
 
             for (const tweet of tweetsOnPage) {
@@ -337,8 +373,12 @@ export class ScraperEngine {
                             this.sessionManager.markBad(this.currentSession.id, 'soft-rate-limit');
                         }
                         
+                        this.performanceMonitor.recordSessionSwitch();
+                        this.performanceMonitor.recordRateLimit();
+                        
                         // Switch session
                         try {
+                            this.performanceMonitor.startPhase('session-switch');
                             await this.sessionManager.injectSession(this.page!, nextSession);
                             await this.fingerprintManager.injectFingerprint(this.page!, nextSession.id);
                             this.currentSession = nextSession;
@@ -346,11 +386,14 @@ export class ScraperEngine {
                             // Re-navigate to the page
                             await this.navigationService.navigateToUrl(this.page!, targetUrl);
                             await this.navigationService.waitForTweets(this.page!);
+                            this.performanceMonitor.endPhase();
+                            this.emitPerformanceUpdate();
                             
                             noNewTweetsConsecutiveAttempts = 0;
                             this.eventBus.emitLog(`Switched to session ${nextSession.id}, continuing scrape...`);
                             continue;
                         } catch (switchError: any) {
+                            this.performanceMonitor.endPhase();
                             this.eventBus.emitLog(`Failed to switch session: ${switchError.message}`, 'error');
                         }
                     }
@@ -364,26 +407,43 @@ export class ScraperEngine {
             }
 
             // Scroll
+            this.performanceMonitor.startPhase('scroll');
+            this.performanceMonitor.recordScroll();
             const scrollTimeout = noNewTweetsConsecutiveAttempts > 0 ? 1000 : constants.WAIT_FOR_NEW_TWEETS_TIMEOUT;
             const domWaitTimeout = noNewTweetsConsecutiveAttempts > 0 ? 500 : 1500;
 
             await dataExtractor.scrollToBottomSmart(this.page, scrollTimeout);
             await dataExtractor.waitForNewTweets(this.page, tweetsOnPage.length, domWaitTimeout);
+            this.performanceMonitor.endPhase();
+            
+            // Update tweet count for performance tracking
+            this.performanceMonitor.recordTweets(collectedTweets.length);
+            this.emitPerformanceUpdate();
         }
 
         // Save Results
+        this.performanceMonitor.startPhase('save-results');
         if (collectedTweets.length > 0) {
             if (saveMarkdown) await markdownUtils.saveTweetsAsMarkdown(collectedTweets, runContext);
             if (exportCsv) await exportUtils.exportToCsv(collectedTweets, runContext);
             if (exportJson) await exportUtils.exportToJson(collectedTweets, runContext);
             if (saveScreenshots) await screenshotUtils.takeScreenshotsOfTweets(this.page, collectedTweets, { runContext });
         }
+        this.performanceMonitor.endPhase();
 
         if (this.currentSession) {
             this.sessionManager.markGood(this.currentSession.id);
         }
 
-        return { success: true, tweets: collectedTweets, runContext, profile: profileInfo };
+        // Stop performance monitoring and get report
+        this.performanceMonitor.stop();
+        this.emitPerformanceUpdate(true);
+        const performanceStats = this.performanceMonitor.getStats();
+        
+        // Log performance report
+        this.eventBus.emitLog(this.performanceMonitor.getReport());
+
+        return { success: true, tweets: collectedTweets, runContext, profile: profileInfo, performance: performanceStats };
     }
 
     async scrapeThread(options: ScrapeThreadOptions): Promise<ScrapeThreadResult> {
