@@ -1,8 +1,50 @@
+# Dependencies
 node_modules/
+frontend/node_modules/
 
-.cache
-output
+# Build outputs
+dist/
+frontend/dist/
+public/
+
+# Cache
+.cache/
+.queue/
+
+# Scraping output (sensitive data!)
+output/
+
+# Cookies (sensitive!)
 cookies/*
 !cookies/.gitkeep
+
+# Runtime state
+monitor_state.json
+
+# Editor/IDE
+.clj-kondo/
+.lsp/
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
 .DS_Store
-dist/
+.AppleDouble
+.LSOverride
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.*
+*.local
+
+# TypeScript
+*.tsbuildinfo
