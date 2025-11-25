@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+  <body>
+    <!-- Mock Tweet 1 -->
+    <article data-testid="tweet" role="article">
+      <div data-testid="User-Name">
+        <div data-testid="UserName">
+          <span>Test User</span>
+          <a href="/testuser">@testuser</a>
+        </div>
+      </div>
+      <div data-testid="tweetText">This is a test tweet for the crawler.</div>
+      <a href="/testuser/status/1234567890" dir="auto">
+        <time datetime="2023-01-01T12:00:00.000Z">Jan 1</time>
+      </a>
+
+      <!-- Stats -->
+      <div role="group">
+        <div data-testid="reply">
+          <div data-testid="app-text-transition-container">
+            <span><span>10</span></span>
+          </div>
+        </div>
+        <div data-testid="retweet">
+          <div data-testid="app-text-transition-container">
+            <span><span>5</span></span>
+          </div>
+        </div>
+        <div data-testid="like">
+          <div data-testid="app-text-transition-container">
+            <span><span>100</span></span>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- Mock Tweet 2 (With Media) -->
+    <article data-testid="tweet" role="article">
+      <div data-testid="tweetText">Tweet with media.</div>
+      <a href="/user2/status/9876543210">
+        <time datetime="2023-01-02T12:00:00.000Z">Jan 2</time>
+      </a>
+      <div data-testid="tweetPhoto"></div>
+      <div role="group">
+        <div data-testid="like">
+          <div data-testid="app-text-transition-container">
+            <span><span>1.5K</span></span>
+          </div>
+        </div>
+      </div>
+    </article>
+  </body>
+</html>
