@@ -950,9 +950,15 @@ export class ScraperEngine {
             // 滚动并提取推文
             let consecutiveNoNew = 0;
             // 对于大目标（>500条），增加连续无新推文的容忍度
-            const maxNoNew = limit > 500 ? Math.max(constants.MAX_CONSECUTIVE_NO_NEW_TWEETS * 2, 6) : constants.MAX_CONSECUTIVE_NO_NEW_TWEETS;
+            // 对于大目标，增加最大容忍次数，避免过早停止
+            // 因为 Twitter 可能需要更长时间才能加载更深层的内容
+            const maxNoNew = limit > 500 ? Math.max(constants.MAX_CONSECUTIVE_NO_NEW_TWEETS * 3, 15) : constants.MAX_CONSECUTIVE_NO_NEW_TWEETS;
             let consecutiveErrors = 0;
 
+            // 记录所有 session 都无法加载新推文的次数
+            let sessionsFailedCount = 0;
+            const MAX_SESSIONS_FAILED = 2; // 如果连续2个session都无法加载新推文，可能是平台限制
+            
             while (collectedTweets.length < limit && consecutiveNoNew < maxNoNew) {
                 if (this.stopSignal || (this.shouldStopFunction && this.shouldStopFunction())) {
                     this.eventBus.emitLog('Manual stop signal received.');
@@ -1022,15 +1028,24 @@ export class ScraperEngine {
                         consecutiveNoNew++;
                         this.eventBus.emitLog(`No new tweets found (consecutive: ${consecutiveNoNew}/${maxNoNew}). Continuing to scroll...`, 'debug');
                         
-                        // 如果连续多次没有新推文，可能是页面限制，尝试切换 session
-                        // 注意：切换 session 后不重新导航，而是继续滚动，因为新 session 可能能看到更多内容
-                        if (consecutiveNoNew >= 3 && attemptedSessions.size < 4) {
+                        // 智能判断是否需要切换 session：
+                        // 1. 如果收集数量较少（< 500）且连续无新推文次数 >= 5，可能是 session 问题，应该更早切换
+                        // 2. 如果收集数量较多（>= 500），可能是到达了深度限制，可以容忍更多次无新推文
+                        const isLowCount = collectedTweets.length < 500;
+                        const sessionSwitchThreshold = isLowCount ? 5 : 10; // 少量时5次就切换，大量时10次才切换
+                        
+                        if (consecutiveNoNew >= sessionSwitchThreshold && attemptedSessions.size < 4) {
+                            if (isLowCount) {
+                                this.eventBus.emitLog(`Low tweet count (${collectedTweets.length}) with ${consecutiveNoNew} consecutive no-new cycles. Likely session issue. Rotating session...`, 'warn');
+                            } else {
+                                this.eventBus.emitLog(`High tweet count (${collectedTweets.length}) with ${consecutiveNoNew} consecutive no-new cycles. May have reached depth limit. Trying session rotation...`, 'warn');
+                            }
                             const allActiveSessions = this.sessionManager.getAllActiveSessions();
                             const untriedSessions = allActiveSessions.filter(s => !attemptedSessions.has(s.id));
                             
                             if (untriedSessions.length > 0) {
                                 const nextSession = untriedSessions[0];
-                                this.eventBus.emitLog(`Multiple consecutive no-new-tweet cycles. Trying session rotation to ${nextSession.id}...`, 'warn');
+                                this.eventBus.emitLog(`Switching to session: ${nextSession.id}...`, 'info');
                                 
                                 try {
                                     await this.applySession(nextSession, { refreshFingerprint: false, clearExistingCookies: true });
@@ -1039,22 +1054,142 @@ export class ScraperEngine {
                                     this.performanceMonitor.recordSessionSwitch();
                                     
                                     // 切换 session 后，刷新页面以应用新 cookies
-                                    // 但保持当前滚动位置，继续向下滚动获取更多内容
-                                    this.eventBus.emitLog(`Switched to session: ${nextSession.id} (${attemptedSessions.size} session(s) tried). Refreshing page and continuing scroll...`, 'info');
-                                    
-                                    // 记录当前滚动位置（如果可能）
-                                    const currentScrollY = await this.page!.evaluate(() => window.scrollY);
+                                    // 然后进行快速深度滚动，尽快恢复到之前的深度
+                                    // 策略：快速连续滚动，每滚动几次就提取一次，看是否有新内容
+                                    this.eventBus.emitLog(`Switched to session: ${nextSession.id} (${attemptedSessions.size} session(s) tried). Refreshing and performing rapid deep scroll...`, 'info');
                                     
                                     // 刷新页面以应用新 session 的 cookies
                                     await this.page!.reload({ waitUntil: 'networkidle2', timeout: 30000 });
                                     await this.navigationService.waitForTweets(this.page!);
                                     
-                                    // 尝试滚动到之前的位置附近（但可能页面结构已变，所以继续向下滚动）
-                                    // 滚动到底部，让新 session 加载更多内容
-                                    await this.page!.evaluate(() => {
-                                        window.scrollTo(0, document.body.scrollHeight);
-                                    });
-                                    await throttle(2000); // 等待内容加载
+                                    // 快速连续滚动策略：每滚动5次就提取一次，检查是否有新推文
+                                    // 这样可以更快地发现是否有新内容，而不需要滚动到很深的深度
+                                    const targetDepth = Math.max(collectedTweets.length, 800);
+                                    const maxScrollAttempts = 60; // 最多尝试60次滚动
+                                    const scrollsPerExtraction = 5; // 每5次滚动提取一次
+                                    
+                                    this.eventBus.emitLog(`Performing rapid deep scroll: ${maxScrollAttempts} scrolls, extracting every ${scrollsPerExtraction} scrolls to check for new tweets...`, 'debug');
+                                    
+                                    let scrollCount = 0;
+                                    let lastExtractionCount = collectedTweets.length;
+                                    
+                                    while (scrollCount < maxScrollAttempts) {
+                                        // 检查 stop 信号（在每次循环开始和关键操作前）
+                                        if (this.stopSignal || (this.shouldStopFunction && this.shouldStopFunction())) {
+                                            this.eventBus.emitLog('Manual stop signal received during deep scroll. Stopping...', 'info');
+                                            break;
+                                        }
+                                        
+                                        // 快速连续滚动 scrollsPerExtraction 次
+                                        for (let i = 0; i < scrollsPerExtraction && scrollCount < maxScrollAttempts; i++) {
+                                            // 在每次滚动前也检查 stop 信号
+                                            if (this.stopSignal || (this.shouldStopFunction && this.shouldStopFunction())) {
+                                                break;
+                                            }
+                                            // 使用快速滚动（不等待太久）
+                                            await this.page!.evaluate(() => {
+                                                window.scrollTo(0, document.body.scrollHeight);
+                                            });
+                                            await throttle(800 + Math.random() * 400); // 0.8-1.2秒，快速滚动
+                                            scrollCount++;
+                                            
+                                            // 在等待后再次检查
+                                            if (this.stopSignal || (this.shouldStopFunction && this.shouldStopFunction())) {
+                                                break;
+                                            }
+                                        }
+                                        
+                                        // 在提取前再次检查 stop 信号
+                                        if (this.stopSignal || (this.shouldStopFunction && this.shouldStopFunction())) {
+                                            this.eventBus.emitLog('Manual stop signal received. Stopping extraction...', 'info');
+                                            break;
+                                        }
+                                        
+                                        // 每滚动 scrollsPerExtraction 次后，提取一次推文
+                                        const tweetsOnPage = await dataExtractor.extractTweetsFromPage(this.page!);
+                                        let foundNew = false;
+                                        
+                                        for (const rawTweet of tweetsOnPage) {
+                                            if (collectedTweets.length >= limit) break;
+                                            
+                                            const tweetId = rawTweet.id;
+                                            // 检查是否已收集（通过 ID 集合或遍历已收集的推文）
+                                            const alreadyCollected = collectedTweets.some(t => t.id === tweetId);
+                                            if (!alreadyCollected) {
+                                                const normalized = normalizeRawTweet(rawTweet);
+                                                if (normalized) {
+                                                    collectedTweets.push(normalized);
+                                                    foundNew = true;
+                                                }
+                                            }
+                                        }
+                                        
+                                        const currentCount = collectedTweets.length;
+                                        
+                                        if (foundNew) {
+                                            // 发现新推文，继续滚动
+                                            this.eventBus.emitLog(`Found new tweets during deep scroll! Extracted ${tweetsOnPage.length} tweets, added ${currentCount - lastExtractionCount} new. Total: ${currentCount} (scrolled ${scrollCount} times)`, 'info');
+                                            lastExtractionCount = currentCount;
+                                            
+                                            // 如果已经超过目标深度，可以停止快速滚动
+                                            const tweetCountOnPage = await this.page!.evaluate((selector) => {
+                                                return document.querySelectorAll(selector).length;
+                                            }, 'article[data-testid="tweet"]');
+                                            
+                                            if (tweetCountOnPage >= targetDepth * 0.8) { // 达到目标深度的80%就可以停止快速滚动
+                                                this.eventBus.emitLog(`Reached ~80% of target depth (${tweetCountOnPage} tweets on page). Stopping rapid scroll.`, 'debug');
+                                                break;
+                                            }
+                                        } else {
+                                            // 没有新推文，检查是否到达边界
+                                            const tweetCountOnPage = await this.page!.evaluate((selector) => {
+                                                return document.querySelectorAll(selector).length;
+                                            }, 'article[data-testid="tweet"]');
+                                            
+                                            // 每20次滚动报告一次
+                                            if (scrollCount % 20 === 0) {
+                                                this.eventBus.emitLog(`Deep scroll progress: ${scrollCount}/${maxScrollAttempts} scrolls, ${tweetCountOnPage} tweets on page, ${currentCount} collected`, 'debug');
+                                            }
+                                            
+                                            // 如果页面上推文数量稳定在很低的值（<50条），说明可能无法加载更多
+                                            if (tweetCountOnPage < 50 && scrollCount >= 20) {
+                                                this.eventBus.emitLog(`Tweet count on page is low (${tweetCountOnPage}) after ${scrollCount} scrolls. This session cannot load deeper content. Platform limit likely reached.`, 'warn');
+                                                break;
+                                            }
+                                        }
+                                        
+                                        // 如果已经收集到足够的推文，停止
+                                        if (collectedTweets.length >= limit) {
+                                            break;
+                                        }
+                                    }
+                                    
+                                    // 检查刷新后是否找到了新推文
+                                    const tweetsAfterRefresh = collectedTweets.length;
+                                    const foundNewAfterRefresh = tweetsAfterRefresh > lastExtractionCount;
+                                    
+                                    this.eventBus.emitLog(`Completed rapid deep scroll: ${scrollCount} scrolls, collected ${tweetsAfterRefresh} tweets total (${foundNewAfterRefresh ? 'found new tweets' : 'no new tweets found'}).`, 'info');
+                                    
+                                    if (!foundNewAfterRefresh) {
+                                        // 刷新后滚动多次仍然没有新推文，说明这个 session 也无法突破限制
+                                        sessionsFailedCount++;
+                                        this.eventBus.emitLog(`Session ${nextSession.id} also cannot load more tweets after refresh and deep scroll. Failed sessions: ${sessionsFailedCount}/${MAX_SESSIONS_FAILED}`, 'warn');
+                                        
+                                        // 如果连续多个 session 都无法加载新推文，很可能是平台限制
+                                        if (sessionsFailedCount >= MAX_SESSIONS_FAILED) {
+                                            this.eventBus.emitLog(`⚠️  Platform depth limit reached! After trying ${sessionsFailedCount} sessions, none can load more tweets. Twitter/X appears to have a ~800 tweet limit per timeline access. Stopping to avoid wasting time.`, 'warn');
+                                            // 设置为达到最大无新推文次数，触发循环退出
+                                            consecutiveNoNew = maxNoNew;
+                                            break;
+                                        }
+                                        
+                                        // 重置计数器，继续尝试下一个 session
+                                        consecutiveNoNew = 0;
+                                    } else {
+                                        // 找到了新推文，重置失败计数和计数器
+                                        sessionsFailedCount = 0;
+                                        consecutiveNoNew = 0;
+                                    }
                                     
                                     // 继续循环，尝试提取新内容
                                     continue;
@@ -1065,23 +1200,86 @@ export class ScraperEngine {
                             }
                         }
                         
-                        // 如果连续没有新推文，可能是需要更长的滚动等待时间
-                        // 增加滚动延迟，给页面更多时间加载新内容
+                        // 如果连续没有新推文，增加等待时间，给 Twitter 更多时间加载内容
+                        // 连续无新推文越多，等待时间越长
                         if (consecutiveNoNew >= 2) {
-                            const extraDelay = 2000 + Math.random() * 1000; // 2-3秒额外延迟
-                            this.eventBus.emitLog(`Adding extra delay (${Math.round(extraDelay)}ms) to allow more content to load...`, 'debug');
+                            // 连续2-4次：额外等待 2-3秒
+                            // 连续5-7次：额外等待 4-5秒
+                            // 连续8+次：额外等待 6-8秒
+                            const baseDelay = consecutiveNoNew >= 8 ? 6000 
+                                            : consecutiveNoNew >= 5 ? 4000 
+                                            : 2000;
+                            const extraDelay = baseDelay + Math.random() * 1000;
+                            this.eventBus.emitLog(`Adding extra delay (${Math.round(extraDelay)}ms) to allow more content to load (consecutive no-new: ${consecutiveNoNew})...`, 'debug');
+                            
+                            // 在长时间等待前检查 stop 信号
+                            if (this.stopSignal || (this.shouldStopFunction && this.shouldStopFunction())) {
+                                this.eventBus.emitLog('Manual stop signal received during delay. Stopping...', 'info');
+                                break;
+                            }
+                            
                             await throttle(extraDelay);
+                            
+                            // 等待后再次检查
+                            if (this.stopSignal || (this.shouldStopFunction && this.shouldStopFunction())) {
+                                this.eventBus.emitLog('Manual stop signal received after delay. Stopping...', 'info');
+                                break;
+                            }
                         }
                     } else {
                         consecutiveNoNew = 0;
                     }
 
+                    // 检查 stop 信号
+                    if (this.stopSignal || (this.shouldStopFunction && this.shouldStopFunction())) {
+                        this.eventBus.emitLog('Manual stop signal received.');
+                        break;
+                    }
+                    
                     // 滚动加载更多（即使连续没有新推文也继续尝试，直到达到最大次数）
                     if (collectedTweets.length < limit && consecutiveNoNew < maxNoNew) {
                         this.performanceMonitor.startPhase('scroll');
                         this.performanceMonitor.recordScroll();
-                        await dataExtractor.scrollToBottomSmart(this.page!, constants.WAIT_FOR_NEW_TWEETS_TIMEOUT);
-                        await new Promise(r => setTimeout(r, constants.getScrollDelay()));
+                        
+                        // 如果连续无新推文，进行更激进的滚动（多次滚动，更长的等待时间）
+                        // 关键：不要过早放弃，继续滚动更长时间
+                        let scrollCount = 1;
+                        let scrollDelay = constants.getScrollDelay();
+                        
+                        if (consecutiveNoNew >= 5) {
+                            // 连续5次无新推文，开始更激进的滚动
+                            scrollCount = 5; // 每次滚动5次
+                            scrollDelay = constants.getScrollDelay() * 2; // 等待时间翻倍
+                            this.eventBus.emitLog(`Consecutive no-new-tweets: ${consecutiveNoNew}. Performing aggressive scroll (${scrollCount} scrolls, ${Math.round(scrollDelay)}ms delay)...`, 'debug');
+                        } else if (consecutiveNoNew >= 2) {
+                            // 连续2次无新推文，中等激进
+                            scrollCount = 3;
+                            scrollDelay = constants.getScrollDelay() * 1.5;
+                        }
+                        
+                        for (let i = 0; i < scrollCount; i++) {
+                            // 在每次滚动前检查 stop 信号
+                            if (this.stopSignal || (this.shouldStopFunction && this.shouldStopFunction())) {
+                                this.eventBus.emitLog('Manual stop signal received during scroll. Stopping...', 'info');
+                                break;
+                            }
+                            
+                            await dataExtractor.scrollToBottomSmart(this.page!, constants.WAIT_FOR_NEW_TWEETS_TIMEOUT);
+                            
+                            // 每次滚动后等待，给内容加载时间
+                            await new Promise(r => setTimeout(r, scrollDelay));
+                            
+                            // 在等待后也检查 stop 信号
+                            if (this.stopSignal || (this.shouldStopFunction && this.shouldStopFunction())) {
+                                this.eventBus.emitLog('Manual stop signal received. Stopping scroll...', 'info');
+                                break;
+                            }
+                            
+                            if (i < scrollCount - 1) {
+                                this.eventBus.emitLog(`Additional scroll ${i + 2}/${scrollCount} to load more content...`, 'debug');
+                            }
+                        }
+                        
                         this.performanceMonitor.endPhase();
                     }
                 } catch (error: any) {
