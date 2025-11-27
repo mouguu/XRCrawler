@@ -682,6 +682,14 @@ export class ScraperEngine {
             } catch (error: any) {
                 this.performanceMonitor.endPhase();
                 this.eventBus.emitLog(`API Error: ${error instanceof Error ? error.message : String(error)}`, 'error');
+                
+                // 特殊处理 404 错误：搜索 API 可能不支持 cursor 分页
+                if (error.message.includes('404') && mode === 'search' && cursor) {
+                    this.eventBus.emitLog(`404 error with cursor in search mode. Search API may not support cursor pagination. Treating as end of results.`, 'warn');
+                    // 将 404 视为搜索结果的末尾
+                    break;
+                }
+                
                 consecutiveErrors++;
 
                 // Handle Rate Limits / Session Rotation

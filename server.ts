@@ -268,12 +268,18 @@ app.post('/api/scrape', async (req: Request, res: Response) => {
                             throw ScraperErrors.cookieLoadFailed('Failed to load cookies');
                         }
                         
+                        // 搜索模式强制使用 Puppeteer（GraphQL 模式搜索 API 存在 cursor 404 问题）
+                        const searchScrapeMode = 'puppeteer' as const;
+                        if (scrapeMode === 'graphql') {
+                            console.log('[INFO] Search mode: Forcing Puppeteer mode (GraphQL search has cursor pagination issues)');
+                        }
+                        
                         result = await engine.scrapeTimeline({
                             mode: 'search',
                             searchQuery: input,
                         limit: parseInt(limit),
                         saveMarkdown: true,
-                            scrapeMode
+                            scrapeMode: searchScrapeMode
                     });
                     } finally {
                         await engine.close();

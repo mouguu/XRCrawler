@@ -54,7 +54,15 @@ function App() {
     const [deleteMerged, setDeleteMerged] = useState(true);
     
     // Scrape Mode: 'graphql' (API) or 'puppeteer' (DOM)
+    // Note: Search mode always uses Puppeteer (GraphQL search has cursor pagination issues)
     const [scrapeMode, setScrapeMode] = useState<'graphql' | 'puppeteer'>('graphql');
+    
+    // Auto-switch to Puppeteer when search tab is active
+    useEffect(() => {
+        if (activeTab === 'search' && scrapeMode === 'graphql') {
+            setScrapeMode('puppeteer');
+        }
+    }, [activeTab, scrapeMode]);
 
     // Monitor Options
     const [lookbackHours, setLookbackHours] = useState(24);
@@ -354,17 +362,19 @@ function App() {
                                         <div className="flex flex-col space-y-2">
                                             <span className="text-xs uppercase tracking-wider text-stone/60 font-sans">Extraction Mode</span>
                                             <div className="flex items-center space-x-2">
-                                                <button
-                                                    onClick={() => setScrapeMode('graphql')}
-                                                    className={cn(
-                                                        "px-4 py-2 border rounded-full text-sm font-serif transition-all duration-300",
-                                                        scrapeMode === 'graphql'
-                                                            ? "border-rust bg-rust/10 text-rust"
-                                                            : "border-stone/30 text-stone hover:border-rust hover:text-rust"
-                                                    )}
-                                                >
-                                                    ⚡ GraphQL API
-                                                </button>
+                                                {activeTab !== 'search' && (
+                                                    <button
+                                                        onClick={() => setScrapeMode('graphql')}
+                                                        className={cn(
+                                                            "px-4 py-2 border rounded-full text-sm font-serif transition-all duration-300",
+                                                            scrapeMode === 'graphql'
+                                                                ? "border-rust bg-rust/10 text-rust"
+                                                                : "border-stone/30 text-stone hover:border-rust hover:text-rust"
+                                                        )}
+                                                    >
+                                                        ⚡ GraphQL API
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={() => setScrapeMode('puppeteer')}
                                                     className={cn(
@@ -375,12 +385,17 @@ function App() {
                                                     )}
                                                 >
                                                     🌐 Puppeteer DOM
+                                                    {activeTab === 'search' && (
+                                                        <span className="ml-2 text-[10px] bg-rust/20 text-rust px-2 py-0.5 rounded-full">Required</span>
+                                                    )}
                                                 </button>
                                             </div>
                                             <span className="text-[10px] text-stone/40 font-sans italic">
-                                                {scrapeMode === 'graphql' 
-                                                    ? 'Faster, uses Twitter\'s internal API' 
-                                                    : 'Slower but more reliable, simulates browser'}
+                                                {activeTab === 'search' 
+                                                    ? 'Search mode requires Puppeteer (GraphQL search has cursor pagination issues)'
+                                                    : scrapeMode === 'graphql' 
+                                                        ? 'Faster, uses Twitter\'s internal API' 
+                                                        : 'Slower but more reliable, simulates browser'}
                                             </span>
                                         </div>
                                     )}
