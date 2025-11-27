@@ -1,8 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ScraperEngine } from './scraper-engine';
-import { Tweet } from '../utils/markdown';
+import { Tweet } from '../types/tweet';
 import * as fileUtils from '../utils/fileutils';
+import { ScraperEventBus } from './event-bus';
 
 interface MonitorState {
     [username: string]: {
@@ -15,11 +16,24 @@ export class MonitorService {
     private stateFilePath: string;
     private state: MonitorState = {};
     private scraperEngine: ScraperEngine;
+    private eventBus?: ScraperEventBus;
 
-    constructor(scraperEngine: ScraperEngine) {
+    constructor(scraperEngine: ScraperEngine, eventBus?: ScraperEventBus) {
         this.scraperEngine = scraperEngine;
+        this.eventBus = eventBus;
         this.stateFilePath = path.join(process.cwd(), 'monitor_state.json');
         this.loadState();
+    }
+
+    private log(message: string, level: 'info' | 'warn' | 'error' = 'info'): void {
+        if (this.eventBus) {
+            this.eventBus.emitLog(message, level);
+        } else {
+            const prefix = '[Monitor]';
+            if (level === 'error') console.error(prefix, message);
+            else if (level === 'warn') console.warn(prefix, message);
+            else console.log(prefix, message);
+        }
     }
 
     private loadState() {
@@ -27,7 +41,7 @@ export class MonitorService {
             try {
                 this.state = JSON.parse(fs.readFileSync(this.stateFilePath, 'utf-8'));
             } catch (e) {
-                console.error('Failed to load monitor state:', e);
+                this.log(`Failed to load monitor state: ${e instanceof Error ? e.message : String(e)}`, 'error');
                 this.state = {};
             }
         }
@@ -37,12 +51,12 @@ export class MonitorService {
         try {
             fs.writeFileSync(this.stateFilePath, JSON.stringify(this.state, null, 2));
         } catch (e) {
-            console.error('Failed to save monitor state:', e);
+            this.log(`Failed to save monitor state: ${e instanceof Error ? e.message : String(e)}`, 'error');
         }
     }
 
     async runMonitor(usernames: string[], options: { lookbackHours?: number, keywords?: string[] } = {}): Promise<void> {
-        console.log(`[Monitor] Starting batch job for: ${usernames.join(', ')}`);
+        this.log(`Starting batch job for: ${usernames.join(', ')}`);
 
         const allNewTweets: { username: string; tweets: Tweet[] }[] = [];
         const { lookbackHours, keywords } = options;
@@ -50,11 +64,11 @@ export class MonitorService {
         let sinceTimestamp: number | undefined;
         if (lookbackHours) {
             sinceTimestamp = Date.now() - (lookbackHours * 60 * 60 * 1000);
-            console.log(`[Monitor] Lookback set to ${lookbackHours} hours (Since: ${new Date(sinceTimestamp).toISOString()})`);
+            this.log(`Lookback set to ${lookbackHours} hours (Since: ${new Date(sinceTimestamp).toISOString()})`);
         }
 
         for (const username of usernames) {
-            console.log(`[Monitor] Checking updates for @${username}...`);
+            this.log(`Checking updates for @${username}...`);
 
             const lastState = this.state[username];
             const stopAtTweetId = lastState ? lastState.lastTweetId : undefined;
@@ -78,11 +92,11 @@ export class MonitorService {
                         const text = (t.text || '').toLowerCase();
                         return lowerKeywords.some(k => text.includes(k));
                     });
-                    console.log(`[Monitor] Filtered ${result.tweets.length} -> ${newTweets.length} tweets using keywords: ${keywords.join(', ')}`);
+                    this.log(`Filtered ${result.tweets.length} -> ${newTweets.length} tweets using keywords: ${keywords.join(', ')}`);
                 }
 
                 if (newTweets.length > 0) {
-                    console.log(`[Monitor] Found ${newTweets.length} relevant new tweets for @${username}`);
+                    this.log(`Found ${newTweets.length} relevant new tweets for @${username}`);
 
                     // Update state with the latest tweet from the ORIGINAL result (to avoid re-scanning even if filtered out)
                     // We track progress based on the timeline, not the filtered results.
@@ -96,7 +110,7 @@ export class MonitorService {
 
                     allNewTweets.push({ username, tweets: newTweets });
                 } else {
-                    console.log(`[Monitor] No tweets matched keywords for @${username}`);
+                    this.log(`No tweets matched keywords for @${username}`);
                     // Still update state to avoid re-scanning these non-matching tweets
                     const newestTweet = result.tweets[0];
                     this.state[username] = {
@@ -106,20 +120,20 @@ export class MonitorService {
                     this.saveState();
                 }
             } else {
-                console.log(`[Monitor] No new tweets for @${username}`);
+                this.log(`No new tweets for @${username}`);
             }
         }
 
         if (allNewTweets.length > 0) {
             await this.generateDailyReport(allNewTweets, options);
         } else {
-            console.log('[Monitor] No new tweets found for any user.');
+            this.log('No new tweets found for any user.');
         }
     }
 
     private async generateDailyReport(data: { username: string; tweets: Tweet[] }[], options: { lookbackHours?: number, keywords?: string[] }) {
         const dateStr = new Date().toISOString().split('T')[0];
-        const reportDir = path.join(process.cwd(), 'output', 'reports');
+        const reportDir = path.join(fileUtils.getDefaultOutputRoot(), 'reports');
         if (!fs.existsSync(reportDir)) {
             fs.mkdirSync(reportDir, { recursive: true });
         }
@@ -135,10 +149,13 @@ export class MonitorService {
         for (const item of data) {
             content += `## @${item.username} (${item.tweets.length} new)\n\n`;
             for (const tweet of item.tweets) {
-                content += `### ${tweet.createdAt}\n`;
-                content += `${tweet.text}\n\n`;
-                if (tweet.images && tweet.images.length > 0) {
-                    content += `> Images: ${tweet.images.length}\n\n`;
+                // 使用统一的 time 字段
+                const tweetTime = tweet.time ? new Date(tweet.time).toLocaleString() : 'Unknown time';
+                content += `### ${tweetTime}\n`;
+                content += `${tweet.text || ''}\n\n`;
+                // 使用统一的 hasMedia 字段
+                if (tweet.hasMedia) {
+                    content += `> 📷 Contains media\n\n`;
                 }
                 content += `[View Tweet](${tweet.url})\n`;
                 content += `---\n`;
@@ -147,6 +164,6 @@ export class MonitorService {
         }
 
         fs.writeFileSync(filename, content, 'utf-8');
-        console.log(`[Monitor] Report generated: ${filename}`);
+        this.log(`Report generated: ${filename}`);
     }
 }

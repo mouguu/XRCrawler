@@ -508,10 +508,14 @@ if (require.main === module) {
     .requiredOption('-u, --users <users>', 'Comma-separated list of usernames (e.g. elonmusk,trump)')
     .action(async (options) => {
       try {
-        const { ScraperEngine } = require('./core/scraper-engine');
-        const { MonitorService } = require('./core/monitor-service');
+        // 统一使用编译后的 dist 目录
+        const { ScraperEngine } = require('./dist/core/scraper-engine');
+        const { MonitorService } = require('./dist/core/monitor-service');
+        const { getShouldStopScraping } = require('./dist/core/stop-signal');
 
-        const engine = new ScraperEngine();
+        // 使用 apiOnly 模式（默认使用 GraphQL API，更快）
+        // 添加 shouldStopFunction 以支持停止信号
+        const engine = new ScraperEngine(() => getShouldStopScraping(), { apiOnly: true });
         await engine.init();
         const success = await engine.loadCookies();
         if (!success) {

@@ -9,16 +9,9 @@ import * as fileUtils from './fileutils';
 import * as timeUtils from './time';
 import { RunContext } from './fileutils';
 
-export interface Tweet {
-  time?: string | number | Date;
-  text?: string;
-  url?: string;
-  likes?: number;
-  retweets?: number;
-  replies?: number;
-  hasMedia?: boolean;
-  [key: string]: any;
-}
+// 从统一类型定义导入并重新导出
+import { Tweet } from '../types/tweet';
+export { Tweet };
 
 export interface SaveTweetsOptions {
   batchSize?: number;

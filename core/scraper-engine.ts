@@ -6,7 +6,6 @@ import { SessionManager, Session } from './session-manager';
 import { ErrorSnapshotter } from './error-snapshotter';
 import { FingerprintManager } from './fingerprint-manager';
 import * as dataExtractor from './data-extractor';
-import { ProfileInfo } from './data-extractor';
 import { NavigationService } from './navigation-service';
 import { RateLimitManager } from './rate-limit-manager';
 import { PerformanceMonitor, PerformanceStats } from './performance-monitor';
@@ -14,10 +13,23 @@ import eventBusInstance, { ScraperEventBus } from './event-bus';
 import * as fileUtils from '../utils/fileutils';
 import { RunContext } from '../utils/fileutils';
 import * as markdownUtils from '../utils/markdown';
-import { Tweet } from '../utils/markdown';
 import * as exportUtils from '../utils/export';
 import * as screenshotUtils from '../utils/screenshot';
 import * as constants from '../config/constants';
+import { validateScrapeConfig } from '../config/constants';
+import { XApiClient } from './x-api';
+import { ScraperErrors, ScraperError } from './errors';
+import {
+    Tweet,
+    ProfileInfo,
+    RawTweetData,
+    normalizeRawTweet,
+    parseTweetFromApiResult,
+    extractInstructionsFromResponse,
+    parseTweetsFromInstructions,
+    extractNextCursor,
+    parseTweetDetailResponse
+} from '../types/tweet';
 
 const throttle = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -26,6 +38,11 @@ export interface ScraperEngineOptions {
     browserOptions?: BrowserLaunchOptions;
     sessionId?: string;
     eventBus?: ScraperEventBus;
+    /** 
+     * 如果为 true，只初始化 API 客户端，不启动浏览器
+     * 适用于纯 GraphQL API 模式，节省资源
+     */
+    apiOnly?: boolean;
 }
 
 export interface ScrapeTimelineConfig {
@@ -44,6 +61,8 @@ export interface ScrapeTimelineConfig {
     stopAtTweetId?: string; // Stop scraping when this tweet ID is encountered
     sinceTimestamp?: number; // Stop scraping if tweet is older than this timestamp (ms)
     collectProfileInfo?: boolean;
+    /** 爬取模式: 'graphql' 使用 API (默认), 'puppeteer' 使用 DOM */
+    scrapeMode?: 'graphql' | 'puppeteer';
 }
 
 export interface ScrapeTimelineResult {
@@ -65,6 +84,8 @@ export interface ScrapeThreadOptions {
     outputDir?: string;
     headless?: boolean;
     sessionId?: string;
+    /** 爬取模式: 'graphql' 使用 API (默认), 'puppeteer' 使用 DOM */
+    scrapeMode?: 'graphql' | 'puppeteer';
 }
 
 export interface ScrapeThreadResult {
@@ -93,6 +114,44 @@ export class ScraperEngine {
     private shouldStopFunction?: () => boolean;
     private browserOptions: BrowserLaunchOptions;
     private preferredSessionId?: string;
+    /** 是否为纯 API 模式（不启动浏览器） */
+    private apiOnlyMode: boolean;
+
+    private xApiClient: XApiClient | null = null;
+
+    /**
+     * 检查是否为 API 模式（不启动浏览器）
+     */
+    private isApiOnlyMode(): boolean {
+        return this.apiOnlyMode;
+    }
+
+    /**
+     * 检查是否为 Puppeteer 模式（需要浏览器）
+     */
+    private isPuppeteerMode(): boolean {
+        return !this.apiOnlyMode;
+    }
+
+    /**
+     * 确保 API 客户端已初始化
+     */
+    private ensureApiClient(): XApiClient {
+        if (!this.xApiClient) {
+            throw ScraperErrors.apiClientNotInitialized();
+        }
+        return this.xApiClient;
+    }
+
+    /**
+     * 确保浏览器页面已初始化
+     */
+    private async ensureBrowserPage(): Promise<Page> {
+        if (this.apiOnlyMode) {
+            throw ScraperErrors.browserNotInitialized();
+        }
+        return await this.ensurePage();
+    }
 
     constructor(shouldStopFunction?: () => boolean, options: ScraperEngineOptions = {}) {
         this.eventBus = options.eventBus || eventBusInstance;
@@ -111,6 +170,7 @@ export class ScraperEngine {
             ...(options.browserOptions || {})
         };
         this.preferredSessionId = options.sessionId;
+        this.apiOnlyMode = options.apiOnly ?? false;
     }
 
     setStopSignal(value: boolean): void {
@@ -119,7 +179,7 @@ export class ScraperEngine {
 
     private async ensurePage(): Promise<Page> {
         if (!this.browserManager) {
-            throw new Error('BrowserManager not initialized');
+            throw ScraperErrors.browserNotInitialized();
         }
         if (!this.page) {
             this.page = await this.browserManager.newPage(this.browserOptions);
@@ -128,8 +188,17 @@ export class ScraperEngine {
     }
 
     private async applySession(session: Session, options: { refreshFingerprint?: boolean; clearExistingCookies?: boolean } = {}): Promise<void> {
+        // API-only 模式：只更新 API 客户端，不操作浏览器
+        if (this.isApiOnlyMode()) {
+            this.currentSession = session;
+            this.xApiClient = new XApiClient(session.cookies);
+            this.eventBus.emitLog(`[API-only] Switched to session: ${session.id}${session.username ? ` (${session.username})` : ''}`);
+            return;
+        }
+
+        // 浏览器模式：需要 page
         if (!this.page) {
-            throw new Error('Page not initialized');
+            throw ScraperErrors.pageNotAvailable();
         }
 
         const sessionId = path.basename(session.filePath);
@@ -139,6 +208,10 @@ export class ScraperEngine {
 
         await this.sessionManager.injectSession(this.page, session, options.clearExistingCookies !== false);
         this.currentSession = session;
+        
+        // Initialize API Client with session cookies
+        this.xApiClient = new XApiClient(session.cookies);
+        
         this.eventBus.emitLog(`Loaded session: ${session.id}${session.username ? ` (${session.username})` : ''}`);
     }
 
@@ -158,18 +231,31 @@ export class ScraperEngine {
     }
 
     async init(): Promise<void> {
+        // Initialize SessionManager (needed for both modes)
+        await this.sessionManager.init();
+
+        // 纯 API 模式：不启动浏览器
+        if (this.apiOnlyMode) {
+            this.eventBus.emitLog('API-only mode: Browser not launched');
+            return;
+        }
+
+        // 浏览器模式：启动 Puppeteer
         this.browserManager = new BrowserManager();
         await this.browserManager.init(this.browserOptions);
         // We do NOT create the page here anymore. 
         // The page is created in loadCookies() to ensure it's tied to a session and fingerprint.
 
-        // Initialize Managers
-        await this.sessionManager.init();
-
         this.eventBus.emitLog('Browser launched and configured');
     }
 
     async loadCookies(): Promise<boolean> {
+        // 纯 API 模式：只加载 cookies 初始化 API 客户端
+        if (this.apiOnlyMode) {
+            return this.loadCookiesApiOnly();
+        }
+
+        // 浏览器模式：需要 BrowserManager
         if (!this.browserManager) {
             this.eventBus.emitError(new Error('BrowserManager not initialized'));
             return false;
@@ -213,6 +299,10 @@ export class ScraperEngine {
                 filePath: cookieInfo.source || fallbackSessionId,
                 username: cookieInfo.username
             };
+            
+            // Initialize API Client with fallback cookies
+            this.xApiClient = new XApiClient(cookieInfo.cookies);
+            
             this.eventBus.emitLog(`Loaded legacy cookies from ${cookieInfo.source}`);
             return true;
         } catch (error: any) {
@@ -221,13 +311,85 @@ export class ScraperEngine {
         }
     }
 
+    /**
+     * 纯 API 模式下加载 cookies
+     * 只初始化 API 客户端，不涉及浏览器操作
+     */
+    private async loadCookiesApiOnly(): Promise<boolean> {
+        // 1. 尝试从 SessionManager 获取 session
+        const nextSession = this.sessionManager.getNextSession(this.preferredSessionId);
+
+        if (nextSession) {
+            this.currentSession = nextSession;
+            this.xApiClient = new XApiClient(nextSession.cookies);
+            this.eventBus.emitLog(`[API-only] Loaded session: ${nextSession.id}${nextSession.username ? ` (${nextSession.username})` : ''}`);
+            return true;
+        }
+
+        // 2. Fallback to CookieManager
+        try {
+            const cookieManager = new CookieManager();
+            const cookieInfo = await cookieManager.load();
+            const fallbackSessionId = cookieInfo.source ? path.basename(cookieInfo.source) : 'legacy-cookies';
+
+            this.currentSession = {
+                id: fallbackSessionId,
+                cookies: cookieInfo.cookies,
+                usageCount: 0,
+                errorCount: 0,
+                isRetired: false,
+                filePath: cookieInfo.source || fallbackSessionId,
+                username: cookieInfo.username
+            };
+            
+            this.xApiClient = new XApiClient(cookieInfo.cookies);
+            this.eventBus.emitLog(`[API-only] Loaded cookies from ${cookieInfo.source}`);
+            return true;
+        } catch (error: any) {
+            this.eventBus.emitError(new Error(`[API-only] Cookie error: ${error.message}`));
+            return false;
+        }
+    }
+
     async scrapeTimeline(config: ScrapeTimelineConfig): Promise<ScrapeTimelineResult> {
-        if (!this.page) {
-            return { success: false, tweets: [], error: 'Page not initialized' };
+        // 验证配置
+        validateScrapeConfig({
+            limit: config.limit,
+            username: config.username,
+            searchQuery: config.searchQuery,
+            mode: config.mode,
+            scrapeMode: config.scrapeMode
+        });
+
+        const scrapeMode = config.scrapeMode || 'graphql';
+        
+        // 验证模式组合：如果 apiOnly 为 true，不能使用 puppeteer 模式
+        if (scrapeMode === 'puppeteer' && this.isApiOnlyMode()) {
+            throw ScraperErrors.invalidConfiguration(
+                'Cannot use puppeteer mode when apiOnly is true. Set apiOnly to false or use graphql mode.',
+                { scrapeMode, apiOnly: true }
+            );
+        }
+        
+        // 如果是 puppeteer 模式，使用 DOM 爬取
+        if (scrapeMode === 'puppeteer') {
+            return this.scrapeTimelineDom(config);
+        }
+        
+        // GraphQL API 模式
+        try {
+            this.ensureApiClient();
+        } catch (error) {
+            return { 
+                success: false, 
+                tweets: [], 
+                error: error instanceof ScraperError ? error.message : 'API Client not initialized' 
+            };
         }
 
         // Start performance monitoring
         this.performanceMonitor.reset();
+        this.performanceMonitor.setMode('graphql');
         this.performanceMonitor.start();
         this.emitPerformanceUpdate(true);
 
@@ -249,176 +411,163 @@ export class ScraperEngine {
         }
 
         const collectedTweets: Tweet[] = [];
-        const scrapedUrls = new Set<string>();
+        const scrapedIds = new Set<string>();
+        let cursor: string | undefined;
+        let userId: string | null = null;
 
-        // Determine Target URL
-        let targetUrl = 'https://x.com/home';
-        if (mode === 'search' && searchQuery) {
-            const encodedQuery = encodeURIComponent(searchQuery);
-            targetUrl = `https://x.com/search?q=${encodedQuery}&src=typed_query&f=live`;
-        } else if (username) {
-            if (config.tab === 'likes') {
-                targetUrl = `https://x.com/${username}/likes`;
-            } else if (config.withReplies || config.tab === 'replies') {
-                targetUrl = `https://x.com/${username}/with_replies`;
-            } else {
-                targetUrl = `https://x.com/${username}`;
-            }
-        }
-
-        // Navigation with Retry & Rate Limit Handling
-        let navigationSuccess = false;
-        let attempts = 0;
-        this.performanceMonitor.startPhase('navigation');
-        while (!navigationSuccess && attempts < 3) {
+        // Resolve User ID if needed
+        if (mode === 'timeline' && username) {
             try {
-                await this.navigationService.navigateToUrl(this.page, targetUrl);
-                await this.navigationService.waitForTweets(this.page);
-                navigationSuccess = true;
-            } catch (error: any) {
-                if (this.rateLimitManager.isRateLimitError(error)) {
-                    this.performanceMonitor.recordRateLimit();
-                    const rotatedSession = await this.rateLimitManager.handleRateLimit(this.page, attempts, error, this.currentSession?.id);
-                    if (!rotatedSession) throw error;
-
-                    this.performanceMonitor.recordSessionSwitch();
-                    await this.applySession(rotatedSession, { refreshFingerprint: true, clearExistingCookies: true });
-                    // Reset attempts after rotating to give the new session full retry budget
-                    attempts = 0;
-                    continue;
-                } else {
-                    throw error;
+                this.eventBus.emitLog(`Resolving user ID for ${username}...`);
+                const apiClient = this.ensureApiClient();
+                userId = await apiClient.getUserByScreenName(username);
+                if (!userId) {
+                    throw ScraperErrors.userNotFound(username);
                 }
-            }
-            attempts++;
-        }
-        this.performanceMonitor.endPhase();
-        this.emitPerformanceUpdate();
-
-        // Scraping Loop
-        let scrollAttempts = 0;
-        const maxScrollAttempts = Math.max(50, Math.ceil(limit / 5));
-        let noNewTweetsConsecutiveAttempts = 0;
-        let profileInfo: ProfileInfo | null = null;
-
-        if (config.collectProfileInfo) {
-            try {
-                profileInfo = await dataExtractor.extractProfileInfo(this.page);
+                this.eventBus.emitLog(`Resolved user ID: ${userId}`);
             } catch (error: any) {
-                this.eventBus.emitLog(`Failed to extract profile info: ${error.message}`, 'warn');
+                const errorMessage = error instanceof ScraperError 
+                    ? error.message 
+                    : `Failed to resolve user: ${error.message}`;
+                return { success: false, tweets: [], error: errorMessage };
             }
         }
 
-        while (collectedTweets.length < limit && scrollAttempts < maxScrollAttempts) {
+        let consecutiveErrors = 0;
+        const attemptedSessions = new Set<string>();
+        if (this.currentSession) attemptedSessions.add(this.currentSession.id);
+
+        while (collectedTweets.length < limit) {
             if (this.stopSignal || (this.shouldStopFunction && this.shouldStopFunction())) {
                 this.eventBus.emitLog('Manual stop signal received.');
                 break;
             }
 
-            scrollAttempts++;
-            
-            // Extract tweets
-            this.performanceMonitor.startPhase('extraction');
-            const tweetsOnPage = await dataExtractor.extractTweetsFromPage(this.page);
-            this.performanceMonitor.endPhase();
-            
-            let addedInAttempt = 0;
+            try {
+                const apiClient = this.ensureApiClient();
+                let response: any;
+                
+                // 记录 API 请求开始时间
+                const apiStartTime = Date.now();
+                this.performanceMonitor.startPhase(mode === 'search' ? 'api-search' : 'api-fetch-tweets');
+                
+                if (mode === 'search' && searchQuery) {
+                    this.eventBus.emitLog(`Fetching search results for "${searchQuery}"...`);
+                    response = await apiClient.searchTweets(searchQuery, 20, cursor);
+                } else if (userId) {
+                    this.eventBus.emitLog(`Fetching tweets for user ${username}...`);
+                    response = await apiClient.getUserTweets(userId, 40, cursor);
+                } else {
+                    throw ScraperErrors.invalidConfiguration('Invalid configuration: missing username or search query');
+                }
+                
+                // 记录 API 请求延迟
+                const apiLatency = Date.now() - apiStartTime;
+                this.performanceMonitor.endPhase();
+                this.performanceMonitor.recordApiRequest(apiLatency, false);
+                
+                // 记录解析时间
+                this.performanceMonitor.startPhase('parse-api-response');
+                const { tweets, nextCursor } = this.parseApiResponse(response);
+                const parseTime = Date.now() - apiStartTime - apiLatency;
+                this.performanceMonitor.endPhase();
+                this.performanceMonitor.recordApiParse(parseTime);
 
-            for (const tweet of tweetsOnPage) {
-                // Check stop condition (Incremental Scraping)
-                if (config.stopAtTweetId && tweet.id === config.stopAtTweetId) {
-                    this.eventBus.emitLog(`Reached last scraped tweet ID: ${tweet.id}. Stopping.`);
-                    // Stop the outer loop as well
-                    scrollAttempts = maxScrollAttempts;
+                if (tweets.length === 0) {
+                    this.eventBus.emitLog('No more tweets found.');
                     break;
                 }
 
-                // Check time condition (Lookback Period)
-                if (config.sinceTimestamp) {
-                    const tweetTime = new Date(tweet.time).getTime();
-                    if (!isNaN(tweetTime) && tweetTime < config.sinceTimestamp) {
-                        this.eventBus.emitLog(`Reached time limit: ${tweet.time}. Stopping.`);
-                        scrollAttempts = maxScrollAttempts;
-                        break;
+                let addedCount = 0;
+                for (const tweet of tweets) {
+                    if (collectedTweets.length >= limit) break;
+                    
+                    if (!scrapedIds.has(tweet.id)) {
+                        // Check stop conditions
+                        if (config.stopAtTweetId && tweet.id === config.stopAtTweetId) {
+                            this.eventBus.emitLog(`Reached stop tweet ID: ${tweet.id}`);
+                            cursor = undefined; // Stop loop
+                            break;
+                        }
+                        if (config.sinceTimestamp && new Date(tweet.time!).getTime() < config.sinceTimestamp) {
+                            this.eventBus.emitLog(`Reached time limit: ${tweet.time}`);
+                            cursor = undefined; // Stop loop
+                            break;
+                        }
+
+                        collectedTweets.push(tweet);
+                        scrapedIds.add(tweet.id);
+                        addedCount++;
                     }
                 }
 
-                if (collectedTweets.length < limit && !scrapedUrls.has(tweet.url)) {
-                    collectedTweets.push(tweet);
-                    scrapedUrls.add(tweet.url);
-                    addedInAttempt++;
+                this.eventBus.emitLog(`Fetched ${tweets.length} tweets, added ${addedCount} new. Total: ${collectedTweets.length}`);
+                
+                // Update progress
+                this.eventBus.emitProgress({
+                    current: collectedTweets.length,
+                    target: limit,
+                    action: 'scraping'
+                });
+
+                // Update performance stats and emit update
+                this.performanceMonitor.recordTweets(collectedTweets.length);
+                this.emitPerformanceUpdate();
+
+                if (!nextCursor || nextCursor === cursor) {
+                    this.eventBus.emitLog('Reached end of timeline.');
+                    break;
                 }
-            }
+                cursor = nextCursor;
+                consecutiveErrors = 0;
 
-            // Emit Progress
-            this.eventBus.emitProgress({
-                current: collectedTweets.length,
-                target: limit,
-                action: 'scraping'
-            });
+                // Rate limit handling / Sleep
+                await throttle(2000 + Math.random() * 1000);
 
-            if (addedInAttempt === 0) {
-                noNewTweetsConsecutiveAttempts++;
+            } catch (error: any) {
+                this.performanceMonitor.endPhase();
+                this.eventBus.emitLog(`API Error: ${error instanceof Error ? error.message : String(error)}`, 'error');
+                consecutiveErrors++;
 
-                // After 3 consecutive attempts with no new tweets, try session rotation
-                if (noNewTweetsConsecutiveAttempts >= 3) {
-                    // Check if we have other sessions to try
+                // Handle Rate Limits / Session Rotation
+                if (error.message.includes('429') || error.message.includes('Authentication failed') || consecutiveErrors >= 3) {
+                    this.performanceMonitor.recordRateLimit();
+                    const waitStartTime = Date.now();
+                    this.eventBus.emitLog(`API Error: ${error.message}. Attempting session rotation...`, 'warn');
+                    
                     const nextSession = this.sessionManager.getNextSession(undefined, this.currentSession?.id);
                     
-                    if (nextSession && nextSession.id !== this.currentSession?.id) {
-                        this.eventBus.emitLog(`No new tweets after ${noNewTweetsConsecutiveAttempts} attempts. Rotating to session: ${nextSession.id}`, 'warn');
-                        
-                        // Mark current session as potentially rate-limited
-                        if (this.currentSession) {
-                            this.sessionManager.markBad(this.currentSession.id, 'soft-rate-limit');
-                        }
-                        
-                        this.performanceMonitor.recordSessionSwitch();
-                        this.performanceMonitor.recordRateLimit();
-                        
-                        // Switch session
+                    if (nextSession && !attemptedSessions.has(nextSession.id)) {
                         try {
-                            this.performanceMonitor.startPhase('session-switch');
-                            await this.sessionManager.injectSession(this.page!, nextSession);
-                            await this.fingerprintManager.injectFingerprint(this.page!, nextSession.id);
-                            this.currentSession = nextSession;
-                            
-                            // Re-navigate to the page
-                            await this.navigationService.navigateToUrl(this.page!, targetUrl);
-                            await this.navigationService.waitForTweets(this.page!);
-                            this.performanceMonitor.endPhase();
+                            await this.applySession(nextSession, { refreshFingerprint: true, clearExistingCookies: true });
+                            attemptedSessions.add(nextSession.id);
+                            consecutiveErrors = 0;
+                            this.performanceMonitor.recordSessionSwitch();
+                            const waitTime = Date.now() - waitStartTime;
+                            this.performanceMonitor.recordRateLimitWait(waitTime);
+                            // Update performance stats after session switch
+                            this.performanceMonitor.recordTweets(collectedTweets.length);
                             this.emitPerformanceUpdate();
-                            
-                            noNewTweetsConsecutiveAttempts = 0;
-                            this.eventBus.emitLog(`Switched to session ${nextSession.id}, continuing scrape...`);
+                            // Retry the same request with new session
                             continue;
-                        } catch (switchError: any) {
-                            this.performanceMonitor.endPhase();
-                            this.eventBus.emitLog(`Failed to switch session: ${switchError.message}`, 'error');
+                        } catch (e: any) {
+                            this.eventBus.emitLog(`Session rotation failed: ${e.message}`, 'error');
                         }
+                    } else {
+                        this.eventBus.emitLog('No more sessions available or all attempted. Stopping.', 'error');
+                        break;
                     }
-                    
-                    // No more sessions or switch failed, stop
-                    this.eventBus.emitLog(`No new tweets detected after ${noNewTweetsConsecutiveAttempts} attempts. Collected ${collectedTweets.length} tweets (target was ${limit}). Finishing...`);
-                    break;
+                } else {
+                    this.performanceMonitor.recordApiRequest(0, true); // 记录重试
+                    this.eventBus.emitLog(`Transient error: ${error.message}. Retrying...`, 'warn');
+                    const waitTime = 5000;
+                    await throttle(waitTime);
+                    this.performanceMonitor.recordRateLimitWait(waitTime);
+                    // Update performance stats after error handling
+                    this.performanceMonitor.recordTweets(collectedTweets.length);
+                    this.emitPerformanceUpdate();
                 }
-            } else {
-                noNewTweetsConsecutiveAttempts = 0;
             }
-
-            // Scroll
-            this.performanceMonitor.startPhase('scroll');
-            this.performanceMonitor.recordScroll();
-            const scrollTimeout = noNewTweetsConsecutiveAttempts > 0 ? 1000 : constants.WAIT_FOR_NEW_TWEETS_TIMEOUT;
-            const domWaitTimeout = noNewTweetsConsecutiveAttempts > 0 ? 500 : 1500;
-
-            await dataExtractor.scrollToBottomSmart(this.page, scrollTimeout);
-            await dataExtractor.waitForNewTweets(this.page, tweetsOnPage.length, domWaitTimeout);
-            this.performanceMonitor.endPhase();
-            
-            // Update tweet count for performance tracking
-            this.performanceMonitor.recordTweets(collectedTweets.length);
-            this.emitPerformanceUpdate();
         }
 
         // Save Results
@@ -427,7 +576,7 @@ export class ScraperEngine {
             if (saveMarkdown) await markdownUtils.saveTweetsAsMarkdown(collectedTweets, runContext);
             if (exportCsv) await exportUtils.exportToCsv(collectedTweets, runContext);
             if (exportJson) await exportUtils.exportToJson(collectedTweets, runContext);
-            if (saveScreenshots) await screenshotUtils.takeScreenshotsOfTweets(this.page, collectedTweets, { runContext });
+            // Screenshot saving is not applicable for API scraping
         }
         this.performanceMonitor.endPhase();
 
@@ -435,21 +584,254 @@ export class ScraperEngine {
             this.sessionManager.markGood(this.currentSession.id);
         }
 
-        // Stop performance monitoring and get report
         this.performanceMonitor.stop();
         this.emitPerformanceUpdate(true);
-        const performanceStats = this.performanceMonitor.getStats();
-        
-        // Log performance report
         this.eventBus.emitLog(this.performanceMonitor.getReport());
 
-        return { success: true, tweets: collectedTweets, runContext, profile: profileInfo, performance: performanceStats };
+        return { success: true, tweets: collectedTweets, runContext, performance: this.performanceMonitor.getStats() };
+    }
+
+    /**
+     * 解析 API 响应，使用统一的解析函数
+     */
+    private parseApiResponse(response: any): { tweets: Tweet[], nextCursor?: string } {
+        try {
+            const instructions = extractInstructionsFromResponse(response);
+            const tweets = parseTweetsFromInstructions(instructions);
+            const nextCursor = extractNextCursor(instructions);
+            return { tweets, nextCursor };
+        } catch (e) {
+            this.eventBus.emitLog(`Error parsing API response: ${e instanceof Error ? e.message : String(e)}`, 'error');
+            return { tweets: [], nextCursor: undefined };
+        }
+    }
+
+    /**
+     * 使用 Puppeteer DOM 模式爬取时间线
+     * 这是较慢但更可靠的方法，模拟真实浏览器行为
+     */
+    private async scrapeTimelineDom(config: ScrapeTimelineConfig): Promise<ScrapeTimelineResult> {
+        // 确保页面可用
+        if (!this.page) {
+            await this.ensurePage();
+        }
+
+        // Start performance monitoring
+        this.performanceMonitor.reset();
+        this.performanceMonitor.setMode('puppeteer');
+        this.performanceMonitor.start();
+        this.emitPerformanceUpdate(true);
+
+        const {
+            username, limit = 50, mode = 'timeline', searchQuery,
+            saveMarkdown = true, saveScreenshots = false,
+            exportCsv = false, exportJson = false
+        } = config;
+        let { runContext } = config;
+
+        // Initialize runContext if missing
+        if (!runContext) {
+            const identifier = username || searchQuery || 'unknown';
+            runContext = await fileUtils.createRunContext({
+                platform: 'x',
+                identifier,
+                baseOutputDir: config.outputDir
+            });
+            this.eventBus.emitLog(`Created new run context: ${runContext.runId}`);
+        }
+
+        const collectedTweets: Tweet[] = [];
+        const scrapedIds = new Set<string>();
+        let profileInfo: ProfileInfo | null = null;
+
+        try {
+            // 构建目标 URL
+            let targetUrl: string;
+            if (mode === 'search' && searchQuery) {
+                targetUrl = `https://x.com/search?q=${encodeURIComponent(searchQuery)}&src=typed_query&f=live`;
+            } else if (username) {
+                targetUrl = `https://x.com/${username}`;
+            } else {
+                targetUrl = 'https://x.com/home';
+            }
+
+            // 导航到页面
+            this.performanceMonitor.startPhase('navigation');
+            await this.navigationService.navigateToUrl(this.page!, targetUrl);
+            await this.navigationService.waitForTweets(this.page!);
+            this.performanceMonitor.endPhase();
+
+            // 提取资料信息（如果是用户页面）
+            if (username && config.collectProfileInfo) {
+                profileInfo = await dataExtractor.extractProfileInfo(this.page!);
+            }
+
+            // 滚动并提取推文
+            let consecutiveNoNew = 0;
+            const maxNoNew = constants.MAX_CONSECUTIVE_NO_NEW_TWEETS;
+
+            while (collectedTweets.length < limit && consecutiveNoNew < maxNoNew) {
+                if (this.stopSignal || (this.shouldStopFunction && this.shouldStopFunction())) {
+                    this.eventBus.emitLog('Manual stop signal received.');
+                    break;
+                }
+
+                this.performanceMonitor.startPhase('extraction');
+                const tweetsOnPage = await dataExtractor.extractTweetsFromPage(this.page!);
+                this.performanceMonitor.endPhase();
+
+                let addedCount = 0;
+                for (const rawTweet of tweetsOnPage) {
+                    if (collectedTweets.length >= limit) break;
+                    
+                    const tweetId = rawTweet.id;
+                    if (!scrapedIds.has(tweetId)) {
+                        // 使用统一的转换函数
+                        const tweet = normalizeRawTweet(rawTweet);
+
+                        // Check stop conditions
+                        if (config.stopAtTweetId && tweet.id === config.stopAtTweetId) {
+                            this.eventBus.emitLog(`Reached stop tweet ID: ${tweet.id}`);
+                            consecutiveNoNew = maxNoNew; // Stop loop
+                            break;
+                        }
+                        if (config.sinceTimestamp && tweet.time) {
+                            const tweetTime = new Date(tweet.time).getTime();
+                            if (tweetTime < config.sinceTimestamp) {
+                                this.eventBus.emitLog(`Reached time limit: ${tweet.time}`);
+                                consecutiveNoNew = maxNoNew; // Stop loop
+                                break;
+                            }
+                        }
+
+                        collectedTweets.push(tweet);
+                        scrapedIds.add(tweetId);
+                        addedCount++;
+                    }
+                }
+
+                this.eventBus.emitLog(`Extracted ${tweetsOnPage.length} tweets, added ${addedCount} new. Total: ${collectedTweets.length}`);
+                
+                // Update progress
+                this.eventBus.emitProgress({
+                    current: collectedTweets.length,
+                    target: limit,
+                    action: 'scraping (DOM)'
+                });
+
+                if (addedCount === 0) {
+                    consecutiveNoNew++;
+                } else {
+                    consecutiveNoNew = 0;
+                }
+
+                // 滚动加载更多
+                if (collectedTweets.length < limit && consecutiveNoNew < maxNoNew) {
+                    this.performanceMonitor.startPhase('scroll');
+                    this.performanceMonitor.recordScroll();
+                    await dataExtractor.scrollToBottomSmart(this.page!, constants.WAIT_FOR_NEW_TWEETS_TIMEOUT);
+                    await new Promise(r => setTimeout(r, constants.getScrollDelay()));
+                    this.performanceMonitor.endPhase();
+                }
+            }
+
+            // Save Results
+            this.performanceMonitor.startPhase('save-results');
+            if (collectedTweets.length > 0) {
+                if (saveMarkdown) await markdownUtils.saveTweetsAsMarkdown(collectedTweets, runContext);
+                if (exportCsv) await exportUtils.exportToCsv(collectedTweets, runContext);
+                if (exportJson) await exportUtils.exportToJson(collectedTweets, runContext);
+                if (saveScreenshots) {
+                    await screenshotUtils.takeTimelineScreenshot(this.page!, { runContext, filename: 'final.png' });
+                            }
+            }
+            this.performanceMonitor.endPhase();
+
+            if (this.currentSession) {
+                this.sessionManager.markGood(this.currentSession.id);
+            }
+
+            this.performanceMonitor.stop();
+            this.emitPerformanceUpdate(true);
+            this.eventBus.emitLog(this.performanceMonitor.getReport());
+
+            return {
+                success: true,
+                tweets: collectedTweets,
+                runContext,
+                profile: profileInfo,
+                performance: this.performanceMonitor.getStats()
+            };
+
+        } catch (error: any) {
+            this.performanceMonitor.stop();
+            this.eventBus.emitError(new Error(`DOM scraping failed: ${error.message}`));
+            
+            // 尝试保存错误快照
+            if (this.page) {
+                await this.errorSnapshotter.capture(this.page, error, 'timeline-dom');
+                        }
+            
+            return { success: false, tweets: collectedTweets, error: error.message };
+            }
     }
 
     async scrapeThread(options: ScrapeThreadOptions): Promise<ScrapeThreadResult> {
-        if (!this.page) {
-            return { success: false, tweets: [], error: 'Page not initialized' };
+        const scrapeMode = options.scrapeMode || 'graphql';
+        
+        // 验证模式组合：如果 apiOnly 为 true，不能使用 puppeteer 模式
+        if (scrapeMode === 'puppeteer' && this.isApiOnlyMode()) {
+            throw ScraperErrors.invalidConfiguration(
+                'Cannot use puppeteer mode when apiOnly is true. Set apiOnly to false or use graphql mode.',
+                { scrapeMode, apiOnly: true }
+            );
         }
+        
+        // 如果是 puppeteer 模式，使用 DOM 爬取
+        if (scrapeMode === 'puppeteer') {
+            return this.scrapeThreadDom(options);
+        }
+        
+        // GraphQL API 模式
+        return this.scrapeThreadGraphql(options);
+    }
+
+    /**
+     * 使用 GraphQL API 爬取推文串
+     */
+    private async scrapeThreadGraphql(options: ScrapeThreadOptions): Promise<ScrapeThreadResult> {
+        try {
+            this.ensureApiClient();
+        } catch (error) {
+            return { 
+                success: false, 
+                tweets: [], 
+                error: error instanceof ScraperError ? error.message : 'API Client not initialized' 
+            };
+        }
+
+        // 验证配置
+        if (options.maxReplies !== undefined) {
+            if (typeof options.maxReplies !== 'number' || options.maxReplies < 1) {
+                return {
+                    success: false,
+                    tweets: [],
+                    error: `Invalid maxReplies: must be a positive number, got ${options.maxReplies}`
+                };
+            }
+            if (options.maxReplies > 10000) {
+                return {
+                    success: false,
+                    tweets: [],
+                    error: `Invalid maxReplies: must be <= 10000, got ${options.maxReplies}`
+                };
+            }
+        }
+
+        this.performanceMonitor.reset();
+        this.performanceMonitor.setMode('graphql');
+        this.performanceMonitor.start();
+        this.emitPerformanceUpdate(true);
 
         let { tweetUrl, maxReplies = 100, runContext, saveMarkdown = true, exportCsv = false, exportJson = false } = options;
 
@@ -469,7 +851,156 @@ export class ScraperEngine {
         if (!runContext) {
             runContext = await fileUtils.createRunContext({
                 platform: 'x',
-                identifier: username,
+                identifier: `thread-${username}`,
+                baseOutputDir: options.outputDir
+            });
+            this.eventBus.emitLog(`Created new run context for thread: ${runContext.runId}`);
+        }
+
+        let originalTweet: Tweet | null = null;
+        const allReplies: Tweet[] = [];
+        const scrapedReplyIds = new Set<string>();
+        let cursor: string | undefined;
+
+        try {
+            this.eventBus.emitLog(`Fetching thread for tweet ${tweetId}...`);
+
+            // 首次请求获取主推文和初始回复
+            const apiStartTime = Date.now();
+            this.performanceMonitor.startPhase('api-fetch-thread');
+            const apiClient = this.ensureApiClient();
+            const response = await apiClient.getTweetDetail(tweetId);
+            const apiLatency = Date.now() - apiStartTime;
+            this.performanceMonitor.endPhase();
+            this.performanceMonitor.recordApiRequest(apiLatency, false);
+
+            this.performanceMonitor.startPhase('parse-thread-response');
+            const parsed = parseTweetDetailResponse(response, tweetId);
+            const parseTime = Date.now() - apiStartTime - apiLatency;
+            this.performanceMonitor.endPhase();
+            this.performanceMonitor.recordApiParse(parseTime);
+
+            originalTweet = parsed.originalTweet;
+            
+            // 添加回复
+            for (const reply of [...parsed.conversationTweets, ...parsed.replies]) {
+                if (!scrapedReplyIds.has(reply.id)) {
+                    allReplies.push(reply);
+                    scrapedReplyIds.add(reply.id);
+                }
+            }
+            
+            cursor = parsed.nextCursor;
+            
+            this.eventBus.emitLog(`Initial fetch: ${allReplies.length} replies found`);
+
+            // 分页获取更多回复
+            while (allReplies.length < maxReplies && cursor) {
+                if (this.stopSignal || (this.shouldStopFunction && this.shouldStopFunction())) {
+                    this.eventBus.emitLog('Manual stop signal received.');
+                    break;
+                }
+
+                const waitTime = 1500 + Math.random() * 1000;
+                await throttle(waitTime);
+
+                const moreApiStartTime = Date.now();
+                this.performanceMonitor.startPhase('api-fetch-more-replies');
+                const moreResponse = await apiClient.getTweetDetail(tweetId, cursor);
+                const moreApiLatency = Date.now() - moreApiStartTime;
+                this.performanceMonitor.endPhase();
+                this.performanceMonitor.recordApiRequest(moreApiLatency, false);
+
+                const moreParsed = parseTweetDetailResponse(moreResponse, tweetId);
+
+                let addedCount = 0;
+                for (const reply of [...moreParsed.conversationTweets, ...moreParsed.replies]) {
+                    if (allReplies.length >= maxReplies) break;
+                    if (!scrapedReplyIds.has(reply.id)) {
+                        allReplies.push(reply);
+                        scrapedReplyIds.add(reply.id);
+                        addedCount++;
+                    }
+                }
+
+                this.eventBus.emitLog(`Fetched ${addedCount} more replies. Total: ${allReplies.length}`);
+                
+                this.eventBus.emitProgress({
+                    current: allReplies.length,
+                    target: maxReplies,
+                    action: 'fetching replies'
+                });
+
+                if (!moreParsed.nextCursor || moreParsed.nextCursor === cursor) {
+                    this.eventBus.emitLog('Reached end of replies.');
+                    break;
+                }
+                cursor = moreParsed.nextCursor;
+            }
+
+            const allTweets = originalTweet ? [originalTweet, ...allReplies] : allReplies;
+
+            // Save
+            this.performanceMonitor.startPhase('save-results');
+            if (allTweets.length > 0) {
+                if (saveMarkdown) await markdownUtils.saveTweetsAsMarkdown(allTweets, runContext);
+                if (exportCsv) await exportUtils.exportToCsv(allTweets, runContext);
+                if (exportJson) await exportUtils.exportToJson(allTweets, runContext);
+            }
+            this.performanceMonitor.endPhase();
+
+            if (this.currentSession) {
+                this.sessionManager.markGood(this.currentSession.id);
+            }
+
+            this.performanceMonitor.stop();
+            this.emitPerformanceUpdate(true);
+            this.eventBus.emitLog(this.performanceMonitor.getReport());
+
+            return {
+                success: true,
+                tweets: allTweets,
+                originalTweet,
+                replies: allReplies,
+                runContext,
+                performance: this.performanceMonitor.getStats()
+            };
+
+        } catch (error: any) {
+            this.performanceMonitor.stop();
+            this.eventBus.emitError(new Error(`Thread scraping (GraphQL) failed: ${error.message}`));
+            return { success: false, tweets: [], error: error.message };
+        }
+    }
+
+    /**
+     * 使用 Puppeteer DOM 爬取推文串（原有逻辑）
+     */
+    private async scrapeThreadDom(options: ScrapeThreadOptions): Promise<ScrapeThreadResult> {
+        // Ensure page is available for DOM operations.
+        if (!this.page) {
+             await this.ensurePage();
+        }
+        
+        let { tweetUrl, maxReplies = 100, runContext, saveMarkdown = true, exportCsv = false, exportJson = false } = options;
+
+        if (!tweetUrl || !tweetUrl.includes('/status/')) {
+            return { success: false, tweets: [], error: 'Invalid tweet URL' };
+        }
+
+        // Extract ID and Username
+        const urlMatch = tweetUrl.match(/x\.com\/([^\/]+)\/status\/(\d+)/);
+        if (!urlMatch) {
+            return { success: false, tweets: [], error: 'Could not parse tweet URL' };
+        }
+        const username = urlMatch[1];
+        const tweetId = urlMatch[2];
+
+        // Initialize runContext if missing
+        if (!runContext) {
+            runContext = await fileUtils.createRunContext({
+                platform: 'x',
+                identifier: `thread-${username}`,
                 baseOutputDir: options.outputDir
             });
             this.eventBus.emitLog(`Created new run context for thread: ${runContext.runId}`);
@@ -481,17 +1012,17 @@ export class ScraperEngine {
 
         try {
             // Navigate
-            await this.navigationService.navigateToUrl(this.page, tweetUrl);
-            await this.navigationService.waitForTweets(this.page);
+            await this.navigationService.navigateToUrl(this.page!, tweetUrl);
+            await this.navigationService.waitForTweets(this.page!);
 
             // Extract Original Tweet
-            let tweetsOnPage = await dataExtractor.extractTweetsFromPage(this.page);
+            let tweetsOnPage = await dataExtractor.extractTweetsFromPage(this.page!);
             if (tweetsOnPage.length > 0) {
                 originalTweet = tweetsOnPage.find(t => t.id === tweetId || t.url.includes(tweetId)) || tweetsOnPage[0];
 
                 tweetsOnPage.forEach(tweet => {
                     if (tweet.id !== originalTweet?.id && !scrapedReplyIds.has(tweet.id)) {
-                        allReplies.push(tweet);
+                        allReplies.push(tweet as Tweet);
                         scrapedReplyIds.add(tweet.id);
                     }
                 });
@@ -506,16 +1037,16 @@ export class ScraperEngine {
 
                 scrollAttempts++;
                 // Smart Scroll (Mimicking Crawlee)
-                await dataExtractor.scrollToBottomSmart(this.page, constants.WAIT_FOR_NEW_TWEETS_TIMEOUT);
+                await dataExtractor.scrollToBottomSmart(this.page!, constants.WAIT_FOR_NEW_TWEETS_TIMEOUT);
                 // Double check DOM update
-                await dataExtractor.waitForNewTweets(this.page, tweetsOnPage.length, 2000);
+                await dataExtractor.waitForNewTweets(this.page!, tweetsOnPage.length, 2000);
 
-                const newTweets = await dataExtractor.extractTweetsFromPage(this.page);
+                const newTweets = await dataExtractor.extractTweetsFromPage(this.page!);
                 for (const tweet of newTweets) {
                     if (allReplies.length >= maxReplies) break;
                     if (tweet.id === originalTweet?.id) continue;
                     if (!scrapedReplyIds.has(tweet.id)) {
-                        allReplies.push(tweet);
+                        allReplies.push(tweet as Tweet);
                         scrapedReplyIds.add(tweet.id);
                     }
                 }
@@ -543,7 +1074,7 @@ export class ScraperEngine {
             };
 
         } catch (error: any) {
-            this.eventBus.emitError(new Error(`Thread scraping failed: ${error.message}`));
+            this.eventBus.emitError(new Error(`Thread scraping (DOM) failed: ${error.message}`));
             return { success: false, tweets: [], error: error.message };
         }
     }

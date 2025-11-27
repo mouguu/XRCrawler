@@ -4,6 +4,7 @@ import * as constants from '../config/constants';
 // @ts-ignore
 import * as dataExtractor from './data-extractor';
 import { ScraperEventBus } from './event-bus';
+import { ScraperErrors } from './errors';
 
 export interface NavigationOptions {
     maxRetries?: number;
@@ -39,7 +40,7 @@ export class NavigationService {
             return true;
         } catch (error: any) {
             this._log(`Navigation failed: ${error.message}`, 'error');
-            throw error;
+            throw ScraperErrors.navigationFailed(url, error);
         }
     }
 
@@ -62,7 +63,7 @@ export class NavigationService {
             return true;
         } catch (error: any) {
             this._log(`No tweets found: ${error.message}`, 'error');
-            throw error;
+            throw ScraperErrors.dataExtractionFailed(`No tweets found: ${error.message}`, { page: 'waitForTweets' });
         }
     }
 
@@ -86,7 +87,7 @@ export class NavigationService {
             return true;
         } catch (error: any) {
             this._log(`Page reload failed: ${error.message}`, 'error');
-            throw error;
+            throw ScraperErrors.navigationFailed('Page reload', error);
         }
     }
 

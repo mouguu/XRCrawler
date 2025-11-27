@@ -17,8 +17,8 @@ import { getShouldStopScraping } from './core/stop-signal';
 import * as markdownUtils from './utils/markdown';
 import * as exportUtils from './utils/export';
 import * as fileUtils from './utils/fileutils';
-import { Tweet } from './utils/markdown';
-import { ProfileInfo } from './core/data-extractor';
+import { Tweet, ProfileInfo } from './types/tweet';
+import { ScraperErrors } from './core/errors';
 
 export interface ScrapeXFeedOptions extends Omit<ScrapeTimelineConfig, 'mode'> {
     scrapeLikes?: boolean;
@@ -27,6 +27,8 @@ export interface ScrapeXFeedOptions extends Omit<ScrapeTimelineConfig, 'mode'> {
     clearCache?: boolean;
     headless?: boolean;
     sessionId?: string;
+    /** 爬取模式: 'graphql' 使用 API, 'puppeteer' 使用 DOM */
+    scrapeMode?: 'graphql' | 'puppeteer';
 }
 
 export interface ScrapeSearchOptions extends Omit<ScrapeTimelineConfig, 'mode' | 'searchQuery'> {
@@ -62,13 +64,21 @@ export interface ScrapeTwitterUserResult {
 }
 
 export async function scrapeXFeed(options: ScrapeXFeedOptions = {}): Promise<ScrapeTimelineResult> {
-    const engine = new ScraperEngine(getShouldStopScraping, { headless: options.headless, sessionId: options.sessionId });
+    // 根据 scrapeMode 决定是否启动浏览器
+    const scrapeMode = options.scrapeMode || 'graphql';
+    const apiOnly = scrapeMode === 'graphql';
+    
+    const engine = new ScraperEngine(getShouldStopScraping, { 
+        headless: options.headless, 
+        sessionId: options.sessionId,
+        apiOnly 
+    });
 
     try {
         await engine.init();
         const cookiesLoaded = await engine.loadCookies();
         if (!cookiesLoaded) {
-            throw new Error('Failed to load cookies');
+            throw ScraperErrors.cookieLoadFailed('Failed to load cookies');
         }
 
         // Direct scrape without cache/merge logic
@@ -80,24 +90,34 @@ export async function scrapeXFeed(options: ScrapeXFeedOptions = {}): Promise<Scr
         return result;
     } catch (error: any) {
         console.error('Scrape failed:', error);
-        return { success: false, tweets: [], error: error.message };
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return { success: false, tweets: [], error: errorMessage };
     } finally {
         await engine.close();
     }
 }
 
 export async function scrapeSearch(options: ScrapeSearchOptions): Promise<ScrapeTimelineResult> {
-    const engine = new ScraperEngine(getShouldStopScraping, { headless: options.headless, sessionId: options.sessionId });
+    // 搜索模式默认使用 GraphQL API（更快）
+    const scrapeMode = 'graphql';
+    const apiOnly = true;
+    
+    const engine = new ScraperEngine(getShouldStopScraping, { 
+        headless: options.headless, 
+        sessionId: options.sessionId,
+        apiOnly 
+    });
     try {
         await engine.init();
         const cookiesLoaded = await engine.loadCookies();
         if (!cookiesLoaded) {
-            throw new Error('Failed to load cookies');
+            throw ScraperErrors.cookieLoadFailed('Failed to load cookies');
         }
         return await engine.scrapeTimeline({
             ...options,
             mode: 'search',
-            searchQuery: options.query
+            searchQuery: options.query,
+            scrapeMode
         });
     } catch (error: any) {
         console.error('Search scrape failed:', error);
@@ -108,12 +128,20 @@ export async function scrapeSearch(options: ScrapeSearchOptions): Promise<Scrape
 }
 
 export async function scrapeThread(options: ScrapeThreadOptions): Promise<ScrapeThreadResult> {
-    const engine = new ScraperEngine(getShouldStopScraping, { headless: options.headless, sessionId: options.sessionId });
+    // 根据 scrapeMode 决定是否启动浏览器
+    const scrapeMode = options.scrapeMode || 'graphql';
+    const apiOnly = scrapeMode === 'graphql';
+    
+    const engine = new ScraperEngine(getShouldStopScraping, { 
+        headless: options.headless, 
+        sessionId: options.sessionId,
+        apiOnly 
+    });
     try {
         await engine.init();
         const cookiesLoaded = await engine.loadCookies();
         if (!cookiesLoaded) {
-            throw new Error('Failed to load cookies');
+            throw ScraperErrors.cookieLoadFailed('Failed to load cookies');
         }
         return await engine.scrapeThread(options);
     } catch (error: any) {
@@ -136,14 +164,22 @@ export async function scrapeTwitterUsers(
         return [];
     }
 
-    const engine = new ScraperEngine(getShouldStopScraping, { headless: options.headless, sessionId: options.sessionId });
+    // 批量爬取默认使用 GraphQL API（更快），但如果需要 likes 则可能需要浏览器
+    // 这里先使用 API 模式，如果需要 likes 会在后续处理
+    const apiOnly = !options.scrapeLikes;
+    
+    const engine = new ScraperEngine(getShouldStopScraping, { 
+        headless: options.headless, 
+        sessionId: options.sessionId,
+        apiOnly 
+    });
     const results: ScrapeTwitterUserResult[] = [];
 
     try {
         await engine.init();
         const cookiesLoaded = await engine.loadCookies();
         if (!cookiesLoaded) {
-            throw new Error('Failed to load cookies');
+            throw ScraperErrors.cookieLoadFailed('Failed to load cookies');
         }
 
         for (const rawUsername of usernames) {

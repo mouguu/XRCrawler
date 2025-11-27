@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as scraper from './scrape-unified';
+// 注意: scrapeProfileGraphql 已废弃，统一使用 ScraperEngine
 import eventBusInstance from './core/event-bus';
 import { ScrapeProgressData, LogMessageData } from './core/event-bus';
 import { getShouldStopScraping, resetShouldStopScraping, setShouldStopScraping } from './core/stop-signal';
@@ -9,6 +10,9 @@ import { isPathInsideBase } from './utils/path-utils';
 import * as fileUtils from './utils/fileutils';
 import { apiKeyMiddleware } from './middleware/api-key';
 import { RequestQueue, RequestTask } from './core/request-queue';
+import { ScraperEngine } from './core/scraper-engine';
+import { MonitorService } from './core/monitor-service';
+import { ScraperErrors } from './core/errors';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5001;
@@ -163,7 +167,7 @@ app.post('/api/scrape', async (req: Request, res: Response) => {
             { url: queueKey, type: queueType, priority: 1 },
             () => trackTask(async () => {
             try {
-                const { type, input, limit = 50, likes = false, mergeResults = false, deleteMerged = false } = req.body;
+                const { type, input, limit = 50, likes = false, mergeResults = false, deleteMerged = false, mode } = req.body;
 
                 console.log(`Received scrape request: Type=${type}, Input=${input}, Limit=${limit}`);
 
@@ -175,34 +179,104 @@ app.post('/api/scrape', async (req: Request, res: Response) => {
                 let result: scraper.ScrapeTimelineResult | scraper.ScrapeThreadResult | undefined;
 
                 if (type === 'profile') {
-                    // Profile Scrape
+                    // Profile Scrape - 统一使用 ScraperEngine
                     const username = input.replace('@', '').replace('https://x.com/', '').replace('/', '');
-                    result = await scraper.scrapeXFeed({
-                        username,
-                        limit: parseInt(limit),
-                        scrapeLikes: likes,
-                        saveMarkdown: true,
-                        mergeResults,
-                        deleteMerged
-                    });
+                    const useGraphql = mode === 'graphql';
+                    
+                    // 使用 apiOnly 模式可以避免启动浏览器（对于 GraphQL 模式）
+                    const engine = new ScraperEngine(
+                        () => getShouldStopScraping(),
+                        { apiOnly: useGraphql }
+                    );
+                    
+                    try {
+                        await engine.init();
+                        const cookiesLoaded = await engine.loadCookies();
+                        
+                        if (!cookiesLoaded) {
+                            throw ScraperErrors.cookieLoadFailed('Failed to load cookies');
+                        }
+                        
+                        result = await engine.scrapeTimeline({
+                            username,
+                            limit: parseInt(limit),
+                            saveMarkdown: true,
+                            scrapeMode: useGraphql ? 'graphql' : 'puppeteer'
+                        });
+                        
+                        // 如果需要抓取 likes，使用 DOM 模式单独处理
+                        if (likes && !useGraphql && result) {
+                            const likesResult = await engine.scrapeTimeline({
+                                username,
+                                tab: 'likes',
+                                limit: parseInt(limit),
+                                saveMarkdown: false,
+                                scrapeMode: 'puppeteer'
+                            });
+                            if (likesResult.success && likesResult.tweets) {
+                                const likedTweets = likesResult.tweets.map((t: any) => ({ ...t, isLiked: true }));
+                                result.tweets = [...(result.tweets || []), ...likedTweets];
+                            }
+                        }
+                    } finally {
+                        await engine.close();
+                    }
 
                 } else if (type === 'thread') {
-                    // Thread Scrape
-                    result = await scraper.scrapeThread({
+                    // Thread Scrape - 统一使用 ScraperEngine
+                    const useGraphql = mode !== 'puppeteer';
+                    
+                    const engine = new ScraperEngine(
+                        () => getShouldStopScraping(),
+                        { apiOnly: useGraphql }
+                    );
+                    
+                    try {
+                        await engine.init();
+                        const cookiesLoaded = await engine.loadCookies();
+                        
+                        if (!cookiesLoaded) {
+                            throw ScraperErrors.cookieLoadFailed('Failed to load cookies');
+                        }
+                        
+                        result = await engine.scrapeThread({
                         tweetUrl: input,
                         maxReplies: parseInt(limit),
-                        saveMarkdown: true
+                            saveMarkdown: true,
+                            scrapeMode: useGraphql ? 'graphql' : 'puppeteer'
                     });
+                    } finally {
+                        await engine.close();
+                    }
 
                 } else if (type === 'search') {
-                    // Search Scrape
-                    result = await scraper.scrapeSearch({
-                        query: input,
+                    // Search Scrape - 统一使用 ScraperEngine
+                    const useGraphql = mode === 'graphql';
+                    
+                    // 使用 apiOnly 模式可以避免启动浏览器（对于 GraphQL 模式）
+                    const engine = new ScraperEngine(
+                        () => getShouldStopScraping(),
+                        { apiOnly: useGraphql }
+                    );
+                    
+                    try {
+                        await engine.init();
+                        const cookiesLoaded = await engine.loadCookies();
+                        
+                        if (!cookiesLoaded) {
+                            throw ScraperErrors.cookieLoadFailed('Failed to load cookies');
+                        }
+                        
+                        result = await engine.scrapeTimeline({
+                            mode: 'search',
+                            searchQuery: input,
                         limit: parseInt(limit),
                         saveMarkdown: true,
-                        mergeResults,
-                        deleteMerged
+                            scrapeMode: useGraphql ? 'graphql' : 'puppeteer'
                     });
+                    } finally {
+                        await engine.close();
+                    }
                 } else {
                     res.status(400).json({ error: 'Invalid scrape type' });
                     return;
@@ -294,10 +368,6 @@ app.post('/api/monitor', async (req: Request, res: Response) => {
             isScrapingActive = true;
             resetShouldStopScraping();
 
-            // Dynamic import to avoid circular dependencies or initialization issues
-            const { ScraperEngine } = require('./core/scraper-engine');
-            const { MonitorService } = require('./core/monitor-service');
-
             const engine = new ScraperEngine(() => getShouldStopScraping());
             await engine.init();
             const success = await engine.loadCookies();
@@ -308,7 +378,7 @@ app.post('/api/monitor', async (req: Request, res: Response) => {
                 return;
             }
 
-            const monitor = new MonitorService(engine);
+            const monitor = new MonitorService(engine, eventBusInstance);
             await monitor.runMonitor(users, {
                 lookbackHours: lookbackHours ? parseFloat(lookbackHours) : undefined,
                 keywords: keywords ? keywords.split(',').map((k: string) => k.trim()).filter(Boolean) : undefined

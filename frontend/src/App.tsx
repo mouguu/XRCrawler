@@ -26,6 +26,14 @@ interface PerformanceStats {
     peakMemoryUsage: number;
     currentMemoryUsage: number;
     phases?: { name: string; duration: number; percentage: number }[];
+    // API mode stats
+    apiRequestTime?: number;
+    apiRequestCount?: number;
+    apiParseTime?: number;
+    apiAverageLatency?: number;
+    apiRetryCount?: number;
+    rateLimitWaitTime?: number;
+    mode?: 'graphql' | 'puppeteer' | 'mixed';
 }
 
 function App() {
@@ -44,6 +52,9 @@ function App() {
     const [scrapeLikes, setScrapeLikes] = useState(false);
     const [mergeResults, setMergeResults] = useState(true);
     const [deleteMerged, setDeleteMerged] = useState(true);
+    
+    // Scrape Mode: 'graphql' (API) or 'puppeteer' (DOM)
+    const [scrapeMode, setScrapeMode] = useState<'graphql' | 'puppeteer'>('graphql');
 
     // Monitor Options
     const [lookbackHours, setLookbackHours] = useState(24);
@@ -161,7 +172,8 @@ function App() {
                 limit,
                 likes: scrapeLikes,
                 mergeResults,
-                deleteMerged
+                deleteMerged,
+                mode: scrapeMode  // 传递爬取模式
             };
 
             if (activeTab === 'monitor') {
@@ -337,6 +349,42 @@ function App() {
                                 </div>
 
                                 <div className="flex flex-col space-y-4">
+                                    {/* Scrape Mode Toggle - 在 profile, search, thread 模式显示 */}
+                                    {(activeTab === 'profile' || activeTab === 'search' || activeTab === 'thread') && (
+                                        <div className="flex flex-col space-y-2">
+                                            <span className="text-xs uppercase tracking-wider text-stone/60 font-sans">Extraction Mode</span>
+                                            <div className="flex items-center space-x-2">
+                                                <button
+                                                    onClick={() => setScrapeMode('graphql')}
+                                                    className={cn(
+                                                        "px-4 py-2 border rounded-full text-sm font-serif transition-all duration-300",
+                                                        scrapeMode === 'graphql'
+                                                            ? "border-rust bg-rust/10 text-rust"
+                                                            : "border-stone/30 text-stone hover:border-rust hover:text-rust"
+                                                    )}
+                                                >
+                                                    ⚡ GraphQL API
+                                                </button>
+                                                <button
+                                                    onClick={() => setScrapeMode('puppeteer')}
+                                                    className={cn(
+                                                        "px-4 py-2 border rounded-full text-sm font-serif transition-all duration-300",
+                                                        scrapeMode === 'puppeteer'
+                                                            ? "border-rust bg-rust/10 text-rust"
+                                                            : "border-stone/30 text-stone hover:border-rust hover:text-rust"
+                                                    )}
+                                                >
+                                                    🌐 Puppeteer DOM
+                                                </button>
+                                            </div>
+                                            <span className="text-[10px] text-stone/40 font-sans italic">
+                                                {scrapeMode === 'graphql' 
+                                                    ? 'Faster, uses Twitter\'s internal API' 
+                                                    : 'Slower but more reliable, simulates browser'}
+                                            </span>
+                                        </div>
+                                    )}
+                                    
                                     {activeTab === 'profile' && (
                                         <label className="flex items-center space-x-4 cursor-pointer group select-none">
                                             <div className="w-6 h-6 border border-stone rounded-full flex items-center justify-center group-hover:border-rust transition-colors">
@@ -519,37 +567,92 @@ function App() {
                                     <p className="text-xl font-display text-rust">{performanceStats.tweetsPerSecond.toFixed(2)} <span className="text-xs text-stone/50">t/s</span></p>
                                 </div>
                                 
-                                {/* Scroll Count */}
-                                <div className="p-4 border border-white/10 rounded-sm bg-white/5">
-                                    <p className="text-[10px] uppercase tracking-wider text-stone/50 mb-1">Scrolls</p>
-                                    <p className="text-xl font-display text-washi/80">{performanceStats.scrollCount}</p>
-                                </div>
-                                
-                                {/* Peak Memory */}
-                                <div className="p-4 border border-white/10 rounded-sm bg-white/5">
-                                    <p className="text-[10px] uppercase tracking-wider text-stone/50 mb-1">Peak Memory</p>
-                                    <p className="text-xl font-display text-washi/80">{performanceStats.peakMemoryUsage.toFixed(0)} <span className="text-xs text-stone/50">MB</span></p>
-                                </div>
+                                {/* Mode-specific metric */}
+                                {(performanceStats.mode === 'graphql' || performanceStats.mode === 'mixed') && performanceStats.apiRequestCount !== undefined ? (
+                                    <>
+                                        {/* API Requests */}
+                                        <div className="p-4 border border-white/10 rounded-sm bg-white/5">
+                                            <p className="text-[10px] uppercase tracking-wider text-stone/50 mb-1">API Requests</p>
+                                            <p className="text-xl font-display text-washi/80">{performanceStats.apiRequestCount}</p>
+                                        </div>
+                                        
+                                        {/* Avg API Latency */}
+                                        <div className="p-4 border border-white/10 rounded-sm bg-white/5">
+                                            <p className="text-[10px] uppercase tracking-wider text-stone/50 mb-1">Avg Latency</p>
+                                            <p className="text-xl font-display text-washi/80">
+                                                {performanceStats.apiAverageLatency 
+                                                    ? `${(performanceStats.apiAverageLatency / 1000).toFixed(2)}s`
+                                                    : 'N/A'
+                                                }
+                                            </p>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        {/* Scroll Count (Puppeteer mode) */}
+                                        <div className="p-4 border border-white/10 rounded-sm bg-white/5">
+                                            <p className="text-[10px] uppercase tracking-wider text-stone/50 mb-1">Scrolls</p>
+                                            <p className="text-xl font-display text-washi/80">{performanceStats.scrollCount}</p>
+                                        </div>
+                                        
+                                        {/* Peak Memory */}
+                                        <div className="p-4 border border-white/10 rounded-sm bg-white/5">
+                                            <p className="text-[10px] uppercase tracking-wider text-stone/50 mb-1">Peak Memory</p>
+                                            <p className="text-xl font-display text-washi/80">{performanceStats.peakMemoryUsage.toFixed(0)} <span className="text-xs text-stone/50">MB</span></p>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                             
                             {/* Detailed Breakdown */}
                             <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-                                {/* Time Breakdown */}
+                                {/* Time Breakdown - Different for API vs Puppeteer */}
                                 <div className="p-4 border border-white/10 rounded-sm bg-white/5">
-                                    <p className="text-[10px] uppercase tracking-wider text-stone/50 mb-3">Time Breakdown</p>
+                                    <p className="text-[10px] uppercase tracking-wider text-stone/50 mb-3">
+                                        {(performanceStats.mode === 'graphql' || performanceStats.mode === 'mixed') && performanceStats.apiRequestTime !== undefined
+                                            ? 'API Time Breakdown'
+                                            : 'Time Breakdown'}
+                                    </p>
                                     <div className="space-y-2 text-xs">
-                                        <div className="flex justify-between">
-                                            <span className="text-stone/60">Navigation</span>
-                                            <span className="text-washi/80">{(performanceStats.navigationTime / 1000).toFixed(2)}s</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-stone/60">Scrolling</span>
-                                            <span className="text-washi/80">{(performanceStats.scrollTime / 1000).toFixed(2)}s</span>
-                                        </div>
-                                        <div className="flex justify-between">
-                                            <span className="text-stone/60">Extraction</span>
-                                            <span className="text-washi/80">{(performanceStats.extractionTime / 1000).toFixed(2)}s</span>
-                                        </div>
+                                        {(performanceStats.mode === 'graphql' || performanceStats.mode === 'mixed') && performanceStats.apiRequestTime !== undefined ? (
+                                            <>
+                                                <div className="flex justify-between">
+                                                    <span className="text-stone/60">API Request Time</span>
+                                                    <span className="text-washi/80">
+                                                        {performanceStats.apiRequestTime 
+                                                            ? `${(performanceStats.apiRequestTime / 1000).toFixed(2)}s`
+                                                            : '0s'}
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-stone/60">API Parse Time</span>
+                                                    <span className="text-washi/80">
+                                                        {performanceStats.apiParseTime 
+                                                            ? `${(performanceStats.apiParseTime / 1000).toFixed(2)}s`
+                                                            : '0s'}
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-stone/60">Extraction</span>
+                                                    <span className="text-washi/80">{(performanceStats.extractionTime / 1000).toFixed(2)}s</span>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="flex justify-between">
+                                                    <span className="text-stone/60">Navigation</span>
+                                                    <span className="text-washi/80">{(performanceStats.navigationTime / 1000).toFixed(2)}s</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-stone/60">Scrolling</span>
+                                                    <span className="text-washi/80">{(performanceStats.scrollTime / 1000).toFixed(2)}s</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-stone/60">Extraction</span>
+                                                    <span className="text-washi/80">{(performanceStats.extractionTime / 1000).toFixed(2)}s</span>
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                                 
@@ -565,6 +668,18 @@ function App() {
                                             <span className="text-stone/60">Rate Limits Hit</span>
                                             <span className={performanceStats.rateLimitHits > 0 ? "text-red-400" : "text-green-400"}>{performanceStats.rateLimitHits}</span>
                                         </div>
+                                        {performanceStats.rateLimitWaitTime !== undefined && performanceStats.rateLimitWaitTime > 0 && (
+                                            <div className="flex justify-between">
+                                                <span className="text-stone/60">Rate Limit Wait</span>
+                                                <span className="text-washi/80">{(performanceStats.rateLimitWaitTime / 1000).toFixed(2)}s</span>
+                                            </div>
+                                        )}
+                                        {(performanceStats.mode === 'graphql' || performanceStats.mode === 'mixed') && performanceStats.apiRetryCount !== undefined && performanceStats.apiRetryCount > 0 && (
+                                            <div className="flex justify-between">
+                                                <span className="text-stone/60">API Retries</span>
+                                                <span className="text-yellow-400">{performanceStats.apiRetryCount}</span>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                                 
@@ -572,15 +687,27 @@ function App() {
                                 <div className="p-4 border border-white/10 rounded-sm bg-white/5">
                                     <p className="text-[10px] uppercase tracking-wider text-stone/50 mb-3">Efficiency</p>
                                     <div className="space-y-2 text-xs">
-                                        <div className="flex justify-between">
-                                            <span className="text-stone/60">Tweets/Scroll</span>
-                                            <span className="text-washi/80">
-                                                {performanceStats.scrollCount > 0 
-                                                    ? (performanceStats.tweetsCollected / performanceStats.scrollCount).toFixed(1)
-                                                    : 'N/A'
-                                                }
-                                            </span>
-                                        </div>
+                                        {(performanceStats.mode === 'graphql' || performanceStats.mode === 'mixed') && performanceStats.apiRequestCount !== undefined ? (
+                                            <div className="flex justify-between">
+                                                <span className="text-stone/60">Tweets/Request</span>
+                                                <span className="text-washi/80">
+                                                    {performanceStats.apiRequestCount > 0 
+                                                        ? (performanceStats.tweetsCollected / performanceStats.apiRequestCount).toFixed(1)
+                                                        : 'N/A'
+                                                    }
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <div className="flex justify-between">
+                                                <span className="text-stone/60">Tweets/Scroll</span>
+                                                <span className="text-washi/80">
+                                                    {performanceStats.scrollCount > 0 
+                                                        ? (performanceStats.tweetsCollected / performanceStats.scrollCount).toFixed(1)
+                                                        : 'N/A'
+                                                    }
+                                                </span>
+                                            </div>
+                                        )}
                                         <div className="flex justify-between">
                                             <span className="text-stone/60">Total Tweets</span>
                                             <span className="text-rust font-medium">{performanceStats.tweetsCollected}</span>

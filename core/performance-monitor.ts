@@ -13,18 +13,26 @@ export interface TimingMetric {
 export interface PerformanceStats {
     // 时间统计
     totalDuration: number;           // 总耗时 (ms)
-    navigationTime: number;          // 导航耗时 (ms)
-    scrollTime: number;              // 滚动耗时 (ms)
+    navigationTime: number;          // 导航耗时 (ms) - DOM 模式
+    scrollTime: number;              // 滚动耗时 (ms) - DOM 模式
     extractionTime: number;          // 数据提取耗时 (ms)
+    
+    // API 统计 (GraphQL 模式)
+    apiRequestTime: number;          // API 请求总耗时 (ms)
+    apiRequestCount: number;         // API 请求次数
+    apiParseTime: number;            // API 响应解析耗时 (ms)
+    apiAverageLatency: number;       // API 平均延迟 (ms)
+    apiRetryCount: number;           // API 重试次数
     
     // 抓取统计
     tweetsCollected: number;         // 收集的推文数
     tweetsPerSecond: number;         // 每秒推文数
-    scrollCount: number;             // 滚动次数
+    scrollCount: number;             // 滚动次数 - DOM 模式
     
     // Session 统计
     sessionSwitches: number;         // Session 切换次数
     rateLimitHits: number;           // Rate limit 触发次数
+    rateLimitWaitTime: number;      // Rate limit 等待时间 (ms)
     
     // 内存统计 (MB)
     peakMemoryUsage: number;         // 峰值内存使用
@@ -32,6 +40,9 @@ export interface PerformanceStats {
     
     // 阶段耗时明细
     phases: PhaseMetric[];
+    
+    // 模式标识
+    mode: 'graphql' | 'puppeteer' | 'mixed';  // 爬取模式
 }
 
 export interface PhaseMetric {
@@ -49,11 +60,19 @@ export class PerformanceMonitor {
     private scrollTime: number = 0;
     private extractionTime: number = 0;
     
+    // API 统计
+    private apiRequestTime: number = 0;
+    private apiRequestCount: number = 0;
+    private apiParseTime: number = 0;
+    private apiRetryCount: number = 0;
+    private apiLatencies: number[] = [];  // 存储每次请求的延迟
+    
     // 计数器
     private tweetsCollected: number = 0;
     private scrollCount: number = 0;
     private sessionSwitches: number = 0;
     private rateLimitHits: number = 0;
+    private rateLimitWaitTime: number = 0;
     
     // 内存追踪
     private peakMemoryUsage: number = 0;
@@ -62,6 +81,9 @@ export class PerformanceMonitor {
     // 当前阶段追踪
     private currentPhase: { name: string; startTime: number } | null = null;
     private phases: Map<string, number> = new Map();
+    
+    // 模式追踪
+    private mode: 'graphql' | 'puppeteer' | 'mixed' = 'mixed';
     
     /**
      * 开始监控
@@ -80,6 +102,13 @@ export class PerformanceMonitor {
         if (this.currentPhase) {
             this.endPhase();
         }
+    }
+    
+    /**
+     * 设置爬取模式
+     */
+    setMode(mode: 'graphql' | 'puppeteer'): void {
+        this.mode = mode;
     }
     
     /**
@@ -110,9 +139,45 @@ export class PerformanceMonitor {
             this.scrollTime += duration;
         } else if (name.includes('extract') || name.includes('parse')) {
             this.extractionTime += duration;
+            // 如果是 API 解析阶段
+            if (name.includes('parse') && (name.includes('api') || name.includes('response'))) {
+                this.apiParseTime += duration;
+            }
+        } else if (name.includes('fetch') || name.includes('api') || name.includes('request')) {
+            // API 请求阶段
+            this.apiRequestTime += duration;
+            this.apiRequestCount++;
+            this.apiLatencies.push(duration);
         }
         
         this.currentPhase = null;
+    }
+    
+    /**
+     * 记录 API 请求（带延迟信息）
+     */
+    recordApiRequest(latency: number, retried: boolean = false): void {
+        this.apiRequestTime += latency;
+        this.apiRequestCount++;
+        this.apiLatencies.push(latency);
+        if (retried) {
+            this.apiRetryCount++;
+        }
+    }
+    
+    /**
+     * 记录 API 解析时间
+     */
+    recordApiParse(duration: number): void {
+        this.apiParseTime += duration;
+    }
+    
+    /**
+     * 记录 Rate Limit 等待时间
+     */
+    recordRateLimitWait(waitTime: number): void {
+        this.rateLimitHits++;
+        this.rateLimitWaitTime += waitTime;
     }
     
     /**
@@ -198,6 +263,11 @@ export class PerformanceMonitor {
             ? (this.tweetsCollected / (totalDuration / 1000)) 
             : 0;
         
+        // 计算 API 平均延迟
+        const apiAverageLatency = this.apiLatencies.length > 0
+            ? this.apiLatencies.reduce((sum, lat) => sum + lat, 0) / this.apiLatencies.length
+            : 0;
+        
         // 计算各阶段百分比
         const phaseMetrics: PhaseMetric[] = [];
         for (const [name, duration] of this.phases.entries()) {
@@ -216,14 +286,21 @@ export class PerformanceMonitor {
             navigationTime: this.navigationTime,
             scrollTime: this.scrollTime,
             extractionTime: this.extractionTime,
+            apiRequestTime: this.apiRequestTime,
+            apiRequestCount: this.apiRequestCount,
+            apiParseTime: this.apiParseTime,
+            apiAverageLatency: Math.round(apiAverageLatency * 100) / 100,
+            apiRetryCount: this.apiRetryCount,
             tweetsCollected: this.tweetsCollected,
             tweetsPerSecond: Math.round(tweetsPerSecond * 100) / 100,
             scrollCount: this.scrollCount,
             sessionSwitches: this.sessionSwitches,
             rateLimitHits: this.rateLimitHits,
+            rateLimitWaitTime: this.rateLimitWaitTime,
             peakMemoryUsage: Math.round(this.peakMemoryUsage * 100) / 100,
             currentMemoryUsage: Math.round(this.getCurrentMemoryUsage() * 100) / 100,
-            phases: phaseMetrics
+            phases: phaseMetrics,
+            mode: this.mode
         };
     }
     
@@ -240,12 +317,30 @@ export class PerformanceMonitor {
         lines.push('═══════════════════════════════════════════════════════════');
         lines.push('');
         
+        // 模式标识
+        lines.push(`🔧 MODE: ${stats.mode.toUpperCase()}`);
+        lines.push('');
+        
         // 时间统计
         lines.push('⏱️  TIME STATISTICS');
         lines.push('───────────────────────────────────────────────────────────');
         lines.push(`   Total Duration:     ${this.formatDuration(stats.totalDuration)}`);
-        lines.push(`   Navigation Time:    ${this.formatDuration(stats.navigationTime)} (${this.percentage(stats.navigationTime, stats.totalDuration)})`);
-        lines.push(`   Scroll Time:        ${this.formatDuration(stats.scrollTime)} (${this.percentage(stats.scrollTime, stats.totalDuration)})`);
+        
+        if (stats.mode === 'graphql' || stats.mode === 'mixed') {
+            lines.push(`   API Request Time:   ${this.formatDuration(stats.apiRequestTime)} (${this.percentage(stats.apiRequestTime, stats.totalDuration)})`);
+            lines.push(`   API Parse Time:     ${this.formatDuration(stats.apiParseTime)} (${this.percentage(stats.apiParseTime, stats.totalDuration)})`);
+            lines.push(`   API Requests:       ${stats.apiRequestCount}`);
+            lines.push(`   Avg API Latency:    ${this.formatDuration(stats.apiAverageLatency)}`);
+            if (stats.apiRetryCount > 0) {
+                lines.push(`   API Retries:        ${stats.apiRetryCount}`);
+            }
+        }
+        
+        if (stats.mode === 'puppeteer' || stats.mode === 'mixed') {
+            lines.push(`   Navigation Time:    ${this.formatDuration(stats.navigationTime)} (${this.percentage(stats.navigationTime, stats.totalDuration)})`);
+            lines.push(`   Scroll Time:        ${this.formatDuration(stats.scrollTime)} (${this.percentage(stats.scrollTime, stats.totalDuration)})`);
+        }
+        
         lines.push(`   Extraction Time:    ${this.formatDuration(stats.extractionTime)} (${this.percentage(stats.extractionTime, stats.totalDuration)})`);
         lines.push('');
         
@@ -263,6 +358,9 @@ export class PerformanceMonitor {
         lines.push('───────────────────────────────────────────────────────────');
         lines.push(`   Session Switches:   ${stats.sessionSwitches}`);
         lines.push(`   Rate Limit Hits:    ${stats.rateLimitHits}`);
+        if (stats.rateLimitWaitTime > 0) {
+            lines.push(`   Rate Limit Wait:    ${this.formatDuration(stats.rateLimitWaitTime)}`);
+        }
         lines.push('');
         
         // 内存统计
@@ -329,13 +427,20 @@ export class PerformanceMonitor {
         this.navigationTime = 0;
         this.scrollTime = 0;
         this.extractionTime = 0;
+        this.apiRequestTime = 0;
+        this.apiRequestCount = 0;
+        this.apiParseTime = 0;
+        this.apiRetryCount = 0;
+        this.apiLatencies = [];
         this.tweetsCollected = 0;
         this.scrollCount = 0;
         this.sessionSwitches = 0;
         this.rateLimitHits = 0;
+        this.rateLimitWaitTime = 0;
         this.peakMemoryUsage = 0;
         this.currentPhase = null;
         this.phases.clear();
+        this.mode = 'mixed';
         this.stopMemoryTracking();
     }
 }
@@ -356,6 +461,9 @@ export function resetGlobalMonitor(): void {
     }
     globalMonitor = null;
 }
+
+
+
 
 
 

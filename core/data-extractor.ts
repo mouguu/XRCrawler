@@ -5,6 +5,10 @@
 
 import { Page } from 'puppeteer';
 import * as constants from '../config/constants';
+import { Tweet, ProfileInfo, RawTweetData, normalizeRawTweet } from '../types/tweet';
+
+// 重新导出统一类型
+export { Tweet, ProfileInfo, RawTweetData };
 
 // Twitter 选择器
 export const X_SELECTORS = {
@@ -18,30 +22,8 @@ export const X_SELECTORS = {
     MEDIA: '[data-testid="tweetPhoto"], [data-testid="videoPlayer"]'
 };
 
-export interface ProfileInfo {
-    displayName: string | null;
-    handle: string | null;
-    bio: string | null;
-    location: string | null;
-    website: string | null;
-    joined: string | null;
-    followers: number | null;
-    following: number | null;
-}
-
-export interface TweetData {
-    text: string;
-    time: string;
-    url: string;
-    id: string;
-    author: string;
-    likes: number;
-    retweets: number;
-    replies: number;
-    hasMedia: boolean;
-    isReply: boolean;
-    quotedContent: string | null;
-}
+/** @deprecated 使用 RawTweetData 代替 */
+export type TweetData = RawTweetData;
 
 /**
  * 解析计数文本（如 "1.5K" -> 1500）
@@ -134,7 +116,7 @@ export async function extractProfileInfo(page: Page): Promise<ProfileInfo | null
 /**
  * 从页面提取所有推文
  */
-export async function extractTweetsFromPage(page: Page): Promise<TweetData[]> {
+export async function extractTweetsFromPage(page: Page): Promise<RawTweetData[]> {
     try {
         const tweetsOnPage = await page.evaluate((SELECTORS) => {
             const parseCountInBrowser = (countText: string | null | undefined): number => {

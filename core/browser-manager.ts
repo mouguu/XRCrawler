@@ -7,6 +7,7 @@ import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { Browser, Page, HTTPRequest } from 'puppeteer';
 import * as constants from '../config/constants';
+import { ScraperErrors } from './errors';
 
 puppeteer.use(StealthPlugin());
 
@@ -66,7 +67,7 @@ export class BrowserManager {
      */
     async newPage(options: BrowserLaunchOptions = {}): Promise<Page> {
         if (!this.browser) {
-            throw new Error('[BrowserManager] Browser not initialized. Call init() first.');
+            throw ScraperErrors.browserNotInitialized();
         }
 
         this.page = await this.browser.newPage();
@@ -87,7 +88,7 @@ export class BrowserManager {
      */
     async setupRequestInterception(blockedTypes: string[] | null = null): Promise<void> {
         if (!this.page) {
-            throw new Error('Page not created. Call createPage() first.');
+            throw ScraperErrors.pageNotAvailable();
         }
 
         const typesToBlock = blockedTypes || constants.BLOCKED_RESOURCE_TYPES;
@@ -129,7 +130,7 @@ export class BrowserManager {
      */
     getPage(): Page {
         if (!this.page) {
-            throw new Error('Page not created. Call createPage() first.');
+            throw ScraperErrors.pageNotAvailable();
         }
         return this.page;
     }
@@ -139,7 +140,7 @@ export class BrowserManager {
      */
     getBrowser(): Browser {
         if (!this.browser) {
-            throw new Error('Browser not launched. Call launch() first.');
+            throw ScraperErrors.browserNotInitialized();
         }
         return this.browser;
     }
@@ -156,7 +157,7 @@ export class BrowserManager {
             const cookies = Array.isArray(parsed) ? parsed : parsed.cookies;
 
             if (!Array.isArray(cookies)) {
-                throw new Error('Invalid cookie file format');
+                throw ScraperErrors.cookieLoadFailed('Invalid cookie file format');
             }
 
             await page.setCookie(...cookies);

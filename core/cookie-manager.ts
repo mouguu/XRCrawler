@@ -7,6 +7,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import { Page, Protocol } from 'puppeteer';
 import * as validation from '../utils/validation';
+import { ScraperErrors } from './errors';
 
 export interface CookieManagerOptions {
   cookiesDir?: string;
@@ -74,7 +75,7 @@ export class CookieManager {
     }
 
     if (this.cookieFiles.length === 0) {
-      throw new Error(`No cookie files found in ${this.cookiesDir}. Please place your exported cookie JSON files there.`);
+      throw ScraperErrors.cookieLoadFailed(`No cookie files found in ${this.cookiesDir}. Please place your exported cookie JSON files there.`);
     }
   }
 
@@ -118,7 +119,7 @@ export class CookieManager {
       const envData = JSON.parse(cookiesString);
       return this.parseCookieData(envData, cookieFile);
     } catch (error: any) {
-      throw new Error(`Failed to load cookies from ${cookieFile}: ${error.message}`);
+      throw ScraperErrors.cookieLoadFailed(`Failed to load cookies from ${cookieFile}: ${error.message}`, error);
     }
   }
 
@@ -136,7 +137,7 @@ export class CookieManager {
   private parseCookieData(envData: any, sourcePath: string): CookieLoadResult {
     const cookieValidation = validation.validateEnvCookieData(envData);
     if (!cookieValidation.valid) {
-      throw new Error(`Cookie validation failed for ${path.basename(sourcePath)}: ${cookieValidation.error}`);
+      throw ScraperErrors.cookieLoadFailed(`Cookie validation failed for ${path.basename(sourcePath)}: ${cookieValidation.error}`);
     }
 
     this.cookies = cookieValidation.cookies || [];
@@ -159,11 +160,11 @@ export class CookieManager {
    */
   async injectIntoPage(page: Page): Promise<void> {
     if (!this.cookies) {
-      throw new Error('Cookies not loaded. Call load() first.');
+      throw ScraperErrors.cookieLoadFailed('Cookies not loaded. Call load() first.');
     }
 
     if (!page) {
-      throw new Error('Page is required');
+      throw ScraperErrors.pageNotAvailable();
     }
 
     await page.setCookie(...(this.cookies as any[]));
