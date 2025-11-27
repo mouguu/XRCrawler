@@ -167,7 +167,7 @@ app.post('/api/scrape', async (req: Request, res: Response) => {
             { url: queueKey, type: queueType, priority: 1 },
             () => trackTask(async () => {
             try {
-                const { type, input, limit = 50, likes = false, mergeResults = false, deleteMerged = false, mode } = req.body;
+                const { type, input, limit = 50, likes = false, mode, resume = false, dateRange } = req.body;
 
                 console.log(`Received scrape request: Type=${type}, Input=${input}, Limit=${limit}`);
 
@@ -277,10 +277,12 @@ app.post('/api/scrape', async (req: Request, res: Response) => {
                         result = await engine.scrapeTimeline({
                             mode: 'search',
                             searchQuery: input,
-                        limit: parseInt(limit),
-                        saveMarkdown: true,
-                            scrapeMode: searchScrapeMode
-                    });
+                            limit: parseInt(limit),
+                            saveMarkdown: true,
+                            scrapeMode: searchScrapeMode,
+                            resume,
+                            dateRange
+                        });
                     } finally {
                         await engine.close();
                     }

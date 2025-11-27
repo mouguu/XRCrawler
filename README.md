@@ -43,10 +43,21 @@ A powerful, full-featured tool to scrape, archive, and analyze Twitter/X content
    cd twitter-crawler
    ```
 
-2. **Install dependencies**
+2. **Install backend dependencies**
    ```bash
    npm install
    ```
+
+3. **Install frontend dependencies**
+   ```bash
+   npm run install:frontend
+   ```
+
+4. **Build & sync the frontend bundle (only required after frontend changes)**
+   ```bash
+   npm run deploy:frontend
+   ```
+   This command compiles the Vite UI (`frontend/`) and copies the output into the root `public/` directory that Express serves.
 
 3. **Configure Cookies (Required)**
    To access age-restricted content, search, or avoid rate limits, you must provide Twitter cookies.
@@ -332,6 +343,7 @@ Download generated artifacts (Markdown, JSON, CSV).
 ## 🛠️ Development
 
 - **Run Tests**: `npm test`
+- **Frontend Tests**: `cd frontend && npm run test`
 - **Build Frontend**: `cd frontend && npm run build`
 - **Linting**: `npm run lint` (if configured)
 

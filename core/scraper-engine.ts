@@ -10,6 +10,8 @@ import { NavigationService } from './navigation-service';
 import { RateLimitManager } from './rate-limit-manager';
 import { PerformanceMonitor, PerformanceStats } from './performance-monitor';
 import eventBusInstance, { ScraperEventBus } from './event-bus';
+import { ProgressManager } from './progress-manager';
+import { DateUtils } from '../utils/date-utils';
 import * as fileUtils from '../utils/fileutils';
 import { RunContext } from '../utils/fileutils';
 import * as markdownUtils from '../utils/markdown';
@@ -63,6 +65,11 @@ export interface ScrapeTimelineConfig {
     collectProfileInfo?: boolean;
     /** 爬取模式: 'graphql' 使用 API (默认), 'puppeteer' 使用 DOM */
     scrapeMode?: 'graphql' | 'puppeteer';
+    resume?: boolean;
+    dateRange?: {
+        start: string; // YYYY-MM-DD
+        end: string;   // YYYY-MM-DD
+    };
 }
 
 export interface ScrapeTimelineResult {
@@ -116,6 +123,7 @@ export class ScraperEngine {
     private preferredSessionId?: string;
     /** 是否为纯 API 模式（不启动浏览器） */
     private apiOnlyMode: boolean;
+    private progressManager: ProgressManager;
 
     private xApiClient: XApiClient | null = null;
 
@@ -171,6 +179,7 @@ export class ScraperEngine {
         };
         this.preferredSessionId = options.sessionId;
         this.apiOnlyMode = options.apiOnly ?? false;
+        this.progressManager = new ProgressManager('./data/progress', this.eventBus);
     }
 
     setStopSignal(value: boolean): void {
@@ -374,6 +383,11 @@ export class ScraperEngine {
         // 如果是 puppeteer 模式，使用 DOM 爬取
         if (scrapeMode === 'puppeteer') {
             return this.scrapeTimelineDom(config);
+        }
+        
+        // 如果提供了日期范围，使用分块爬取
+        if (config.dateRange && config.mode === 'search' && config.searchQuery) {
+            return this.scrapeWithDateChunks(config, config.runContext!);
         }
         
         // GraphQL API 模式
@@ -662,6 +676,14 @@ export class ScraperEngine {
                     action: 'scraping'
                 });
 
+                // Update Progress Manager
+                this.progressManager.updateProgress(
+                    collectedTweets.length,
+                    tweets[tweets.length - 1]?.id,
+                    nextCursor,
+                    this.currentSession?.id
+                );
+
                 // Update performance stats and emit update
                 this.performanceMonitor.recordTweets(collectedTweets.length);
                 this.emitPerformanceUpdate();
@@ -768,7 +790,62 @@ export class ScraperEngine {
         this.emitPerformanceUpdate(true);
         this.eventBus.emitLog(this.performanceMonitor.getReport());
 
+        this.progressManager.completeScraping();
         return { success: true, tweets: collectedTweets, runContext, performance: this.performanceMonitor.getStats() };
+    }
+
+    private async scrapeWithDateChunks(config: ScrapeTimelineConfig, runContext: RunContext): Promise<ScrapeTimelineResult> {
+        if (!config.dateRange || !config.searchQuery) {
+            throw new Error('Date range and search query are required for chunked scraping');
+        }
+
+        const ranges = DateUtils.generateDateRanges(config.dateRange.start, config.dateRange.end, 'monthly');
+        this.eventBus.emitLog(`Generated ${ranges.length} date chunks for historical search.`);
+
+        let allTweets: Tweet[] = [];
+        
+        for (let i = 0; i < ranges.length; i++) {
+            const range = ranges[i];
+            const chunkQuery = `${config.searchQuery} since:${range.start} until:${range.end}`;
+            
+            this.eventBus.emitLog(`Processing chunk ${i + 1}/${ranges.length}: ${range.start} to ${range.end}`);
+            
+            // Create a sub-config for this chunk
+            const chunkConfig: ScrapeTimelineConfig = {
+                ...config,
+                searchQuery: chunkQuery,
+                dateRange: undefined, // Prevent recursion
+                resume: false, // Chunks are atomic for now, or we could implement chunk-level resume
+                limit: config.limit ? Math.ceil(config.limit / ranges.length) : 100 // Distribute limit or keep per chunk?
+                // Let's assume limit is per-chunk or global? 
+                // For deep scraping, we usually want "all tweets in this range".
+                // If limit is global, we need to track total collected.
+            };
+
+            // We use a simplified limit for chunks to avoid stopping early if one chunk is empty
+            // But if the user wants 1000 tweets total, we should stop when we hit 1000.
+            // For now, let's treat 'limit' as 'limit per chunk' to ensure deep coverage, 
+            // OR we need a global accumulator.
+            // Let's stick to the requested logic: "Deep scraping".
+            
+            const result = await this.scrapeTimeline(chunkConfig);
+            
+            if (result.success && result.tweets) {
+                allTweets = allTweets.concat(result.tweets);
+                await markdownUtils.saveTweetsAsMarkdown(result.tweets, runContext); // Save incrementally
+            }
+
+            // Update global progress?
+            // The ProgressManager inside scrapeTimeline will handle the chunk's progress.
+            // We might want a "Master Progress" here.
+        }
+
+        return {
+            success: true,
+            tweets: allTweets,
+            runContext,
+            performance: this.performanceMonitor.getStats()
+        };
     }
 
     /**

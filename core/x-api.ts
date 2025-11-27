@@ -8,6 +8,7 @@ import {
     X_API_FEATURES_USER_DETAILS
 } from '../config/constants';
 import { ScraperErrors } from './errors';
+import { RetryOnNetworkError, HandleRateLimit } from '../utils/decorators';
 
 export class XApiClient {
     private cookies: Protocol.Network.CookieParam[];
@@ -49,6 +50,8 @@ export class XApiClient {
         }
     }
 
+    @RetryOnNetworkError(3, 1000)
+    @HandleRateLimit()
     private async request(op: typeof X_API_OPS.UserTweets | typeof X_API_OPS.SearchTimeline | typeof X_API_OPS.UserByScreenName | typeof X_API_OPS.TweetDetail, variables: any) {
         const queryId = op.operationName === 'SearchTimeline' ? this.searchQueryId : op.queryId;
         const url = `https://x.com/i/api/graphql/${queryId}/${op.operationName}`;

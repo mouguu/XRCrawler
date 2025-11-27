@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -50,23 +50,18 @@ function App() {
 
     // Options
     const [scrapeLikes, setScrapeLikes] = useState(false);
-    const [mergeResults, setMergeResults] = useState(true);
-    const [deleteMerged, setDeleteMerged] = useState(true);
     
     // Scrape Mode: 'graphql' (API) or 'puppeteer' (DOM)
-    // Note: Search mode always uses Puppeteer (GraphQL search has cursor pagination issues)
     const [scrapeMode, setScrapeMode] = useState<'graphql' | 'puppeteer'>('graphql');
-    
-    // Auto-switch to Puppeteer when search tab is active
-    useEffect(() => {
-        if (activeTab === 'search' && scrapeMode === 'graphql') {
-            setScrapeMode('puppeteer');
-        }
-    }, [activeTab, scrapeMode]);
 
     // Monitor Options
     const [lookbackHours, setLookbackHours] = useState(24);
     const [keywords, setKeywords] = useState('');
+
+    // Advanced Options
+    const [resume, setResume] = useState(false);
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
 
     const trimmedInput = input.trim();
     const canSubmit = !isScraping && trimmedInput.length > 0;
@@ -173,15 +168,16 @@ function App() {
         setProgress({ current: 0, target: limit });
 
         try {
+            const resolvedMode = activeTab === 'search' ? 'puppeteer' : scrapeMode;
             let endpoint = '/api/scrape';
             let body: any = {
                 type: activeTab,
                 input,
                 limit,
                 likes: scrapeLikes,
-                mergeResults,
-                deleteMerged,
-                mode: scrapeMode  // 传递爬取模式
+                mode: resolvedMode,  // 传递爬取模式
+                resume,
+                dateRange: startDate && endDate ? { start: startDate, end: endDate } : undefined
             };
 
             if (activeTab === 'monitor') {
@@ -340,97 +336,125 @@ function App() {
                         </div>
 
                         {activeTab !== 'monitor' ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-end">
-                                <div className="relative">
-                                    <input
-                                        type="number"
-                                        value={limit}
-                                        onChange={(e) => setLimit(parseInt(e.target.value))}
-                                        onWheel={(e) => e.currentTarget.blur()}
-                                        min="10"
-                                        max="1000"
-                                        className="peer w-full bg-transparent border-b border-stone py-2 focus:outline-none focus:border-rust transition-colors text-xl font-serif text-charcoal"
-                                    />
-                                    <label className="absolute left-0 -top-6 text-sm text-rust font-serif">
-                                        {activeTab === 'thread' ? 'Max Replies' : 'Limit (Tweets)'}
-                                    </label>
-                                </div>
+                            <>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-end">
+                                    <div className="relative">
+                                        <input
+                                            type="number"
+                                            value={limit}
+                                            onChange={(e) => setLimit(parseInt(e.target.value))}
+                                            onWheel={(e) => e.currentTarget.blur()}
+                                            min="10"
+                                            max="1000"
+                                            className="peer w-full bg-transparent border-b border-stone py-2 focus:outline-none focus:border-rust transition-colors text-xl font-serif text-charcoal"
+                                        />
+                                        <label className="absolute left-0 -top-6 text-sm text-rust font-serif">
+                                            {activeTab === 'thread' ? 'Max Replies' : 'Limit (Tweets)'}
+                                        </label>
+                                    </div>
 
-                                <div className="flex flex-col space-y-4">
-                                    {/* Scrape Mode Toggle - 在 profile, search, thread 模式显示 */}
-                                    {(activeTab === 'profile' || activeTab === 'search' || activeTab === 'thread') && (
-                                        <div className="flex flex-col space-y-2">
-                                            <span className="text-xs uppercase tracking-wider text-stone/60 font-sans">Extraction Mode</span>
-                                            <div className="flex items-center space-x-2">
-                                                {activeTab !== 'search' && (
+                                    <div className="flex flex-col space-y-4">
+                                        {/* Scrape Mode Toggle - 在 profile, search, thread 模式显示 */}
+                                        {(activeTab === 'profile' || activeTab === 'search' || activeTab === 'thread') && (
+                                            <div className="flex flex-col space-y-2">
+                                                <span className="text-xs uppercase tracking-wider text-stone/60 font-sans">Extraction Mode</span>
+                                                <div className="flex items-center space-x-2">
+                                                    {activeTab !== 'search' && (
+                                                        <button
+                                                            onClick={() => setScrapeMode('graphql')}
+                                                            className={cn(
+                                                                "px-4 py-2 border rounded-full text-sm font-serif transition-all duration-300",
+                                                                scrapeMode === 'graphql'
+                                                                    ? "border-rust bg-rust/10 text-rust"
+                                                                    : "border-stone/30 text-stone hover:border-rust hover:text-rust"
+                                                            )}
+                                                        >
+                                                            ⚡ GraphQL API
+                                                        </button>
+                                                    )}
                                                     <button
-                                                        onClick={() => setScrapeMode('graphql')}
+                                                        onClick={() => setScrapeMode('puppeteer')}
                                                         className={cn(
                                                             "px-4 py-2 border rounded-full text-sm font-serif transition-all duration-300",
-                                                            scrapeMode === 'graphql'
+                                                            scrapeMode === 'puppeteer'
                                                                 ? "border-rust bg-rust/10 text-rust"
                                                                 : "border-stone/30 text-stone hover:border-rust hover:text-rust"
                                                         )}
                                                     >
-                                                        ⚡ GraphQL API
+                                                        🌐 Puppeteer DOM
+                                                        {activeTab === 'search' && (
+                                                            <span className="ml-2 text-[10px] bg-rust/20 text-rust px-2 py-0.5 rounded-full">Required</span>
+                                                        )}
                                                     </button>
-                                                )}
-                                                <button
-                                                    onClick={() => setScrapeMode('puppeteer')}
-                                                    className={cn(
-                                                        "px-4 py-2 border rounded-full text-sm font-serif transition-all duration-300",
-                                                        scrapeMode === 'puppeteer'
-                                                            ? "border-rust bg-rust/10 text-rust"
-                                                            : "border-stone/30 text-stone hover:border-rust hover:text-rust"
-                                                    )}
-                                                >
-                                                    🌐 Puppeteer DOM
-                                                    {activeTab === 'search' && (
-                                                        <span className="ml-2 text-[10px] bg-rust/20 text-rust px-2 py-0.5 rounded-full">Required</span>
-                                                    )}
-                                                </button>
+                                                </div>
+                                                <span className="text-[10px] text-stone/40 font-sans italic">
+                                                    {activeTab === 'search' 
+                                                        ? 'Search mode requires Puppeteer (GraphQL search has cursor pagination issues)'
+                                                        : scrapeMode === 'graphql' 
+                                                            ? 'Faster, uses Twitter\'s internal API' 
+                                                            : 'Slower but more reliable, simulates browser'}
+                                                </span>
                                             </div>
-                                            <span className="text-[10px] text-stone/40 font-sans italic">
-                                                {activeTab === 'search' 
-                                                    ? 'Search mode requires Puppeteer (GraphQL search has cursor pagination issues)'
-                                                    : scrapeMode === 'graphql' 
-                                                        ? 'Faster, uses Twitter\'s internal API' 
-                                                        : 'Slower but more reliable, simulates browser'}
+                                        )}
+                                        
+                                        {activeTab === 'profile' && (
+                                            <label className="flex items-center space-x-4 cursor-pointer group select-none">
+                                                <div className="w-6 h-6 border border-stone rounded-full flex items-center justify-center group-hover:border-rust transition-colors">
+                                                    <div className={cn("w-3 h-3 bg-rust rounded-full transition-opacity checkbox-indicator", scrapeLikes ? "opacity-100" : "opacity-0")}></div>
+                                                </div>
+                                                <input type="checkbox" checked={scrapeLikes} onChange={(e) => setScrapeLikes(e.target.checked)} className="hidden" />
+                                                <span className="font-serif text-xl text-stone group-hover:text-charcoal transition-colors">Scrape Likes</span>
+                                            </label>
+                                        )}
+
+                                        {(activeTab === 'profile' || activeTab === 'search') && (
+                                            <span className="text-xs uppercase tracking-wider text-stone/60 font-sans">
+                                                Output merging is handled via CLI only. Web UI saves each run separately.
                                             </span>
-                                        </div>
-                                    )}
-                                    
-                                    {activeTab === 'profile' && (
-                                        <label className="flex items-center space-x-4 cursor-pointer group select-none">
-                                            <div className="w-6 h-6 border border-stone rounded-full flex items-center justify-center group-hover:border-rust transition-colors">
-                                                <div className={cn("w-3 h-3 bg-rust rounded-full transition-opacity checkbox-indicator", scrapeLikes ? "opacity-100" : "opacity-0")}></div>
-                                            </div>
-                                            <input type="checkbox" checked={scrapeLikes} onChange={(e) => setScrapeLikes(e.target.checked)} className="hidden" />
-                                            <span className="font-serif text-xl text-stone group-hover:text-charcoal transition-colors">Scrape Likes</span>
-                                        </label>
-                                    )}
-
-                                    {(activeTab === 'profile' || activeTab === 'search') && (
-                                        <>
-                                            <label className="flex items-center space-x-4 cursor-pointer group select-none">
-                                                <div className="w-6 h-6 border border-stone rounded-full flex items-center justify-center group-hover:border-rust transition-colors">
-                                                    <div className={cn("w-3 h-3 bg-rust rounded-full transition-opacity checkbox-indicator", mergeResults ? "opacity-100" : "opacity-0")}></div>
-                                                </div>
-                                                <input type="checkbox" checked={mergeResults} onChange={(e) => setMergeResults(e.target.checked)} className="hidden" />
-                                                <span className="font-serif text-xl text-stone group-hover:text-charcoal transition-colors">Merge Results</span>
-                                            </label>
-
-                                            <label className="flex items-center space-x-4 cursor-pointer group select-none">
-                                                <div className="w-6 h-6 border border-stone rounded-full flex items-center justify-center group-hover:border-rust transition-colors">
-                                                    <div className={cn("w-3 h-3 bg-rust rounded-full transition-opacity checkbox-indicator", deleteMerged ? "opacity-100" : "opacity-0")}></div>
-                                                </div>
-                                                <input type="checkbox" checked={deleteMerged} onChange={(e) => setDeleteMerged(e.target.checked)} className="hidden" />
-                                                <span className="font-serif text-xl text-stone group-hover:text-charcoal transition-colors">Delete Individual Files</span>
-                                            </label>
-                                        </>
-                                    )}
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
+
+                                {/* Advanced Options for Search Mode */}
+                                {activeTab === 'search' && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-end pt-4 border-t border-stone/10 mt-8">
+                                        <div className="flex flex-col space-y-4">
+                                            <label className="flex items-center space-x-4 cursor-pointer group select-none">
+                                                <div className="w-6 h-6 border border-stone rounded-full flex items-center justify-center group-hover:border-rust transition-colors">
+                                                    <div className={cn("w-3 h-3 bg-rust rounded-full transition-opacity checkbox-indicator", resume ? "opacity-100" : "opacity-0")}></div>
+                                                </div>
+                                                <input type="checkbox" checked={resume} onChange={(e) => setResume(e.target.checked)} className="hidden" />
+                                                <span className="font-serif text-xl text-stone group-hover:text-charcoal transition-colors">Resume Previous Scrape</span>
+                                            </label>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="relative">
+                                                <input
+                                                    type="date"
+                                                    value={startDate}
+                                                    onChange={(e) => setStartDate(e.target.value)}
+                                                    className="peer w-full bg-transparent border-b border-stone py-2 focus:outline-none focus:border-rust transition-colors text-lg font-serif text-charcoal"
+                                                />
+                                                <label className="absolute left-0 -top-6 text-sm text-rust font-serif">
+                                                    Start Date
+                                                </label>
+                                            </div>
+                                            <div className="relative">
+                                                <input
+                                                    type="date"
+                                                    value={endDate}
+                                                    onChange={(e) => setEndDate(e.target.value)}
+                                                    className="peer w-full bg-transparent border-b border-stone py-2 focus:outline-none focus:border-rust transition-colors text-lg font-serif text-charcoal"
+                                                />
+                                                <label className="absolute left-0 -top-6 text-sm text-rust font-serif">
+                                                    End Date
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-end">
                                 <div className="relative">

@@ -11,7 +11,11 @@
     "test": "jest",
     "dev": "ts-node server.ts",
     "build": "tsc",
-    "serve": "node dist/server.js"
+    "serve": "node dist/server.js",
+    "install:frontend": "cd frontend && npm install",
+    "build:frontend": "cd frontend && npm run build",
+    "sync:frontend": "node scripts/sync-frontend.js",
+    "deploy:frontend": "npm run build:frontend && npm run sync:frontend"
   },
   "keywords": [
     "twitter",
@@ -24,6 +28,7 @@
   "license": "ISC",
   "dependencies": {
     "commander": "^13.1.0",
+    "dayjs": "^1.11.19",
     "express": "^5.1.0",
     "fingerprint-generator": "^2.1.77",
     "fingerprint-injector": "^2.1.77",
