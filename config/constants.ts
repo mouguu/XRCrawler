@@ -90,7 +90,7 @@ export const REFRESH_RETRY_CONFIG = {
  * 最大连续无新推文尝试次数
  * 达到此次数后会触发页面刷新
  */
-export const MAX_CONSECUTIVE_NO_NEW_TWEETS = 3;
+export const MAX_CONSECUTIVE_NO_NEW_TWEETS = 4; // 搜索场景会放大为 8，给更多机会加载新内容
 
 /**
  * 滚动延迟基础时间（毫秒）

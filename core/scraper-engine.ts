@@ -1156,7 +1156,8 @@ export class ScraperEngine {
                         // 1. 如果收集数量较少（< 500）且连续无新推文次数 >= 5，可能是 session 问题，应该更早切换
                         // 2. 如果收集数量较多（>= 500），可能是到达了深度限制，可以容忍更多次无新推文
                         const isLowCount = collectedTweets.length < 500;
-                        const sessionSwitchThreshold = isLowCount ? 5 : 10; // 少量时5次就切换，大量时10次才切换
+                        // 与 maxNoNew 保持一致：高量场景不超过 8 次，避免永不轮换 session
+                        const sessionSwitchThreshold = isLowCount ? 5 : Math.min(maxNoNew, 8);
 
                         if (consecutiveNoNew >= sessionSwitchThreshold && attemptedSessions.size < 4) {
                             if (isLowCount) {

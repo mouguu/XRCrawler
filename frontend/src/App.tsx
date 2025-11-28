@@ -3,7 +3,6 @@ import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { ErrorNotification } from "./components/ErrorNotification";
 import { SessionManager } from "./components/SessionManager";
-import { PerformanceDashboard } from "./components/PerformanceDashboard";
 import dayjs from "dayjs";
 
 // Error types
@@ -148,16 +147,6 @@ function App() {
 
   // Error Handling
   const [currentError, setCurrentError] = useState<AppError | null>(null);
-
-  // Performance Dashboard Data
-  const [speedHistory, setSpeedHistory] = useState<
-    Array<{ time: string; speed: number }>
-  >([]);
-  const [sessionStats, setSessionStats] = useState({
-    sessionSwitches: 0,
-    rateLimitHits: 0,
-    successfulRequests: 0,
-  });
 
   const trimmedInput = input.trim();
   const canSubmit = !isScraping && trimmedInput.length > 0;
@@ -1137,13 +1126,6 @@ function App() {
           </section>
         </div>
         {/* Performance Dashboard */}
-        <div className="mt-16 border-t border-stone/20 pt-16">
-          <PerformanceDashboard
-            speedHistory={speedHistory}
-            sessionStats={sessionStats}
-          />
-        </div>
-
         {/* Session Management */}
         <div className="mt-16 border-t border-stone/20 pt-16">
           <SessionManager />
