@@ -53,6 +53,9 @@ export interface ScrapeTwitterUsersOptions {
     exportJson?: boolean;
     timezone?: string;
     sessionId?: string;
+    scrapeMode?: 'graphql' | 'puppeteer' | 'mixed';
+    resume?: boolean;
+    resumeFromTweetId?: string;
 }
 
 export interface ScrapeTwitterUserResult {
@@ -168,12 +171,19 @@ export async function scrapeTwitterUsers(
 
     // 批量爬取默认使用 GraphQL API（更快）
     // 如果需要抓取 likes，则必须使用浏览器（DOM 模式），因为 likes API 可能不可用
-    const apiOnly = !options.scrapeLikes;  // 抓取 likes 时需要浏览器
+    let scrapeMode: 'graphql' | 'puppeteer' | 'mixed' = options.scrapeMode || (options.scrapeLikes ? 'puppeteer' : 'graphql');
+
+    if (options.scrapeLikes && scrapeMode === 'graphql') {
+        // Likes 标签依赖浏览器，自动升级为 mixed 模式以兼容 API + DOM
+        scrapeMode = 'mixed';
+    }
+
+    const apiOnly = scrapeMode === 'graphql' && !options.scrapeLikes;
     
     const engine = new ScraperEngine(getShouldStopScraping, { 
         headless: options.headless, 
         sessionId: options.sessionId,
-        apiOnly  // scrapeLikes = true 时需要浏览器
+        apiOnly  // scrapeMode 决定是否需要浏览器
     });
     const results: ScrapeTwitterUserResult[] = [];
 
@@ -185,13 +195,16 @@ export async function scrapeTwitterUsers(
         }
 
         for (const rawUsername of usernames) {
-            const username = rawUsername || 'home';
+            // Check if this is a search query object
+            const isSearchMode = typeof rawUsername === 'object' && rawUsername !== null && 'searchQuery' in rawUsername;
+            const searchQuery = isSearchMode ? (rawUsername as any).searchQuery : null;
+            const username = isSearchMode ? 'search' : (rawUsername || 'home');
 
             let runContext: fileUtils.RunContext;
             try {
                 runContext = await fileUtils.createRunContext({
                     platform: 'x',
-                    identifier: username,
+                    identifier: searchQuery ? `search_${searchQuery.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30)}` : username,
                     baseOutputDir: options.outputDir,
                     timezone: options.timezone
                 });
@@ -201,16 +214,52 @@ export async function scrapeTwitterUsers(
             }
 
             try {
-                const timelineResult = await engine.scrapeTimeline({
-                    username: rawUsername || undefined,
-                    limit: options.tweetCount ?? 20,
-                    withReplies: options.withReplies,
-                    saveMarkdown: false,
-                    exportCsv: false,
-                    exportJson: false,
-                    runContext,
-                    collectProfileInfo: true
-                });
+                const targetCount = options.tweetCount ?? 20;
+                
+                // 🚀 Auto-switch to date-chunked search when target > 800 and using Puppeteer
+                // OR when using search query (search mode always uses deep search)
+                const shouldUseDeepSearch = (targetCount > 800 && (scrapeMode === 'puppeteer' || scrapeMode === 'mixed')) || isSearchMode;
+                
+                let timelineResult: ScrapeTimelineResult;
+                
+                if (shouldUseDeepSearch && (rawUsername || isSearchMode)) {
+                    const today = new Date().toISOString().split('T')[0];
+                    // For search queries, use last 6 months; for user timelines, use full history
+                    const startDate = isSearchMode ? 
+                        new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : 
+                        '2006-01-01';
+                    
+                    // Use date-chunked Puppeteer search (newest → oldest time periods)
+                    // Automatically stops when target is reached
+                    timelineResult = await engine.scrapeSearchByDateChunks({
+                        username: isSearchMode ? undefined : (rawUsername as string),
+                        searchQuery: isSearchMode ? searchQuery : `from:${rawUsername}`,
+                        dateRange: { start: startDate, end: today },
+                        limit: targetCount,
+                        withReplies: options.withReplies,
+                        saveMarkdown: false,
+                        exportCsv: false,
+                        exportJson: false,
+                        runContext,
+                        scrapeMode: 'puppeteer',
+                        collectProfileInfo: !isSearchMode, // No profile info for search queries
+                        resume: options.resume
+                    });
+                } else {
+                    // Normal timeline scraping (target <= 800 or GraphQL API)
+                    timelineResult = await engine.scrapeTimeline({
+                        username: rawUsername || undefined,
+                        limit: targetCount,
+                        withReplies: options.withReplies,
+                        saveMarkdown: false,
+                        exportCsv: false,
+                        exportJson: false,
+                        runContext,
+                        scrapeMode,
+                        collectProfileInfo: true,
+                        resume: options.resume
+                    });
+                }
 
                 if (!timelineResult.success) {
                     console.error(`Scraping timeline failed for ${username}: ${timelineResult.error || 'unknown error'}`);
@@ -236,7 +285,9 @@ export async function scrapeTwitterUsers(
                             saveMarkdown: false,
                             exportCsv: false,
                             exportJson: false,
-                            runContext
+                            runContext,
+                            scrapeMode,
+                            resume: options.resume
                         });
 
                         const likedTweets = (likesResult.tweets || []).map(t => ({ ...t, isLiked: true }));

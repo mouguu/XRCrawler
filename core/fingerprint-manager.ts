@@ -16,7 +16,8 @@ export class FingerprintManager {
     private generator: FingerprintGenerator;
     private injector: FingerprintInjector;
     private storageDir: string;
-    private fingerprints: Map<string, any>; // Cache in memory
+    private fingerprints: Map<string, { pool: any[]; index: number }>; // Fingerprint pool per session
+    private poolSize: number = 3;
 
     constructor(baseDir: string = 'output/fingerprints') {
         this.storageDir = path.isAbsolute(baseDir) ? baseDir : path.join(process.cwd(), baseDir);
@@ -49,7 +50,8 @@ export class FingerprintManager {
                 if (file.endsWith('.json')) {
                     const sessionId = file.replace('.json', '');
                     const content = fs.readFileSync(path.join(this.storageDir, file), 'utf-8');
-                    this.fingerprints.set(sessionId, JSON.parse(content));
+                    const fp = JSON.parse(content);
+                    this.fingerprints.set(sessionId, { pool: [fp], index: 0 });
                 }
             }
         } catch (error) {
@@ -59,39 +61,43 @@ export class FingerprintManager {
 
     /**
      * Gets a fingerprint for a specific session ID.
-     * If one exists, it returns the persisted one.
-     * If not, it generates a new one and saves it.
+     * If rotate=true, will pick the next one in the pool (and grow the pool up to poolSize).
+     * If none exists, it generates a new one, saves the first to disk, and caches the pool in memory.
      */
-    public getFingerprint(sessionId: string): any {
-        if (this.fingerprints.has(sessionId)) {
-            return this.fingerprints.get(sessionId);
+    public getFingerprint(sessionId: string, rotate: boolean = false): any {
+        if (!this.fingerprints.has(sessionId)) {
+            // Generate first fingerprint and persist
+            const fp = this.generator.getFingerprint();
+            this.fingerprints.set(sessionId, { pool: [fp], index: 0 });
+            try {
+                fs.writeFileSync(
+                    path.join(this.storageDir, `${sessionId}.json`),
+                    JSON.stringify(fp, null, 2)
+                );
+            } catch (error) {
+                console.error(`Failed to save fingerprint for session ${sessionId}:`, error);
+            }
         }
 
-        // Generate new fingerprint
-        const fingerprint = this.generator.getFingerprint();
+        const entry = this.fingerprints.get(sessionId)!;
 
-        // Save to memory
-        this.fingerprints.set(sessionId, fingerprint);
-
-        // Save to disk
-        try {
-            fs.writeFileSync(
-                path.join(this.storageDir, `${sessionId}.json`),
-                JSON.stringify(fingerprint, null, 2)
-            );
-        } catch (error) {
-            console.error(`Failed to save fingerprint for session ${sessionId}:`, error);
+        if (rotate) {
+            // Expand pool up to poolSize
+            if (entry.pool.length < this.poolSize) {
+                entry.pool.push(this.generator.getFingerprint());
+            }
+            entry.index = (entry.index + 1) % entry.pool.length;
         }
 
-        return fingerprint;
+        return entry.pool[entry.index];
     }
 
     /**
      * Injects the fingerprint into a Puppeteer page.
      * This must be called BEFORE the page navigates to the target URL.
      */
-    public async injectFingerprint(page: Page, sessionId: string): Promise<void> {
-        const fingerprint = this.getFingerprint(sessionId);
+    public async injectFingerprint(page: Page, sessionId: string, rotate: boolean = false): Promise<void> {
+        const fingerprint = this.getFingerprint(sessionId, rotate);
         await this.injector.attachFingerprintToPuppeteer(page, fingerprint);
     }
 }

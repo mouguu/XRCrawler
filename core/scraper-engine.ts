@@ -1,8 +1,9 @@
 import * as path from 'path';
 import { Page } from 'puppeteer';
-import { BrowserLaunchOptions, BrowserManager } from './browser-manager';
+import { BrowserLaunchOptions, BrowserManager, ProxyConfig } from './browser-manager';
 import { CookieManager } from './cookie-manager';
 import { SessionManager, Session } from './session-manager';
+import { ProxyManager } from './proxy-manager';
 import { ErrorSnapshotter } from './error-snapshotter';
 import { FingerprintManager } from './fingerprint-manager';
 import * as dataExtractor from './data-extractor';
@@ -114,6 +115,7 @@ export class ScraperEngine {
     private navigationService: NavigationService;
     private rateLimitManager: RateLimitManager;
     private sessionManager: SessionManager;
+    private proxyManager: ProxyManager;
     private errorSnapshotter: ErrorSnapshotter;
     private fingerprintManager: FingerprintManager;
     private performanceMonitor: PerformanceMonitor;
@@ -170,7 +172,8 @@ export class ScraperEngine {
     constructor(shouldStopFunction?: () => boolean, options: ScraperEngineOptions = {}) {
         this.eventBus = options.eventBus || eventBusInstance;
         this.navigationService = new NavigationService(this.eventBus);
-        this.sessionManager = new SessionManager(undefined, this.eventBus);
+        this.sessionManager = new SessionManager('./cookies', this.eventBus);
+        this.proxyManager = new ProxyManager();
         this.rateLimitManager = new RateLimitManager(this.sessionManager, this.eventBus);
         this.errorSnapshotter = new ErrorSnapshotter();
         this.fingerprintManager = new FingerprintManager();
@@ -203,7 +206,7 @@ export class ScraperEngine {
     }
 
     private async applySession(session: Session, options: { refreshFingerprint?: boolean; clearExistingCookies?: boolean } = {}): Promise<void> {
-        // API-only 模式：只更新 API 客户端，不操作浏览器
+        // API-only mode: 只更新 API 客户端，不操作浏览器
         if (this.isApiOnlyMode()) {
             this.currentSession = session;
             this.xApiClient = new XApiClient(session.cookies);
@@ -248,6 +251,9 @@ export class ScraperEngine {
     async init(): Promise<void> {
         // Initialize SessionManager (needed for both modes)
         await this.sessionManager.init();
+        
+        // Initialize ProxyManager (optional, won't fail if no proxies found)
+        await this.proxyManager.init();
 
         // 纯 API 模式：不启动浏览器
         if (this.apiOnlyMode) {
@@ -255,13 +261,8 @@ export class ScraperEngine {
             return;
         }
 
-        // 浏览器模式：启动 Puppeteer
-        this.browserManager = new BrowserManager();
-        await this.browserManager.init(this.browserOptions);
-        // We do NOT create the page here anymore. 
-        // The page is created in loadCookies() to ensure it's tied to a session and fingerprint.
-
-        this.eventBus.emitLog('Browser launched and configured');
+        // Note: Browser launch is now delayed until loadCookies() to allow proxy configuration
+        this.eventBus.emitLog('SessionManager and ProxyManager initialized');
     }
 
     async loadCookies(enableRotation: boolean = true): Promise<boolean> {
@@ -286,12 +287,40 @@ export class ScraperEngine {
             return this.loadCookiesApiOnly(this.enableRotation);
         }
 
-        // 浏览器模式：需要 BrowserManager
-        if (!this.browserManager) {
-            this.eventBus.emitError(new Error('BrowserManager not initialized'));
+        // 1. Get the next session first
+        const nextSession = this.sessionManager.getNextSession(this.preferredSessionId);
+
+        if (!nextSession) {
+            this.eventBus.emitError(new Error('No session available'));
             return false;
         }
 
+        // 2. Get proxy for this session
+        let proxyConfig: ProxyConfig | undefined;
+        if (this.proxyManager.hasProxies()) {
+            const proxy = this.proxyManager.getProxyForSession(nextSession.id);
+            if (proxy) {
+                proxyConfig = {
+                    host: proxy.host,
+                    port: proxy.port,
+                    username: proxy.username,
+                    password: proxy.password
+                };
+                this.eventBus.emitLog(`[ProxyManager] Binding session ${nextSession.id} → proxy ${proxy.host}:${proxy.port}`);
+            }
+        }
+
+        // 3. Update browser options with proxy
+        this.browserOptions.proxy = proxyConfig;
+
+        // 4. NOW launch browser with proxy config (if not already launched)
+        if (!this.browserManager) {
+            this.browserManager = new BrowserManager();
+            await this.browserManager.init(this.browserOptions);
+            this.eventBus.emitLog('Browser launched and configured');
+        }
+
+        // 5. Ensure page is created
         try {
             await this.ensurePage();
         } catch (error: any) {
@@ -299,46 +328,62 @@ export class ScraperEngine {
             return false;
         }
 
-        // 1. Try to get a session from SessionManager
-        const nextSession = this.sessionManager.getNextSession(this.preferredSessionId);
-
-        if (nextSession) {
-            try {
-                await this.applySession(nextSession, { refreshFingerprint: true, clearExistingCookies: true });
-                return true;
-            } catch (error: any) {
-                this.eventBus.emitError(new Error(`Failed to inject session ${nextSession.id}: ${error.message}`));
-                this.sessionManager.markBad(nextSession.id);
-                return false;
-            }
-        }
-
-        // 2. Fallback to legacy single-file loading (env.json or cookies/twitter-cookies.json)
-        // This ensures backward compatibility if no multi-session files are found
+        // 6. Apply session to page
         try {
-            const cookieManager = new CookieManager({ enableRotation: this.enableRotation });
-            const cookieInfo = await cookieManager.loadAndInject(this.page!);
-            const fallbackSessionId = cookieInfo.source ? path.basename(cookieInfo.source) : 'legacy-cookies';
-
-            await this.fingerprintManager.injectFingerprint(this.page!, fallbackSessionId);
-            this.currentSession = {
-                id: fallbackSessionId,
-                cookies: cookieInfo.cookies,
-                usageCount: 0,
-                errorCount: 0,
-                isRetired: false,
-                filePath: cookieInfo.source || fallbackSessionId,
-                username: cookieInfo.username
-            };
-
-            this.eventBus.emitLog(`Loaded legacy cookies from ${cookieInfo.source}`);
+            await this.applySession(nextSession, {
+                refreshFingerprint: true,
+                clearExistingCookies: true
+            });
             return true;
         } catch (error: any) {
-            this.eventBus.emitError(new Error(`Cookie error: ${error.message}`));
+            this.eventBus.emitError(new Error(`Failed to inject session ${nextSession.id}: ${error.message}`));
+            this.sessionManager.markBad(nextSession.id);
             return false;
         }
     }
 
+
+    /**
+     * Restart browser with a specific session and its assigned proxy
+     */
+    private async restartBrowserWithSession(session: Session): Promise<void> {
+        this.eventBus.emitLog(`Restarting browser for session ${session.id}...`);
+
+        // 1. Close current browser
+        if (this.browserManager) {
+            await this.browserManager.close();
+            this.browserManager = null;
+            this.page = null;
+        }
+
+        // 2. Get proxy for the new session
+        let proxyConfig: ProxyConfig | undefined;
+        if (this.proxyManager.hasProxies()) {
+            const proxy = this.proxyManager.getProxyForSession(session.id);
+            if (proxy) {
+                proxyConfig = {
+                    host: proxy.host,
+                    port: proxy.port,
+                    username: proxy.username,
+                    password: proxy.password
+                };
+                this.eventBus.emitLog(`[ProxyManager] Switching to proxy ${proxy.host}:${proxy.port} for session ${session.id}`);
+            }
+        }
+
+        // 3. Update browser options
+        this.browserOptions.proxy = proxyConfig;
+
+        // 4. Re-initialize browser
+        this.browserManager = new BrowserManager();
+        await this.browserManager.init(this.browserOptions);
+        
+        // 5. Create page and inject session
+        await this.ensurePage();
+        await this.applySession(session, { refreshFingerprint: true, clearExistingCookies: true });
+        
+        this.eventBus.emitLog(`Browser restarted successfully with session ${session.id}`);
+    }
 
     /**
      * 纯 API 模式下加载 cookies
@@ -366,6 +411,7 @@ export class ScraperEngine {
                 cookies: cookieInfo.cookies,
                 usageCount: 0,
                 errorCount: 0,
+                consecutiveFailures: 0,
                 isRetired: false,
                 filePath: cookieInfo.source || fallbackSessionId,
                 username: cookieInfo.username
@@ -407,7 +453,7 @@ export class ScraperEngine {
 
         // 如果提供了日期范围，使用分块爬取
         if (config.dateRange && config.mode === 'search' && config.searchQuery) {
-            return this.scrapeWithDateChunks(config, config.runContext!);
+            return this.scrapeSearchByDateChunks(config);
         }
 
         // GraphQL API 模式
@@ -881,50 +927,60 @@ export class ScraperEngine {
         return { success: true, tweets: collectedTweets, runContext, performance: this.performanceMonitor.getStats() };
     }
 
-    private async scrapeWithDateChunks(config: ScrapeTimelineConfig, runContext: RunContext): Promise<ScrapeTimelineResult> {
+    public async scrapeSearchByDateChunks(config: ScrapeTimelineConfig): Promise<ScrapeTimelineResult> {
+        const runContext = config.runContext!;
         if (!config.dateRange || !config.searchQuery) {
             throw new Error('Date range and search query are required for chunked scraping');
         }
 
         const ranges = DateUtils.generateDateRanges(config.dateRange.start, config.dateRange.end, 'monthly');
-        this.eventBus.emitLog(`Generated ${ranges.length} date chunks for historical search.`);
+        // REVERSE ranges to scrape newest first (Deep Search usually implies getting latest history first)
+        ranges.reverse();
+        
+        this.eventBus.emitLog(`Generated ${ranges.length} date chunks for historical search (Newest -> Oldest).`);
 
         let allTweets: Tweet[] = [];
+        let totalCollected = 0;
+        const globalLimit = config.limit || 10000; // Default or user limit
 
         for (let i = 0; i < ranges.length; i++) {
+            // Check if we reached the global limit
+            if (totalCollected >= globalLimit) {
+                this.eventBus.emitLog(`Global limit of ${globalLimit} reached. Stopping deep search.`);
+                break;
+            }
+
             const range = ranges[i];
             const chunkQuery = `${config.searchQuery} since:${range.start} until:${range.end}`;
 
             this.eventBus.emitLog(`Processing chunk ${i + 1}/${ranges.length}: ${range.start} to ${range.end}`);
+
+            // Calculate remaining limit
+            const remaining = globalLimit - totalCollected;
+            // Set chunk limit to remaining needed count
+            const chunkLimit = remaining;
 
             // Create a sub-config for this chunk
             const chunkConfig: ScrapeTimelineConfig = {
                 ...config,
                 searchQuery: chunkQuery,
                 dateRange: undefined, // Prevent recursion
-                resume: false, // Chunks are atomic for now, or we could implement chunk-level resume
-                limit: config.limit ? Math.ceil(config.limit / ranges.length) : 100 // Distribute limit or keep per chunk?
-                // Let's assume limit is per-chunk or global? 
-                // For deep scraping, we usually want "all tweets in this range".
-                // If limit is global, we need to track total collected.
+                resume: false, 
+                limit: chunkLimit
             };
-
-            // We use a simplified limit for chunks to avoid stopping early if one chunk is empty
-            // But if the user wants 1000 tweets total, we should stop when we hit 1000.
-            // For now, let's treat 'limit' as 'limit per chunk' to ensure deep coverage, 
-            // OR we need a global accumulator.
-            // Let's stick to the requested logic: "Deep scraping".
 
             const result = await this.scrapeTimeline(chunkConfig);
 
             if (result.success && result.tweets) {
-                allTweets = allTweets.concat(result.tweets);
-                await markdownUtils.saveTweetsAsMarkdown(result.tweets, runContext); // Save incrementally
+                const newTweets = result.tweets;
+                allTweets = allTweets.concat(newTweets);
+                totalCollected += newTweets.length;
+                
+                // Save incrementally
+                await markdownUtils.saveTweetsAsMarkdown(newTweets, runContext); 
+                
+                this.eventBus.emitLog(`✅ Chunk ${i + 1}/${ranges.length} complete: ${newTweets.length} tweets collected | Global total: ${totalCollected}/${globalLimit}`);
             }
-
-            // Update global progress?
-            // The ProgressManager inside scrapeTimeline will handle the chunk's progress.
-            // We might want a "Master Progress" here.
         }
 
         return {
@@ -1090,7 +1146,8 @@ export class ScraperEngine {
                         if (untriedSessions.length > 0) {
                             const nextSession = untriedSessions[0];
                             try {
-                                await this.applySession(nextSession, { refreshFingerprint: false, clearExistingCookies: true });
+                                // Use restartBrowserWithSession to ensure IP switch during navigation rotation
+                                await this.restartBrowserWithSession(nextSession);
                                 attemptedSessions.add(nextSession.id);
                                 this.performanceMonitor.recordSessionSwitch();
                                 this.eventBus.emitLog(`Switched to session: ${nextSession.id} (${attemptedSessions.size} session(s) tried). Retrying navigation...`, 'info');
@@ -1231,23 +1288,14 @@ export class ScraperEngine {
                                 this.eventBus.emitLog(`Switching to session: ${nextSession.id}...`, 'info');
 
                                 try {
-                                    // 记录当前滚动深度与页面推文数量，便于切 session 后快速恢复
-                                    const { scrollY: prevScrollY, tweetCount: prevTweetCount } = await this.page!.evaluate((selector) => {
-                                        return {
-                                            scrollY: window.scrollY,
-                                            tweetCount: document.querySelectorAll(selector).length
-                                        };
-                                    }, 'article[data-testid="tweet"]');
-
-                                    await this.applySession(nextSession, { refreshFingerprint: false, clearExistingCookies: true });
+                                    // Use restartBrowserWithSession to ensure IP switch during scroll rotation
+                                    await this.restartBrowserWithSession(nextSession);
                                     attemptedSessions.add(nextSession.id);
                                     consecutiveNoNew = 0; // 重置计数器，给新session机会
                                     this.performanceMonitor.recordSessionSwitch();
 
                                     // 切换 session 后，刷新页面以应用新 cookies
                                     this.eventBus.emitLog(`Switched to session: ${nextSession.id} (${attemptedSessions.size} session(s) tried). Refreshing and performing rapid deep scroll...`, 'info');
-
-                                    await this.page!.reload({ waitUntil: 'networkidle2', timeout: 30000 });
 
                                     // waitForTweets 失败时再重试一次，避免直接放弃
                                     try {
@@ -1258,18 +1306,9 @@ export class ScraperEngine {
                                         await this.navigationService.waitForTweets(this.page!);
                                     }
 
-                                    // 尝试快速恢复到切换前的深度（按比例滚动）
-                                    const maxResumeScrolls = 30;
-                                    for (let i = 0; i < maxResumeScrolls; i++) {
-                                        await this.page!.evaluate((y) => window.scrollTo(0, y), prevScrollY * Math.min(1.5, 1 + i / maxResumeScrolls));
-                                        await throttle(200);
-                                    }
-
-                                    // 快速连续滚动策略：每滚动5次就提取一次，检查是否有新推文
-                                    const targetDepth = Math.max(prevTweetCount, collectedTweets.length, 800);
-                                    // 更快探测：减少深滚次数和提取间隔
-                                    const maxScrollAttempts = 20; // 最多尝试20次滚动
-                                    const scrollsPerExtraction = 3; // 每3次滚动提取一次
+                                    // Fast scroll to discover new tweets with new session
+                                    const maxScrollAttempts = 20;
+                                    const scrollsPerExtraction = 3;
 
                                     this.eventBus.emitLog(`Performing rapid deep scroll: ${maxScrollAttempts} scrolls, extracting every ${scrollsPerExtraction} scrolls to check for new tweets...`, 'debug');
 
@@ -1346,10 +1385,7 @@ export class ScraperEngine {
                                                 return document.querySelectorAll(selector).length;
                                             }, 'article[data-testid="tweet"]');
 
-                                            if (tweetCountOnPage >= targetDepth * 0.8) { // 达到目标深度的80%就可以停止快速滚动
-                                                this.eventBus.emitLog(`Reached ~80% of target depth (${tweetCountOnPage} tweets on page). Stopping rapid scroll.`, 'debug');
-                                                break;
-                                            }
+                                            // Continue scrolling to find more tweets
                                         } else {
                                             // 没有新推文，检查是否到达边界
                                             const tweetCountOnPage = await this.page!.evaluate((selector) => {

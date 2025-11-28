@@ -9,6 +9,7 @@ export interface Session {
     cookies: Protocol.Network.CookieParam[];
     usageCount: number;
     errorCount: number;
+    consecutiveFailures: number;
     isRetired: boolean;
     filePath: string;
     username?: string | null;
@@ -18,6 +19,7 @@ export class SessionManager {
     private sessions: Session[] = [];
     private currentSessionIndex: number = 0;
     private maxErrorCount: number = 3;
+    private maxConsecutiveFailures: number = 2;
     private cookieManager: CookieManager;
 
     constructor(private cookieDir: string = './cookies', private eventBus?: ScraperEventBus) {
@@ -45,6 +47,7 @@ export class SessionManager {
                     username: cookieInfo.username,
                     usageCount: 0,
                     errorCount: 0,
+                    consecutiveFailures: 0,
                     isRetired: false,
                     filePath
                 });
@@ -116,9 +119,10 @@ export class SessionManager {
         const session = this.sessions.find(s => s.id === sessionId);
         if (session) {
             session.errorCount++;
+            session.consecutiveFailures++;
             this._log(`Session ${sessionId} error count: ${session.errorCount} (${reason})`, 'warn');
 
-            if (session.errorCount >= this.maxErrorCount) {
+            if (session.errorCount >= this.maxErrorCount || session.consecutiveFailures >= this.maxConsecutiveFailures) {
                 this.retire(sessionId);
             }
         }
@@ -133,6 +137,7 @@ export class SessionManager {
             session.usageCount++;
             // 成功一次可以抵消一次错误 (可选)
             if (session.errorCount > 0) session.errorCount--;
+            session.consecutiveFailures = 0;
         }
     }
 

@@ -99,13 +99,21 @@ export async function saveTweetsAsMarkdown(
 
   await fileUtils.ensureDirExists(runContext.markdownDir);
 
+  // Sort tweets by timestamp (newest first) to maintain chronological order
+  // This is critical for Deep Search where tweets from different date chunks are combined
+  const sortedTweets = [...tweets].sort((a, b) => {
+    const timeA = a.time ? new Date(a.time).getTime() : 0;
+    const timeB = b.time ? new Date(b.time).getTime() : 0;
+    return timeB - timeA; // Descending order (newest first)
+  });
+
   const batchSize = options.batchSize || 10;
   const savedFiles: string[] = [];
   const aggregatedSections: string[] = [];
   const timezone = runContext?.timezone || timeUtils.getDefaultTimezone();
 
-  for (let i = 0; i < tweets.length; i += batchSize) {
-    const batch = tweets.slice(i, i + batchSize);
+  for (let i = 0; i < sortedTweets.length; i += batchSize) {
+    const batch = sortedTweets.slice(i, i + batchSize);
     const results = await Promise.all(
       batch.map((tweet, localIdx) => saveTweetAsMarkdown(tweet, runContext, i + localIdx))
     );
@@ -115,7 +123,7 @@ export async function saveTweetsAsMarkdown(
     }
   }
 
-  tweets.forEach((tweet, index) => {
+  sortedTweets.forEach((tweet, index) => {
     let formattedTimestamp = 'Unknown time';
     if (tweet.time) {
       try {

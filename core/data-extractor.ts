@@ -288,6 +288,33 @@ export async function scrollToBottomSmart(page: Page, timeout: number = 5000): P
         console.warn('Scroll execution failed:', e);
     }
 
+    // 2.5 Check for "Show more" / "Load more" buttons
+    try {
+        const clicked = await page.evaluate(() => {
+            // Common selectors for "Show more" buttons in Twitter search
+            const buttons = Array.from(document.querySelectorAll('div[role="button"], button'));
+            const showMoreBtn = buttons.find(b => {
+                const text = b.textContent?.toLowerCase() || '';
+                return text.includes('show more') || 
+                       text.includes('show more results') || 
+                       text.includes('load more');
+            });
+            
+            if (showMoreBtn && (showMoreBtn as HTMLElement).click) {
+                (showMoreBtn as HTMLElement).click();
+                return true;
+            }
+            return false;
+        });
+        
+        if (clicked) {
+            // If we clicked a button, wait a bit for new content
+            await new Promise(r => setTimeout(r, 2000));
+        }
+    } catch (e) {
+        // Ignore errors checking for buttons
+    }
+
     // 3. 智能等待 (等待网络空闲)
     const checkInterval = 200;
     let stableIntervals = 0;

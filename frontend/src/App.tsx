@@ -141,6 +141,7 @@ function App() {
 
   // Advanced Options
   const [autoRotateSessions, setAutoRotateSessions] = useState(true);
+  const [enableDeepSearch, setEnableDeepSearch] = useState(false);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
@@ -283,6 +284,7 @@ function App() {
         dateRange:
           startDate && endDate ? { start: startDate, end: endDate } : undefined,
         enableRotation: autoRotateSessions,
+        enableDeepSearch: activeTab === "search" ? enableDeepSearch : undefined,
       };
 
       if (activeTab === "monitor") {
@@ -502,6 +504,20 @@ function App() {
                   />
                 </div>
 
+                {/* Search Syntax Hints */}
+                {activeTab === "search" && (
+                  <div className="mt-2 text-xs text-stone/60 font-sans space-y-1">
+                    <p className="italic">💡 Advanced search syntax:</p>
+                    <p className="font-mono text-[10px] leading-relaxed">
+                      <span className="text-rust">from:username</span> • 
+                      <span className="text-rust"> lang:en</span> • 
+                      <span className="text-rust"> #hashtag</span> • 
+                      <span className="text-rust"> -is:retweet</span> • 
+                      <span className="text-rust"> min_faves:100</span>
+                    </p>
+                  </div>
+                )}
+
                 {activeTab !== "monitor" ? (
                   <>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-end">
@@ -673,6 +689,37 @@ function App() {
                               End Date
                             </label>
                           </div>
+                        </div>
+
+                        {/* Deep Search Toggle */}
+                        <div className="flex flex-col space-y-2">
+                          <span className="text-xs uppercase tracking-wider text-stone/60 font-sans">
+                            Deep Search
+                          </span>
+                          <label className="flex items-center space-x-4 cursor-pointer group select-none">
+                            <div className="w-6 h-6 border border-stone rounded-full flex items-center justify-center group-hover:border-rust transition-colors">
+                              <div
+                                className={cn(
+                                  "w-3 h-3 bg-rust rounded-full transition-opacity checkbox-indicator",
+                                  enableDeepSearch ? "opacity-100" : "opacity-0"
+                                )}
+                              ></div>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={enableDeepSearch}
+                              onChange={(e) => setEnableDeepSearch(e.target.checked)}
+                              className="hidden"
+                            />
+                            <div className="flex flex-col">
+                              <span className="font-serif text-lg text-stone group-hover:text-charcoal transition-colors">
+                                Enable Date Chunking
+                              </span>
+                              <span className="text-[10px] text-stone/50 font-sans">
+                                Split search into monthly chunks (Newest → Oldest)
+                              </span>
+                            </div>
+                          </label>
                         </div>
                       </div>
                     )}

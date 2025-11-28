@@ -11,12 +11,20 @@ import { ScraperErrors } from './errors';
 
 puppeteer.use(StealthPlugin());
 
+export interface ProxyConfig {
+    host: string;
+    port: number;
+    username: string;
+    password: string;
+}
+
 export interface BrowserLaunchOptions {
     headless?: boolean;
     userAgent?: string;
     blockResources?: boolean;
     blockedResourceTypes?: string[];
     puppeteerOptions?: any;
+    proxy?: ProxyConfig;
 }
 
 /**
@@ -35,18 +43,27 @@ export class BrowserManager {
      * 启动浏览器 (Renamed from launch to match ScraperEngine usage)
      */
     async init(options: BrowserLaunchOptions = {}): Promise<void> {
-        // 禁用代理环境变量
-        delete process.env.HTTP_PROXY;
-        delete process.env.HTTPS_PROXY;
-        delete process.env.http_proxy;
-        delete process.env.https_proxy;
+        // 禁用代理环境变量（除非使用自定义代理）
+        if (!options.proxy) {
+            delete process.env.HTTP_PROXY;
+            delete process.env.HTTPS_PROXY;
+            delete process.env.http_proxy;
+            delete process.env.https_proxy;
+        }
 
-        const launchOptions = {
+        const launchOptions: any = {
             headless: options.headless !== false,
             args: [...constants.BROWSER_ARGS], // 确保参数被正确传递
             defaultViewport: constants.BROWSER_VIEWPORT,
             ...options.puppeteerOptions
         };
+
+        // Add proxy server if provided
+        if (options.proxy) {
+            const proxyUrl = `${options.proxy.host}:${options.proxy.port}`;
+            launchOptions.args.push(`--proxy-server=${proxyUrl}`);
+            console.log(`[BrowserManager] Launching with proxy: ${proxyUrl}`);
+        }
 
         console.log('[BrowserManager] Launching with args:', launchOptions.args);
 
@@ -71,6 +88,15 @@ export class BrowserManager {
         }
 
         this.page = await this.browser.newPage();
+
+        // Inject proxy authentication if provided
+        if (options.proxy) {
+            await this.page.authenticate({
+                username: options.proxy.username,
+                password: options.proxy.password
+            });
+            console.log(`[BrowserManager] Proxy authentication injected for ${options.proxy.host}:${options.proxy.port}`);
+        }
 
         // 设置 User Agent
         await this.page.setUserAgent(options.userAgent || constants.BROWSER_USER_AGENT);

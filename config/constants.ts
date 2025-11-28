@@ -14,8 +14,8 @@ export const BROWSER_ARGS = [
     '--disable-dev-shm-usage',
     '--disable-accelerated-2d-canvas',
     '--disable-gpu',
-    '--window-size=1280,960',
-    '--no-proxy-server'  // 禁用代理服务器
+    '--window-size=1280,960'
+    // Removed '--no-proxy-server' to allow proxy configuration
 ];
 
 /**
@@ -90,17 +90,17 @@ export const REFRESH_RETRY_CONFIG = {
  * 最大连续无新推文尝试次数
  * 达到此次数后会触发页面刷新
  */
-export const MAX_CONSECUTIVE_NO_NEW_TWEETS = 4; // 搜索场景会放大为 8，给更多机会加载新内容
+export const MAX_CONSECUTIVE_NO_NEW_TWEETS = 3; // 搜索场景会放大为 6
 
 /**
  * 滚动延迟基础时间（毫秒）
  */
-export const SCROLL_DELAY_BASE = 1500;
+export const SCROLL_DELAY_BASE = 800;
 
 /**
  * 滚动延迟随机抖动时间（毫秒）
  */
-export const SCROLL_DELAY_JITTER = 1500;
+export const SCROLL_DELAY_JITTER = 800;
 
 /**
  * 刷新后等待延迟基础时间（毫秒）

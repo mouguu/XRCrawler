@@ -12,6 +12,7 @@ public/
 
 # Scraping output (sensitive data!)
 output/
+data/
 
 # Cookies (sensitive!)
 cookies/*

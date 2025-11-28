@@ -9,6 +9,7 @@ export interface ScrapingProgress {
     totalScraped: number;
     lastTweetId?: string;
     lastCursor?: string;
+    oldestTweetId?: string;
     startTime: number;
     lastUpdate: number;
     accountsUsed: string[];
@@ -19,6 +20,7 @@ export interface ScrapingProgress {
     };
     currentChunkIndex?: number; // For date chunking
     totalChunks?: number;       // For date chunking
+    lastDomScrollCount?: number; // Track scroll attempts in DOM mode
 }
 
 export class ProgressManager {
@@ -116,7 +118,9 @@ export class ProgressManager {
         lastTweetId?: string,
         lastCursor?: string,
         accountUsed?: string,
-        chunkInfo?: { current: number; total: number }
+        chunkInfo?: { current: number; total: number },
+        oldestTweetId?: string,
+        lastDomScrollCount?: number
     ): boolean {
         if (!this.currentProgress) {
             return false;
@@ -130,6 +134,14 @@ export class ProgressManager {
 
         if (lastCursor) {
             this.currentProgress.lastCursor = lastCursor;
+        }
+
+        if (oldestTweetId) {
+            this.currentProgress.oldestTweetId = oldestTweetId;
+        }
+
+        if (lastDomScrollCount !== undefined) {
+            this.currentProgress.lastDomScrollCount = lastDomScrollCount;
         }
 
         if (accountUsed && !this.currentProgress.accountsUsed.includes(accountUsed)) {

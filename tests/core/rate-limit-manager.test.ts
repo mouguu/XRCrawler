@@ -13,6 +13,7 @@ class FakeSessionManager {
             cookies: [] as Protocol.Network.CookieParam[],
             usageCount: 0,
             errorCount: 0,
+            consecutiveFailures: 0,
             isRetired: false,
             filePath: 'session-a.json'
         }, {
@@ -20,6 +21,7 @@ class FakeSessionManager {
             cookies: [] as Protocol.Network.CookieParam[],
             usageCount: 0,
             errorCount: 0,
+            consecutiveFailures: 0,
             isRetired: false,
             filePath: 'session-b.json'
         }];

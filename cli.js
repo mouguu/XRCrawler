@@ -104,18 +104,22 @@ program
   .option('--json', 'Additionally export as JSON (consolidated into one file)', false)
   .option('--csv', 'Additionally export as CSV (consolidated into one file)', false)
   .option('--headless <boolean>', 'Run browser in headless mode', 'true')
+  .option('--resume', 'Resume from last saved progress', false)
+  .option('--resume-from <tweetId>', 'Resume after the specified tweet ID')
+  .option('--mode <graphql|puppeteer|mixed>', 'Scrape mode', 'graphql')
   .option('-o, --output <dir>', 'Output directory', './output')
   .option('--timezone <timezone>', 'Timezone for timestamp output (IANA name)')
   .option('-d, --debug', 'Enable debug mode with verbose logs')
   .option('-m, --merge', 'Merge all results into a single file', false)
   .option('--merge-file <filename>', 'Merge file name', 'merged')
   .option('--format <format>', 'Export format: md/json/csv', 'md')
+  .option('--query <searchQuery>', 'Search query (e.g., "climate change" or "from:username keyword")')
   .option('--session <filename>', 'Cookie file to use (e.g., account2.json)')
   .action(async (options) => {
     try {
       // 验证并初始化选项
-      if (!options.username && !options.url && !options.file && !options.home && !options.thread) {
-        console.error('Error: Please provide Twitter username, profile URL, file, --home, or --thread');
+      if (!options.username && !options.url && !options.file && !options.home && !options.thread && !options.query) {
+        console.error('Error: Please provide Twitter username, profile URL, file, --query, --home, or --thread');
         process.exit(1);
       }
 
@@ -159,6 +163,12 @@ program
 
       options.count = parseInt(options.count);
       options.headless = options.headless === 'true';
+      let scrapeMode = (options.mode || 'graphql').toLowerCase();
+      const validModes = new Set(['graphql', 'puppeteer', 'mixed']);
+      if (!validModes.has(scrapeMode)) {
+        console.warn(`Unknown mode "${options.mode}", falling back to "graphql".`);
+        scrapeMode = 'graphql';
+      }
       const outputDir = path.resolve(options.output || './output');
       const timezoneInput = options.timezone || timeUtils.getDefaultTimezone();
       const timezone = timeUtils.resolveTimezone(timezoneInput);
@@ -273,12 +283,24 @@ program
         }
       }
 
+      // Handle Search Query mode
+      if (options.query) {
+        console.log(`🔍 Search Mode ENABLED: "${options.query}"`);
+        // Use a special marker that scrape-unified will recognize as search mode
+        usernames.push({ searchQuery: options.query });
+      }
+
       if (usernames.length === 0) {
-        console.error('No valid Twitter usernames/URLs');
+        console.error('No valid Twitter usernames/URLs or search query');
         process.exit(1);
       }
 
-      console.log(`Will scrape ${usernames.length} Twitter accounts, up to ${options.count} tweets per account`);
+      // Update console message for search mode
+      if (options.query) {
+        console.log(`Will search Twitter for: "${options.query}", up to ${options.count} tweets`);
+      } else {
+        console.log(`Will scrape ${usernames.length} Twitter accounts, up to ${options.count} tweets per account`);
+      }
 
       // 设置爬虫选项
       const scraperOptions = {
@@ -294,7 +316,10 @@ program
         exportCsv: !!options.csv,
         exportJson: !!options.json,
         timezone,
-        sessionId: options.session
+        sessionId: options.session,
+        scrapeMode,
+        resume: !!options.resume,
+        resumeFromTweetId: options.resumeFrom || undefined
       };
 
       // 执行抓取（统一逻辑）

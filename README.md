@@ -9,20 +9,22 @@ A powerful, full-featured tool to scrape, archive, and analyze Twitter/X content
 ## 🚀 Features
 
 - **Dual Scraping Modes**:
-  - **GraphQL API Mode** (Default): Fast, lightweight scraping using Twitter's internal GraphQL API. No browser needed, perfect for quick data collection.
-  - **Puppeteer DOM Mode**: Full browser automation for deeper timeline access and complex scenarios. Bypasses API limitations.
-- **Mixed Mode (API + DOM fallback)**: Start with fast GraphQL; when the API hits the ~800–900 tweet boundary, automatically fall back to DOM to continue deeper.
+  - **GraphQL API Mode** (Default): Fast, lightweight scraping using Twitter's internal GraphQL API. No browser needed, perfect for quick data collection (< 800 tweets).
+  - **Puppeteer DOM Mode**: Full browser automation for deeper timeline access and complex scenarios.
+- **🔥 Deep Search (Date Chunking)**: Bypasses the ~800 tweet hard limit by automatically splitting the timeframe into monthly chunks. Scrapes from newest to oldest with **no depth limit**.
+- **Seamless Auto-Switching**: Automatically detects when a target requires deep scraping (>800 tweets) and switches strategies transparently.
 - **Multi-Mode Scraping**:
-  - **User Profiles**: Scrape tweets, replies, and pinned tweets from any public profile.
+  - **User Profiles**: Scrape tweets, replies, and pinned tweets.
   - **Threads**: Archive complete conversation threads, including nested replies.
-  - **Home Timeline**: Scrape your personal "For You" or "Following" feed (requires login).
+  - **Search**: Advanced search scraping (keywords, hashtags, date ranges).
   - **Likes**: Extract tweets liked by a specific user.
 - **AI-Powered Analysis**:
   - **Persona Mode**: Automatically generates AI prompts and analysis based on scraped user data.
   - **Smart Exports**: Outputs clean Markdown and JSON optimized for LLM context windows.
-- **Modern Web Interface**: A beautiful, responsive React UI to manage scraping tasks visually.
-- **Intelligent Session Management**: Automatic multi-account rotation with health monitoring and smart fallback.
-- **Robust & Stealthy**: Built with Puppeteer and Stealth plugins to handle dynamic content and rate limits.
+- **Resilient Architecture**:
+  - **Smart Session Rotation**: Automatically rotates accounts on rate limits.
+  - **Data Gap Prevention**: If a session fails during a time chunk, the next session **retries the same chunk** to ensure no data is lost.
+  - **"Try Again" Handling**: Automatically detects and recovers from Twitter's frontend error screens.
 - **Flexible Output**:
   - Structured JSON/CSV for data analysis.
   - Markdown for reading and LLM ingestion.
@@ -78,6 +80,7 @@ The easiest way to use the crawler is through the built-in web interface.
    ```
 
 2. **Open your browser**
+
    - If using `dev:fast`: Navigate to `http://localhost:5173`
    - If using `dev`: Navigate to `http://localhost:5001`
 
@@ -89,51 +92,32 @@ The easiest way to use the crawler is through the built-in web interface.
 
 ---
 
-## 🛠️ Development Mode
-
-For active development:
-
-### Option 1: Fast Development (Recommended)
-
-```bash
-pnpm run dev:fast
-```
-
-This starts:
-- **Backend server** (port 5001) with auto-restart
-- **Frontend Vite server** (port 5173) with Hot Module Replacement (HMR)
-- **Access**: `http://localhost:5173`
-
-### Option 2: Production Simulation
-
-```bash
-pnpm run dev
-```
-
-This starts:
-- **Backend server** (port 5001)
-- **Frontend build watcher** (compiles to `public/` on change)
-- **Access**: `http://localhost:5001` (Backend serves the frontend)
-
----
-
-## 💻 CLI Usage
+## CLI Usage
 
 For automation and batch processing, use the Command Line Interface.
 
 ### Basic Commands
 
-**Scrape a Profile**
+**Scrape a Profile (Quick Mode)**
 
 ```bash
-# Scrape 50 tweets from @elonmusk (uses GraphQL API mode by default)
+# Scrape 50 tweets (uses GraphQL API by default)
 node cli.js twitter -u elonmusk -c 50
+```
 
-# Use Puppeteer DOM mode for deeper access (bypasses ~800 tweet API limit)
+**Deep Archive (The "Limit Breaker")**
+
+```bash
+# Scrape 2000 tweets.
+# System automatically detects count > 800 and switches to Date-Chunked Deep Search.
 node cli.js twitter -u elonmusk -c 2000 --mode puppeteer
+```
 
-# Save to a specific folder
-node cli.js twitter -u elonmusk -o ./my-data
+**Resume Interrupted Scrape**
+
+```bash
+# Continues from where you left off (based on the oldest tweet ID found previously)
+node cli.js twitter -u elonmusk -c 2000 --mode puppeteer --resume
 ```
 
 **Scrape a Thread**
@@ -141,13 +125,6 @@ node cli.js twitter -u elonmusk -o ./my-data
 ```bash
 # Archive a specific thread with up to 100 replies
 node cli.js twitter --thread https://x.com/username/status/123456789 --max-replies 100
-```
-
-**Scrape Home Timeline**
-
-```bash
-# Scrape your own "For You" feed (requires valid cookies)
-node cli.js twitter --home -c 50
 ```
 
 ### Advanced Options
@@ -172,13 +149,6 @@ Scrape multiple accounts from a file (one username/URL per line).
 node cli.js twitter -f accounts.txt --merge
 ```
 
-**Export Formats**
-
-```bash
-# Export as JSON and CSV in addition to Markdown
-node cli.js twitter -u elonmusk --json --csv
-```
-
 ### Full CLI Help
 
 ```bash
@@ -195,232 +165,84 @@ Results are organized by target and timestamp to prevent overwriting.
 output/
 └── twitter/
     └── {username}/
-        └── run-{timestamp}/
-            ├── index.md           # Main summary and content (Markdown)
-            ├── tweets.json        # Full raw data (JSON)
-            ├── tweets.csv         # Tabular data (CSV)
-            ├── metadata.json      # Run statistics and config
-            ├── markdown/          # Individual tweet markdown files
-            └── screenshots/       # Captured screenshots (if enabled)
-```
-
----
-
-## ⚙️ Configuration
-
-### `crawler-config.json`
-
-Used for scheduled tasks or default settings.
-
-```json
-{
-  "twitter": {
-    "usernames": ["user1", "user2"],
-    "tweetCount": 50,
-    "separateFiles": true
-  },
-  "schedule": {
-    "interval": 60,
-    "timezone": "UTC"
-  }
-}
-```
-
-### Scheduled Runs
-
-Run the crawler periodically based on your config:
-
-```bash
-node cli.js schedule -c crawler-config.json
+        ├── run-{timestamp}/
+        │   ├── index.md           # Main summary and content (Markdown)
+        │   ├── tweets.json        # Full raw data (JSON)
+        │   ├── tweets.csv         # Tabular data (CSV)
+        │   ├── metadata.json      # Run statistics and config
+        │   ├── markdown/          # Individual tweet markdown files
+        │   └── screenshots/       # Captured screenshots (if enabled)
+        └── ...
 ```
 
 ---
 
 ## 🔧 Technical Architecture
 
-This project goes beyond simple scraping scripts by implementing enterprise-grade features for reliability and stealth.
+This project implements enterprise-grade features for reliability and stealth.
+
+### ⚡ Deep Search & Date Chunking
+
+To bypass the ~800 tweet limit of the standard timeline API, this tool implements a **reverse-chronological date chunking strategy**:
+
+1.  **Intelligent Segmentation**: The timeframe is split into monthly chunks (e.g., 2025-11, 2025-10, 2025-09...).
+2.  **Search-Based Retrieval**: Instead of scrolling the timeline, it uses Puppeteer to perform advanced search queries (`from:user since:A until:B`).
+3.  **Smart Pacing**: Limits scrolling per chunk to prevent frontend crashes, then moves to the next month.
+4.  **Auto-Stop**: Automatically stops once the total target count (e.g., 2000 tweets) is reached.
 
 ### 🛡️ Advanced Fingerprinting
 
 To avoid detection, the crawler uses `fingerprint-injector` to inject realistic browser fingerprints into every Puppeteer session.
 
-- **Canvas & WebGL Noise**: Randomizes rendering outputs to defeat canvas fingerprinting.
-- **AudioContext**: Modifies audio stack processing.
-- **Hardware Concurrency & Device Memory**: Emulates consistent hardware specs matching the User-Agent.
+- **Canvas & WebGL Noise**: Randomizes rendering outputs.
+- **Hardware Emulation**: Emulates consistent hardware specs matching the User-Agent.
 
-### ⚡ Intelligent Rate Limiting & Session Rotation
+### 🔄 Robust Session Management
 
-The system implements advanced rate limit handling with automatic session rotation:
-
-- **Smart Detection**: Detects Rate Limit (429) errors and authentication failures automatically.
-- **Automatic Session Rotation**: When a rate limit is hit, automatically switches to the next available account.
-- **Multi-Account Support**: Loads all cookie files from `cookies/` directory and rotates through them seamlessly.
-- **Intelligent Retry**: Distinguishes between rate limits and API boundaries (e.g., ~800 tweet limit).
-- **Adaptive Delays**: Adjusts request frequency based on success rates and error patterns.
-
-### 🔄 Session Management & Rotation
-
-- **Multi-Account Support**: The `SessionManager` automatically loads all cookie files from the `cookies/` directory (e.g., `account1.json`, `account2.json`, etc.).
-- **Health Checks**: Monitors session validity and tracks error counts for each account.
+- **Multi-Account Support**: Loads all cookie files from `cookies/` directory.
 - **Automatic Rotation**:
-  - **Rate Limit Handling**: Automatically switches to the next available session when rate limits are detected.
-  - **Empty Response Handling**: Intelligently switches sessions when encountering empty API responses to distinguish between account-specific limits and API boundaries.
-  - **Priority-Based Selection**: Chooses sessions based on health (error count) and usage statistics.
-- **Comprehensive Tracking**: Records which sessions have been tried at each cursor position to avoid redundant attempts.
-
-### 📸 Error Snapshotting
-
-Debugging headless browsers can be difficult. The `ErrorSnapshotter` automatically captures context when an error occurs:
-
-- **Screenshots**: Saves a PNG of the browser state at the moment of failure.
-- **HTML Dumps**: Saves the full page source to analyze DOM structure.
-- **Logs**: Correlates browser console logs with the error.
+  - **Rate Limit Handling**: Switches sessions on 429 errors.
+  - **Load Failure Handling**: Switches sessions if Twitter returns "Something went wrong" or empty results repeatedly.
+- **Chunk Retry Mechanism**: **Critical Feature.** If a session gets rate-limited while scraping "May 2024", the system rotates to the next session and **retries "May 2024" immediately**. This prevents data gaps (black holes) in your archive.
 
 ---
 
-## 🎯 Scraping Modes: GraphQL vs Puppeteer
+## 🎯 Scraping Modes
 
-The crawler supports two scraping modes, each optimized for different use cases:
+### GraphQL API Mode (Default for small tasks)
 
-### GraphQL API Mode (Default)
+- **Speed**: ⚡ Fast
+- **Limitation**: ⚠️ **~800 tweet limit** (Server-side restriction).
+- **Best For**: Quick monitoring, daily updates, small profiles.
 
-- **Speed**: ⚡ Fast - No browser overhead, direct API calls
-- **Resource Usage**: 💾 Lightweight - Minimal memory and CPU
-- **Limitation**: ⚠️ **~800 tweet limit per request chain** (Twitter/X API restriction)
-- **Use Case**: Quick data collection, monitoring, small to medium profiles
-- **When to Use**:
-  - Scraping less than 800 tweets
-  - Need fast, efficient scraping
-  - Running in resource-constrained environments
+### Puppeteer DOM Mode (Deep Search)
 
-```bash
-# GraphQL mode (default)
-node cli.js twitter -u elonmusk -c 500 --mode graphql
-```
+- **Speed**: 🐢 Slower (Full browser rendering).
+- **Limitation**: ✅ **Virtually Unlimited**.
+- **Best For**: Archival, large datasets (>800 tweets), historical analysis.
+- **Logic**: Uses the Date-Chunking engine described above.
 
-### Puppeteer DOM Mode
+### Mixed Mode
 
-- **Speed**: 🐢 Slower - Full browser rendering required
-- **Resource Usage**: 💻 Higher - Requires browser instance
-- **Limitation**: ✅ No hard limit - Can access deeper timeline history
-- **Use Case**: Deep archival, large profiles (>800 tweets), complex scenarios
-- **When to Use**:
-  - Need more than ~800 tweets
-  - Require access to very old tweets
-  - Encountering API limitations
-
-```bash
-# Puppeteer mode for deeper access
-node cli.js twitter -u elonmusk -c 2000 --mode puppeteer
-```
-
-### Mixed Mode (API + DOM fallback)
-
-- **Speed**: ⚡➜🐢 先用 API 拉取，触顶后自动切 DOM 补深度
-- **适用**: Profile / Thread 模式（Search 仍强制 DOM）
-- **用法**:
-
-```bash
-# Mixed 模式：先 API，再自动切 DOM 深挖
-node cli.js twitter -u elonmusk -c 2000 --mode mixed
-```
-
-### Mode Selection in Web UI
-
-The web interface allows you to switch between modes via the API selection tabs:
-
-- **GraphQL API**: Fast, API-only mode
-- **Puppeteer DOM**: Full browser automation mode
-- **Mixed**: Profile/Thread 可选；Search 强制 DOM（官方 SearchTimeline 游标 404）
+- **Logic**: Starts with API for speed. Once the API limit is hit, it automatically hands over the cursor (or date range) to Puppeteer to continue digging deeper.
 
 ---
 
 ## ⚠️ Known Limitations & FAQ
 
-### GraphQL API Limit
+### Why does it scrape slowly?
 
-**Q: Why does scraping stop at ~800 tweets in GraphQL mode?**
+Deep scraping uses a real browser (Puppeteer) and respects rate limits to avoid getting your accounts banned. It scrolls, waits for network idle, and handles "Try again" buttons automatically. This takes time but ensures high success rates.
 
-**A:** Twitter/X's GraphQL API has an internal limit of approximately 800-900 tweets per pagination chain. This is a server-side restriction, not a bug in the crawler.
+### Can I use this without login?
 
-**Solutions:**
+No. Twitter/X has removed most public access. You must provide valid cookies in the `cookies/` directory.
 
-1. Use Puppeteer mode: `--mode puppeteer` for deeper timeline access
-2. Use Mixed mode: `--mode mixed` to自动切 DOM 续跑
-2. Split into batches: Use `stopAtTweetId` to scrape in multiple sessions
-3. Wait and retry: The limit may reset after some time
+### What if a month is missing?
 
-### Session Rotation
-
-**Q: How does automatic session rotation work?**
-
-**A:** When a rate limit or empty response is detected:
-
-1. The system automatically switches to the next available account
-2. All accounts in the `cookies/` directory are tried in sequence
-3. The system tracks which accounts have been tested at each cursor position
-4. If all accounts return empty responses at the same position, it indicates an API boundary
-
-**Tips:**
-
-- Place multiple cookie files (`account1.json`, `account2.json`, etc.) in the `cookies/` directory
-- The more accounts you have, the better the rate limit resilience
-- Accounts are selected based on health (fewer errors) and usage statistics
-
-### Rate Limits
-
-**Q: What should I do if all accounts hit rate limits?**
-
-**A:**
-
-1. Wait 15-30 minutes for limits to reset
-2. Reduce request frequency (currently using minimal delays for speed)
-3. Use more accounts to distribute the load
-4. Consider using Puppeteer mode which may have different rate limit thresholds
+The system logs warnings if a specific time chunk returns 0 tweets after multiple retries. Check the logs for "Gaps detected" warnings. You can manually verify if the user actually tweeted during that period.
 
 ---
-
-## 🔌 API Reference
-
-The server exposes a RESTful API for integrating with other tools.
-
-### `POST /api/scrape`
-
-Trigger a scraping task.
-
-```json
-{
-  "type": "profile", // "profile", "thread", "search"
-  "input": "elonmusk", // Username, URL, or Query
-  "limit": 50, // Max tweets
-  "likes": false, // Scrape likes tab?
-  "mergeResults": false,
-  "scrapeMode": "graphql" // "graphql", "puppeteer", or "mixed" (profile/thread only)
-}
-```
-
-### `POST /api/stop`
-
-Gracefully stop the current scraping task.
-
-### `GET /api/progress`
-
-Server-Sent Events (SSE) stream for real-time progress updates.
-
-- Events: `scrape:progress`, `log:message`, `scrape:complete`
-
-### `GET /api/download?path={path}`
-
-Download generated artifacts (Markdown, JSON, CSV).
-
----
-
-## 🛠️ Development
-
-- **Run Tests**: `npm test`
-- **Frontend Tests**: `cd frontend && npm run test`
-- **Build Frontend**: `cd frontend && npm run build`
-- **Linting**: `npm run lint` (if configured)
 
 ## 🤝 Contributing
 
