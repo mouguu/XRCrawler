@@ -90,17 +90,44 @@ def scrape_post():
         result = scraper.scrape_post(post_url)
         
         if result.get('status') == 'success':
-            # 保存到输出目录
-            output_dir = os.path.join(os.getcwd(), 'output', 'reddit')
+            # 获取项目根目录（reddit_api_server.py 在 platforms/reddit/ 目录下）
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(os.path.dirname(script_dir))
+            
+            # 保存到项目根目录的 output/reddit 目录
+            output_dir = os.path.join(project_root, 'output', 'reddit')
             os.makedirs(output_dir, exist_ok=True)
             
-            output_file = os.path.join(
-                output_dir, 
-                f"reddit_post_{result['post']['id']}.json"
-            )
+            post_id = result['post']['id']
             
-            with open(output_file, 'w', encoding='utf-8') as f:
+            # 保存 JSON 文件
+            json_file = os.path.join(output_dir, f"reddit_post_{post_id}.json")
+            with open(json_file, 'w', encoding='utf-8') as f:
                 json.dump(result, f, indent=2, ensure_ascii=False)
+            
+            # 生成 Markdown 文件
+            md_file = os.path.join(output_dir, f"reddit_post_{post_id}.md")
+            with open(md_file, 'w', encoding='utf-8') as f:
+                post = result['post']
+                f.write(f"# {post.get('title', 'Untitled')}\n\n")
+                f.write(f"**Subreddit:** r/{post.get('subreddit', 'unknown')}\n")
+                f.write(f"**Author:** u/{post.get('author', 'unknown')}\n")
+                f.write(f"**Score:** {post.get('score', 0)} | **Upvote Ratio:** {post.get('upvote_ratio', 0):.2%}\n")
+                f.write(f"**Comments:** {result.get('comment_count', 0)}\n")
+                f.write(f"**URL:** {post.get('permalink', '')}\n\n")
+                
+                if post.get('selftext'):
+                    f.write("## Post Content\n\n")
+                    f.write(f"{post['selftext']}\n\n")
+                
+                if result.get('comments'):
+                    f.write("## Comments\n\n")
+                    for i, comment in enumerate(result['comments'], 1):
+                        indent = "  " * comment.get('depth', 0)
+                        f.write(f"{indent}### Comment {i}\n\n")
+                        f.write(f"{indent}**Author:** u/{comment.get('author', 'unknown')}\n")
+                        f.write(f"{indent}**Score:** {comment.get('score', 0)}\n")
+                        f.write(f"{indent}**Body:**\n\n{indent}{comment.get('body', '').replace(chr(10), chr(10) + indent)}\n\n")
             
             return jsonify({
                 'success': True,
@@ -108,7 +135,7 @@ def scrape_post():
                     'post': result['post'],
                     'comments': result['comments'],
                     'comment_count': result['comment_count'],
-                    'file_path': output_file
+                    'file_path': md_file  # 返回 markdown 文件路径
                 },
                 'message': f"Successfully scraped post with {result['comment_count']} comments"
             })

@@ -1,16 +1,23 @@
 /**
- * 统一的日志系统
- * 企业级日志管理：结构化、可追踪、可配置
+ * Winston-based logger with structured output.
  */
 
 import { createLogger as createWinstonLogger, format, transports, Logger } from 'winston';
 import * as path from 'path';
 import * as fs from 'fs';
-import { ScraperError } from '../core';
 
+const hasFs =
+  typeof fs.existsSync === 'function' &&
+  typeof fs.mkdirSync === 'function' &&
+  typeof fs.createWriteStream === 'function';
 const logDir = path.join(process.cwd(), 'logs');
+
+if (hasFs) {
 if (!fs.existsSync(logDir)) {
   fs.mkdirSync(logDir, { recursive: true });
+  }
+} else {
+  console.warn('[Logger] File system APIs unavailable, falling back to console-only logging.');
 }
 
 const logFormat = format.combine(
@@ -32,11 +39,8 @@ const consoleFormat = format.combine(
   })
 );
 
-export const logger: Logger = createWinstonLogger({
-  level: process.env.LOG_LEVEL || 'info',
-  format: logFormat,
-  defaultMeta: { service: 'social-media-crawler' },
-  transports: [
+const fileTransports: transports.StreamTransportInstance[] = hasFs
+  ? [
     new transports.File({
       filename: path.join(logDir, 'error.log'),
       level: 'error',
@@ -48,21 +52,36 @@ export const logger: Logger = createWinstonLogger({
       maxsize: 5 * 1024 * 1024,
       maxFiles: 5
     })
-  ],
-  exceptionHandlers: [
+    ]
+  : [];
+
+const exceptionHandlers = hasFs
+  ? [
     new transports.File({
       filename: path.join(logDir, 'exceptions.log'),
       maxsize: 5 * 1024 * 1024,
       maxFiles: 3
     })
-  ],
-  rejectionHandlers: [
+    ]
+  : [];
+
+const rejectionHandlers = hasFs
+  ? [
     new transports.File({
       filename: path.join(logDir, 'rejections.log'),
       maxsize: 5 * 1024 * 1024,
       maxFiles: 3
     })
   ]
+  : [];
+
+export const logger: Logger = createWinstonLogger({
+  level: process.env.LOG_LEVEL || 'info',
+  format: logFormat,
+  defaultMeta: { service: 'twitter-crawler' },
+  transports: [...fileTransports],
+  exceptionHandlers,
+  rejectionHandlers
 });
 
 if (process.env.NODE_ENV !== 'production') {
@@ -73,46 +92,59 @@ if (process.env.NODE_ENV !== 'production') {
   );
 }
 
-export interface LogContext {
-  [key: string]: any;
+export interface ModuleLogger {
+  info: (message: string, meta?: Record<string, unknown>) => void;
+  warn: (message: string, meta?: Record<string, unknown>) => void;
+  error: (message: string, error?: Error, meta?: Record<string, unknown>) => void;
+  debug: (message: string, meta?: Record<string, unknown>) => void;
+  verbose: (message: string, meta?: Record<string, unknown>) => void;
 }
 
-export interface ModuleLogger {
-  info: (message: string, meta?: LogContext) => void;
-  warn: (message: string, meta?: LogContext) => void;
-  error: (message: string, error?: Error | ScraperError, meta?: LogContext) => void;
-  debug: (message: string, meta?: LogContext) => void;
-  verbose: (message: string, meta?: LogContext) => void;
+function normalizeErrorMeta(
+  error: Error | undefined,
+  extraMeta: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!error) {
+    return extraMeta;
+  }
+
+  const meta: Record<string, unknown> = { ...extraMeta };
+
+  if ((error as any).code !== undefined && (error as any).retryable !== undefined) {
+    // Likely ScraperError-like shape
+    meta.errorCode = (error as any).code;
+    meta.retryable = (error as any).retryable;
+    meta.errorContext = (error as any).context;
+    if ((error as any).originalError) {
+      meta.originalError = {
+        name: (error as any).originalError.name,
+        message: (error as any).originalError.message,
+      };
+    }
+  } else {
+    meta.errorName = error.name;
+    meta.errorMessage = error.message;
+  }
+
+  return meta;
 }
 
 export function createModuleLogger(module: string): ModuleLogger {
   return {
-    info: (message: string, meta: LogContext = {}) => logger.info(message, { module, ...meta }),
-    warn: (message: string, meta: LogContext = {}) => logger.warn(message, { module, ...meta }),
-    error: (message: string, error?: Error | ScraperError, meta: LogContext = {}) => {
-      const errorMeta: LogContext = { module, ...meta };
-      if (error) {
-        if (error instanceof ScraperError) {
-          errorMeta.errorCode = error.code;
-          errorMeta.retryable = error.retryable;
-          errorMeta.errorContext = error.context;
-          if (error.originalError) {
-            errorMeta.originalError = {
-              name: error.originalError.name,
-              message: error.originalError.message
-            };
-          }
-        } else {
-          errorMeta.errorName = error.name;
-          errorMeta.errorMessage = error.message;
-        }
-      }
-      logger.error(message, errorMeta);
-    },
-    debug: (message: string, meta: LogContext = {}) => logger.debug(message, { module, ...meta }),
-    verbose: (message: string, meta: LogContext = {}) => logger.verbose(message, { module, ...meta })
+    info: (message: string, meta: Record<string, unknown> = {}) =>
+      logger.info(message, { module, ...meta }),
+    warn: (message: string, meta: Record<string, unknown> = {}) =>
+      logger.warn(message, { module, ...meta }),
+    error: (message: string, error?: Error, meta: Record<string, unknown> = {}) =>
+      logger.error(message, normalizeErrorMeta(error, { module, ...meta })),
+    debug: (message: string, meta: Record<string, unknown> = {}) =>
+      logger.debug(message, { module, ...meta }),
+    verbose: (message: string, meta: Record<string, unknown> = {}) =>
+      logger.verbose(message, { module, ...meta }),
   };
 }
+
+export type LogContext = Record<string, unknown>;
 
 /**
  * 增强的模块日志器（集成性能追踪和上下文管理）
@@ -143,7 +175,7 @@ export class EnhancedLogger {
     this.baseLogger.warn(message, { ...this.context, ...meta });
   }
 
-  error(message: string, error?: Error | ScraperError, meta?: LogContext): void {
+  error(message: string, error?: Error, meta?: LogContext): void {
     this.baseLogger.error(message, error, { ...this.context, ...meta });
   }
 
@@ -227,4 +259,3 @@ export async function closeLogger(): Promise<void> {
     logger.end();
   });
 }
-

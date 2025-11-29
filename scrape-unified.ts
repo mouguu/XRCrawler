@@ -236,9 +236,8 @@ export async function scrapeTwitterUsers(
                         new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : 
                         '2006-01-01';
                     
-                    // Use date-chunked Puppeteer search (newest → oldest time periods)
-                    // Automatically stops when target is reached
-                    timelineResult = await engine.scrapeSearchByDateChunks({
+                    // Use date-chunked search (newest → oldest time periods)
+                    timelineResult = await engine.scrapeTimeline({
                         username: isSearchMode ? undefined : timelineUsernameValue,
                         searchQuery: isSearchMode
                             ? searchQuery ?? undefined
@@ -251,6 +250,7 @@ export async function scrapeTwitterUsers(
                         exportJson: false,
                         runContext,
                         scrapeMode: 'puppeteer',
+                        mode: 'search',
                         collectProfileInfo: !isSearchMode, // No profile info for search queries
                         resume: options.resume
                     });

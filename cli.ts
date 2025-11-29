@@ -23,6 +23,7 @@ const configManager = getConfigManager();
 const outputConfig = configManager.getOutputConfig();
 const twitterConfig = configManager.getTwitterConfig();
 const redditConfig = configManager.getRedditConfig();
+const browserConfig = configManager.getBrowserConfig();
 
 // Progress Bar Helper
 function monitorProgress(debugMode: boolean): () => void {
@@ -169,7 +170,7 @@ program
   .option('--persona', 'Enable Persona Analysis mode (auto-generates AI prompt, includes replies)', false)
   .option('--json', 'Additionally export as JSON (consolidated into one file)', false)
   .option('--csv', 'Additionally export as CSV (consolidated into one file)', false)
-  .option('--headless <boolean>', 'Run browser in headless mode', 'true')
+  .option('--headless <boolean>', 'Run browser in headless mode', browserConfig.headless ? 'true' : 'false')
   .option('--resume', 'Resume from last saved progress', false)
   .option('--resume-from <tweetId>', 'Resume after the specified tweet ID')
   .option('--mode <graphql|puppeteer|mixed>', 'Scrape mode', twitterConfig.defaultMode)
@@ -441,7 +442,7 @@ program
   .description('Run crawler task on schedule')
   .option('-c, --config <filepath>', 'Configuration file path', './crawler-config.json')
   .option('-i, --interval <minutes>', 'Scraping interval (minutes)', '30')
-  .option('--headless <boolean>', 'Run browser in headless mode', 'true')
+  .option('--headless <boolean>', 'Run browser in headless mode', browserConfig.headless ? 'true' : 'false')
   .option('--timezone <timezone>', 'Timezone for timestamp output (IANA name)')
   .action(async (options: any) => {
     try {
@@ -620,4 +621,3 @@ if (require.main === module) {
 }
 
 export default program;
-

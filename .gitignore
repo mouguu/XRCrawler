@@ -2,6 +2,14 @@
 node_modules/
 frontend/node_modules/
 
+# Python virtual environment
+platforms/reddit/.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
 # Build outputs
 dist/
 frontend/dist/

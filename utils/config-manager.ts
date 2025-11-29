@@ -5,7 +5,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { ScraperError, ErrorCode } from '../core';
+import { ScraperError, ErrorCode } from '../core/errors';
 
 export interface AppConfig {
   // 服务器配置
@@ -321,6 +321,30 @@ export class ConfigManager {
   }
 
   /**
+   * 对前端/CLI 暴露的公共配置
+   */
+  getPublicConfig(): {
+    apiBase: string;
+    twitter: Pick<AppConfig["twitter"], "defaultLimit" | "defaultMode">;
+    reddit: Pick<AppConfig["reddit"], "defaultStrategy">;
+    output: Pick<AppConfig["output"], "baseDir">;
+  } {
+    return {
+      apiBase: this.config.server.publicUrl || "",
+      twitter: {
+        defaultLimit: this.config.twitter.defaultLimit,
+        defaultMode: this.config.twitter.defaultMode,
+      },
+      reddit: {
+        defaultStrategy: this.config.reddit.defaultStrategy,
+      },
+      output: {
+        baseDir: this.config.output.baseDir,
+      },
+    };
+  }
+
+  /**
    * 保存配置到文件
    */
   saveToFile(filePath?: string): void {
@@ -360,4 +384,3 @@ export function getConfigManager(configFilePath?: string): ConfigManager {
 export function resetConfigManager(): void {
   globalConfigManager = null;
 }
-

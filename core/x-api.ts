@@ -8,7 +8,9 @@ import {
     X_API_FEATURES_USER_DETAILS
 } from '../config/constants';
 import { ScraperErrors } from './errors';
-import { RetryOnNetworkError, HandleRateLimit } from '../utils';
+const RETRY_MAX_ATTEMPTS = 3;
+const RETRY_INITIAL_DELAY_MS = 1000;
+const RETRY_BACKOFF = 2;
 
 export class XApiClient {
     private cookies: Protocol.Network.CookieParam[];
@@ -53,9 +55,57 @@ export class XApiClient {
         }
     }
 
-    @RetryOnNetworkError(3, 1000)
-    @HandleRateLimit()
     private async request(op: typeof X_API_OPS.UserTweets | typeof X_API_OPS.SearchTimeline | typeof X_API_OPS.UserByScreenName | typeof X_API_OPS.TweetDetail, variables: any) {
+        let delay = RETRY_INITIAL_DELAY_MS;
+
+        for (let attempt = 0; attempt <= RETRY_MAX_ATTEMPTS; attempt++) {
+            try {
+                return await this.performRequest(op, variables);
+            } catch (error: any) {
+                if (this.isRateLimitError(error)) {
+                    throw error;
+                }
+
+                const isNetworkError = this.isNetworkError(error);
+                const isTransientApiError = this.isTransientApiError(error);
+
+                if (attempt < RETRY_MAX_ATTEMPTS && (isNetworkError || isTransientApiError)) {
+                    console.warn(`[Retry] XApiClient request failed (attempt ${attempt + 1}/${RETRY_MAX_ATTEMPTS + 1}): ${error?.message || 'Unknown error'}. Retrying in ${delay}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= RETRY_BACKOFF;
+                    continue;
+                }
+
+                throw error;
+            }
+        }
+
+        throw ScraperErrors.apiRequestFailed('Request failed after maximum retry attempts', undefined, { operation: op.operationName });
+    }
+
+    private isNetworkError(error: any): boolean {
+        const message = (error?.message || '').toLowerCase();
+        return message.includes('network') || message.includes('timeout') || message.includes('econnreset') || message.includes('fetch failed');
+    }
+
+    private isTransientApiError(error: any): boolean {
+        const status = error?.status ?? error?.statusCode;
+        return status === 500 || status === 502 || status === 503;
+    }
+
+    private isRateLimitError(error: any): boolean {
+        if (!error) return false;
+        const message = (error.message || '').toLowerCase();
+        const status = error.status ?? error.statusCode;
+        const code = error.code;
+        return status === 429 ||
+            message.includes('429') ||
+            message.includes('rate limit') ||
+            code === 'RATE_LIMIT' ||
+            code === 'RATE_LIMIT_EXCEEDED';
+    }
+
+    private async performRequest(op: typeof X_API_OPS.UserTweets | typeof X_API_OPS.SearchTimeline | typeof X_API_OPS.UserByScreenName | typeof X_API_OPS.TweetDetail, variables: any) {
         const queryId = op.operationName === 'SearchTimeline' ? this.searchQueryId : op.queryId;
         const url = `https://x.com/i/api/graphql/${queryId}/${op.operationName}`;
         

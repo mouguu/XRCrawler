@@ -31,6 +31,7 @@ import {
   isMonitorRequest,
 } from "./types";
 import multer from "multer";
+import { TaskQueueManager } from "./server/task-queue";
 
 // 创建服务器日志器
 const serverLogger = createEnhancedLogger("Server");
@@ -93,13 +94,9 @@ let lastDownloadUrl: string | null = null;
 let isShuttingDown = false;
 const activeTasks = new Set<Promise<unknown>>();
 const requestQueue = new RequestQueue({ persistIntervalMs: 0 });
-type QueuedHandler = {
-  handler: () => Promise<void>;
-  resolve: () => void;
-  reject: (error: any) => void;
-};
-const queuedHandlers = new Map<string, QueuedHandler>();
-let isProcessingQueue = false;
+const taskQueue = new TaskQueueManager(requestQueue, {
+  isShuttingDown: () => isShuttingDown,
+});
 
 async function trackTask<T>(fn: () => Promise<T>): Promise<T> {
   const taskPromise = fn();
@@ -117,70 +114,6 @@ function rejectIfShuttingDown(res: Response): boolean {
     return true;
   }
   return false;
-}
-
-async function enqueueSequentialTask(
-  taskInfo: Omit<RequestTask, "id" | "uniqueKey" | "retryCount"> & {
-    uniqueKey?: string;
-  },
-  handler: () => Promise<void>
-): Promise<void> {
-  const queuedTask = await requestQueue.addRequest({
-    ...taskInfo,
-    uniqueKey:
-      taskInfo.uniqueKey ||
-      `${taskInfo.type}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-  });
-
-  if (!queuedTask) {
-    throw ScraperErrors.invalidConfiguration(
-      "Task is already queued or was handled recently",
-      { taskType: taskInfo.type }
-    );
-  }
-
-  const completion = new Promise<void>((resolve, reject) => {
-    queuedHandlers.set(queuedTask.id, { handler, resolve, reject });
-  });
-
-  processQueue();
-  return completion;
-}
-
-async function processQueue(): Promise<void> {
-  if (isProcessingQueue) return;
-  isProcessingQueue = true;
-
-  try {
-    let nextTask: RequestTask | null;
-    while ((nextTask = requestQueue.fetchNextRequest())) {
-      const entry = queuedHandlers.get(nextTask.id);
-      if (!entry) {
-        await requestQueue.markRequestHandled(nextTask);
-        continue;
-      }
-
-      if (isShuttingDown) {
-        await requestQueue.markRequestHandled(nextTask);
-        entry.reject(new Error("Server shutting down"));
-        queuedHandlers.delete(nextTask.id);
-        continue;
-      }
-
-      try {
-        await entry.handler();
-        await requestQueue.markRequestHandled(nextTask);
-        entry.resolve();
-      } catch (error) {
-        await requestQueue.markRequestHandled(nextTask);
-        entry.reject(error);
-      } finally {
-        queuedHandlers.delete(nextTask.id);
-      }
-    }
-  } finally {
-    isProcessingQueue = false;
-  }
 }
 
 // Middleware
@@ -250,7 +183,7 @@ app.post(
         : queueType;
 
     try {
-      await enqueueSequentialTask(
+      await taskQueue.enqueue(
         { url: queueKey, type: queueType, priority: 1 },
         () =>
           trackTask(async () => {
@@ -456,7 +389,21 @@ app.post(
                     });
                     
                     // Use actual file path from API response
-                    const filePath = data.file_path || path.join(process.cwd(), "output/reddit/latest/index.md");
+                    // Ensure the path is within the output directory for security
+                    let filePath = data.file_path || path.join(OUTPUT_ROOT, "reddit/latest/index.md");
+                    
+                    // If the path is absolute but outside output dir, try to make it relative
+                    const resolvedFilePath = path.resolve(filePath);
+                    if (!outputPathManager.isPathSafe(resolvedFilePath)) {
+                      // If path is outside output dir, use a fallback path within output
+                      serverLogger.warn("Reddit 文件路径不在输出目录内，使用备用路径", { 
+                        originalPath: filePath,
+                        outputDir: OUTPUT_ROOT
+                      });
+                      filePath = path.join(OUTPUT_ROOT, "reddit/latest/index.md");
+                    } else {
+                      filePath = resolvedFilePath;
+                    }
                     
                     result = {
                       success: true,
@@ -589,7 +536,7 @@ app.post(
       : "monitor";
 
     try {
-      await enqueueSequentialTask(
+      await taskQueue.enqueue(
         { url: queueKey || "monitor", type: "monitor", priority: 1 },
         () =>
           trackTask(async () => {
@@ -815,11 +762,7 @@ app.get("/api/health", (req: Request, res: Response) => {
 
 // API: Public config for frontend
 app.get("/api/config", (req: Request, res: Response) => {
-  res.json({
-    apiBase: serverConfig.publicUrl || "",
-    defaultLimit: twitterConfig.defaultLimit,
-    defaultMode: twitterConfig.defaultMode,
-  });
+  res.json(configManager.getPublicConfig());
 });
 
 // API: Get result (download URL after scraping completes)
@@ -834,14 +777,25 @@ app.get("/api/result", (req: Request, res: Response) => {
 app.get("/api/download", (req: Request, res: Response) => {
   const filePathParam =
     typeof req.query.path === "string" ? req.query.path : "";
+  
+  if (!filePathParam) {
+    return res.status(400).send("Invalid file path");
+  }
+
   const resolvedPath = path.resolve(filePathParam);
 
-  // 删除 legacy 路径支持，只使用统一路径
-  if (!filePathParam || !outputPathManager.isPathSafe(resolvedPath)) {
+  // 检查路径是否安全（在 output 目录内）
+  if (!outputPathManager.isPathSafe(resolvedPath)) {
+    serverLogger.warn("下载路径不安全", { 
+      path: filePathParam, 
+      resolved: resolvedPath,
+      baseDir: outputPathManager.getBaseDir()
+    });
     return res.status(400).send("Invalid file path");
   }
 
   if (!fs.existsSync(resolvedPath)) {
+    serverLogger.warn("文件不存在", { path: resolvedPath });
     return res.status(404).send("File not found");
   }
 
