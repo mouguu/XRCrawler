@@ -8,17 +8,17 @@ import {
     ScrapeTimelineConfig,
     ScrapeTimelineResult,
     ScrapeThreadOptions,
-    ScrapeThreadResult
-} from './core/scraper-engine';
-
-// Re-export types for consumers
-export type { ScrapeTimelineResult, ScrapeThreadResult };
-import { getShouldStopScraping } from './core/stop-signal';
+    ScrapeThreadResult,
+    getShouldStopScraping,
+    ScraperErrors
+} from './core';
 import * as markdownUtils from './utils/markdown';
 import * as exportUtils from './utils/export';
 import * as fileUtils from './utils/fileutils';
-import { Tweet, ProfileInfo } from './types/tweet';
-import { ScraperErrors } from './core/errors';
+import { Tweet, ProfileInfo } from './types';
+
+// Re-export types for consumers
+export type { ScrapeTimelineResult, ScrapeThreadResult };
 
 export interface ScrapeXFeedOptions extends Omit<ScrapeTimelineConfig, 'mode'> {
     scrapeLikes?: boolean;
@@ -161,8 +161,14 @@ export async function scrapeThread(options: ScrapeThreadOptions): Promise<Scrape
  * Legacy-compatible bulk scraper used by the CLI.
  * Supports timeline scraping (and optional likes) for multiple users in a single browser session.
  */
+export type TwitterUserIdentifier = string | null | { searchQuery: string };
+
+function isSearchQueryIdentifier(value: TwitterUserIdentifier): value is { searchQuery: string } {
+    return typeof value === 'object' && value !== null && typeof value.searchQuery === 'string';
+}
+
 export async function scrapeTwitterUsers(
-    usernames: Array<string | null>,
+    usernames: TwitterUserIdentifier[],
     options: ScrapeTwitterUsersOptions = {}
 ): Promise<ScrapeTwitterUserResult[]> {
     if (!Array.isArray(usernames) || usernames.length === 0) {
@@ -194,22 +200,23 @@ export async function scrapeTwitterUsers(
             throw ScraperErrors.cookieLoadFailed('Failed to load cookies');
         }
 
-        for (const rawUsername of usernames) {
-            // Check if this is a search query object
-            const isSearchMode = typeof rawUsername === 'object' && rawUsername !== null && 'searchQuery' in rawUsername;
-            const searchQuery = isSearchMode ? (rawUsername as any).searchQuery : null;
-            const username = isSearchMode ? 'search' : (rawUsername || 'home');
+        for (const rawIdentifier of usernames) {
+            const isSearchMode = isSearchQueryIdentifier(rawIdentifier);
+            const searchQuery = isSearchMode ? rawIdentifier.searchQuery : null;
+            const timelineUsername = !isSearchMode && typeof rawIdentifier === 'string' ? rawIdentifier : null;
+            const resultIdentifier = isSearchMode ? 'search' : (rawIdentifier ?? 'home');
+            const timelineUsernameValue: string | undefined = timelineUsername ?? undefined;
 
             let runContext: fileUtils.RunContext;
             try {
                 runContext = await fileUtils.createRunContext({
                     platform: 'x',
-                    identifier: searchQuery ? `search_${searchQuery.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30)}` : username,
+                    identifier: searchQuery ? `search_${searchQuery.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30)}` : resultIdentifier,
                     baseOutputDir: options.outputDir,
                     timezone: options.timezone
                 });
             } catch (error: any) {
-                console.error(`Failed to create run context for ${username}: ${error.message}`);
+                console.error(`Failed to create run context for ${resultIdentifier}: ${error.message}`);
                 continue;
             }
 
@@ -222,7 +229,7 @@ export async function scrapeTwitterUsers(
                 
                 let timelineResult: ScrapeTimelineResult;
                 
-                if (shouldUseDeepSearch && (rawUsername || isSearchMode)) {
+                if (shouldUseDeepSearch && (timelineUsername || isSearchMode)) {
                     const today = new Date().toISOString().split('T')[0];
                     // For search queries, use last 6 months; for user timelines, use full history
                     const startDate = isSearchMode ? 
@@ -232,8 +239,10 @@ export async function scrapeTwitterUsers(
                     // Use date-chunked Puppeteer search (newest → oldest time periods)
                     // Automatically stops when target is reached
                     timelineResult = await engine.scrapeSearchByDateChunks({
-                        username: isSearchMode ? undefined : (rawUsername as string),
-                        searchQuery: isSearchMode ? searchQuery : `from:${rawUsername}`,
+                        username: isSearchMode ? undefined : timelineUsernameValue,
+                        searchQuery: isSearchMode
+                            ? searchQuery ?? undefined
+                            : (timelineUsername ? `from:${timelineUsername}` : undefined),
                         dateRange: { start: startDate, end: today },
                         limit: targetCount,
                         withReplies: options.withReplies,
@@ -248,7 +257,7 @@ export async function scrapeTwitterUsers(
                 } else {
                     // Normal timeline scraping (target <= 800 or GraphQL API)
                     timelineResult = await engine.scrapeTimeline({
-                        username: rawUsername || undefined,
+                        username: timelineUsernameValue,
                         limit: targetCount,
                         withReplies: options.withReplies,
                         saveMarkdown: false,
@@ -262,9 +271,9 @@ export async function scrapeTwitterUsers(
                 }
 
                 if (!timelineResult.success) {
-                    console.error(`Scraping timeline failed for ${username}: ${timelineResult.error || 'unknown error'}`);
+                    console.error(`Scraping timeline failed for ${resultIdentifier}: ${timelineResult.error || 'unknown error'}`);
                     results.push({
-                        username,
+                        username: resultIdentifier,
                         tweetCount: 0,
                         tweets: [],
                         profile: timelineResult.profile,
@@ -276,10 +285,10 @@ export async function scrapeTwitterUsers(
                 let combinedTweets: Tweet[] = [...timelineResult.tweets];
 
                 // Optionally scrape likes tab and merge into the same result set
-                if (options.scrapeLikes && rawUsername) {
+                if (options.scrapeLikes && timelineUsername) {
                     try {
                         const likesResult = await engine.scrapeTimeline({
-                            username: rawUsername,
+                            username: timelineUsername,
                             tab: 'likes',
                             limit: options.tweetCount ?? 20,
                             saveMarkdown: false,
@@ -293,7 +302,7 @@ export async function scrapeTwitterUsers(
                         const likedTweets = (likesResult.tweets || []).map(t => ({ ...t, isLiked: true }));
                         combinedTweets = combinedTweets.concat(likedTweets);
                     } catch (likeError: any) {
-                        console.warn(`Failed to scrape likes for ${username}: ${likeError.message}`);
+                        console.warn(`Failed to scrape likes for ${resultIdentifier}: ${likeError.message}`);
                     }
                 }
 
@@ -312,16 +321,16 @@ export async function scrapeTwitterUsers(
                 }
 
                 results.push({
-                    username,
+                    username: resultIdentifier,
                     tweetCount: combinedTweets.length,
                     tweets: combinedTweets,
                     profile: timelineResult.profile,
                     runContext
                 });
             } catch (userError: any) {
-                console.error(`Failed to scrape ${username}: ${userError.message}`);
+                console.error(`Failed to scrape ${resultIdentifier}: ${userError.message}`);
                 results.push({
-                    username,
+                    username: resultIdentifier,
                     tweetCount: 0,
                     tweets: [],
                     runContext

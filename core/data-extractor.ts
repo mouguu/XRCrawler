@@ -5,7 +5,7 @@
 
 import { Page } from 'puppeteer';
 import * as constants from '../config/constants';
-import { Tweet, ProfileInfo, RawTweetData, normalizeRawTweet } from '../types/tweet';
+import { Tweet, ProfileInfo, RawTweetData, normalizeRawTweet } from '../types';
 
 // 重新导出统一类型
 export { Tweet, ProfileInfo, RawTweetData };
@@ -22,7 +22,7 @@ export const X_SELECTORS = {
     MEDIA: '[data-testid="tweetPhoto"], [data-testid="videoPlayer"]'
 };
 
-/** @deprecated 使用 RawTweetData 代替 */
+// 已废弃，使用 RawTweetData
 export type TweetData = RawTweetData;
 
 /**

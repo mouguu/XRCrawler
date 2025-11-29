@@ -5,23 +5,31 @@
  * 专注于抓取Twitter/X账号信息与推文
  */
 
-const path = require('path');
-const fs = require('fs');
-const { Command } = require('commander');
-const scraper = require('./dist/scrape-unified');
-const fileUtils = require('./dist/utils/fileutils');
-const markdownUtils = require('./dist/utils/markdown');
-const aiExportUtils = require('./dist/utils/ai-export');
-const timeUtils = require('./dist/utils/time');
-const readline = require('readline');
-const eventBus = require('./dist/core/event-bus').default;
+import * as path from 'path';
+import * as fs from 'fs';
+import { Command } from 'commander';
+import { spawn, ChildProcess } from 'child_process';
+import * as readline from 'readline';
+import * as scraper from './scrape-unified';
+import type { TwitterUserIdentifier } from './scrape-unified';
+import * as fileUtils from './utils/fileutils';
+import * as markdownUtils from './utils/markdown';
+import * as aiExportUtils from './utils/ai-export';
+import * as timeUtils from './utils/time';
+import { eventBusInstance, ScrapeProgressData, LogMessageData } from './core';
+import { getConfigManager } from './utils';
+
+const configManager = getConfigManager();
+const outputConfig = configManager.getOutputConfig();
+const twitterConfig = configManager.getTwitterConfig();
+const redditConfig = configManager.getRedditConfig();
 
 // Progress Bar Helper
-function monitorProgress(debugMode) {
-  let lastProgress = null;
+function monitorProgress(debugMode: boolean): () => void {
+  let lastProgress: ScrapeProgressData | null = null;
 
-  const updateBar = (current, total, action) => {
-    lastProgress = { current, total, action };
+  const updateBar = (current: number, total: number, action: string): void => {
+    lastProgress = { current, target: total, action };
     const width = 30;
     const percentage = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
     const filled = Math.round((width * percentage) / 100);
@@ -33,11 +41,11 @@ function monitorProgress(debugMode) {
     process.stdout.write(`[${bar}] ${current}/${total} (${percentage}%) | ${action}`);
   };
 
-  const onProgress = (data) => {
+  const onProgress = (data: ScrapeProgressData): void => {
     updateBar(data.current, data.target, data.action);
   };
 
-  const onLog = (data) => {
+  const onLog = (data: LogMessageData): void => {
     // In debug mode, show all logs. Otherwise only show warnings/errors to keep UI clean.
     // However, ScraperEngine emits 'info' logs for important events like "Loaded session".
     // We might want to show those but clear the bar first.
@@ -55,19 +63,17 @@ function monitorProgress(debugMode) {
     }
   };
 
-  eventBus.on('scrape:progress', onProgress);
-  eventBus.on('log:message', onLog);
+  eventBusInstance.on('scrape:progress', onProgress);
+  eventBusInstance.on('log:message', onLog);
 
   return () => {
-    eventBus.off('scrape:progress', onProgress);
-    eventBus.off('log:message', onLog);
+    eventBusInstance.off('scrape:progress', onProgress);
+    eventBusInstance.off('log:message', onLog);
     // Clear the progress bar line one last time
     readline.clearLine(process.stdout, 0);
     readline.cursorTo(process.stdout, 0);
   };
 }
-
-// const mergeUtils = require('./utils/merge');
 
 // 创建命令行程序
 const program = new Command();
@@ -81,31 +87,27 @@ program
 // 通用选项
 program
   .option('-d, --debug', 'Enable debug mode with verbose logs')
-  .option('-o, --output <dir>', 'Output directory', './output')
+  .option('-o, --output <dir>', 'Output directory', outputConfig.baseDir)
   .option('-m, --merge', 'Merge all results into a single file', false)
   .option('--merge-file <filename>', 'Merge file name', 'merged')
   .option('--format <format>', 'Export format: md/json/csv', 'md');
 
-// Twitter命令
 // Reddit Command
 program
   .command('reddit')
   .description('Scrape Reddit content')
   .option('-r, --subreddit <name>', 'Subreddit name', 'UofT')
   .option('-c, --count <number>', 'Number of posts to scrape', '100')
-  .option('-s, --strategy <strategy>', 'Scraping strategy (auto, super_full, super_recent, new)', 'auto')
+  .option('-s, --strategy <strategy>', 'Scraping strategy (auto, super_full, super_recent, new)', redditConfig.defaultStrategy)
   .option('--save-json', 'Save individual JSON files')
-  .action(async (options) => {
+  .action(async (options: any) => {
     console.log(`🚀 Starting Reddit Scraper...`);
     console.log(`r/ ${options.subreddit}`);
     console.log(`📊 Target: ${options.count} posts`);
     console.log(`🎯 Strategy: ${options.strategy}`);
 
-    const { spawn } = require('child_process');
-    const path = require('path');
-    
     const pythonScript = path.join(__dirname, 'platforms/reddit/reddit_cli.py');
-    const python = spawn('python3', [
+    const python: ChildProcess = spawn('python3', [
       pythonScript,
       '--subreddit', options.subreddit,
       '--max_posts', options.count,
@@ -113,7 +115,7 @@ program
       ...(options.saveJson ? ['--save_json'] : [])
     ]);
 
-    python.stdout.on('data', (data) => {
+    python.stdout?.on('data', (data: Buffer) => {
       const output = data.toString();
       // Filter out the JSON result marker for clean logs
       if (!output.includes('__JSON_RESULT__')) {
@@ -139,11 +141,11 @@ program
       }
     });
 
-    python.stderr.on('data', (data) => {
+    python.stderr?.on('data', (data: Buffer) => {
       process.stderr.write(`[PYTHON ERROR] ${data}`);
     });
 
-    python.on('close', (code) => {
+    python.on('close', (code: number | null) => {
       if (code !== 0) {
         console.log(`Python process exited with code ${code}`);
       }
@@ -160,7 +162,7 @@ program
   .option('--thread <tweetUrl>', 'Scrape a specific tweet thread (e.g., https://x.com/username/status/123456)')
   .option('--max-replies <number>', 'Maximum number of replies to scrape for thread mode', '100')
   .option('-f, --file <filepath>', 'File containing Twitter usernames (one per line)')
-  .option('-c, --count <number>', 'Number of tweets to scrape per account', '20')
+  .option('-c, --count <number>', 'Number of tweets to scrape per account', String(twitterConfig.defaultLimit))
   .option('-s, --separate', 'Save each Twitter account separately', false)
   .option('--with-replies', 'Scrape with_replies tab (saved with same logic)', false)
   .option('--likes', 'Also scrape user likes (useful for persona analysis)', false)
@@ -170,8 +172,8 @@ program
   .option('--headless <boolean>', 'Run browser in headless mode', 'true')
   .option('--resume', 'Resume from last saved progress', false)
   .option('--resume-from <tweetId>', 'Resume after the specified tweet ID')
-  .option('--mode <graphql|puppeteer|mixed>', 'Scrape mode', 'graphql')
-  .option('-o, --output <dir>', 'Output directory', './output')
+  .option('--mode <graphql|puppeteer|mixed>', 'Scrape mode', twitterConfig.defaultMode)
+  .option('-o, --output <dir>', 'Output directory', outputConfig.baseDir)
   .option('--timezone <timezone>', 'Timezone for timestamp output (IANA name)')
   .option('-d, --debug', 'Enable debug mode with verbose logs')
   .option('-m, --merge', 'Merge all results into a single file', false)
@@ -179,7 +181,7 @@ program
   .option('--format <format>', 'Export format: md/json/csv', 'md')
   .option('--query <searchQuery>', 'Search query (e.g., "climate change" or "from:username keyword")')
   .option('--session <filename>', 'Cookie file to use (e.g., account2.json)')
-  .action(async (options) => {
+  .action(async (options: any) => {
     try {
       // 验证并初始化选项
       if (!options.username && !options.url && !options.file && !options.home && !options.thread && !options.query) {
@@ -195,7 +197,7 @@ program
         const threadOptions = {
           tweetUrl: options.thread,
           maxReplies: maxReplies,
-          outputDir: path.resolve(options.output || './output'),
+          outputDir: path.resolve(options.output || outputConfig.baseDir),
           timezone: timeUtils.resolveTimezone(options.timezone || timeUtils.getDefaultTimezone()),
           saveMarkdown: true,
           exportJson: !!options.json,
@@ -212,7 +214,7 @@ program
         if (result.success) {
           console.log(`✅ Thread scraping completed!`);
           console.log(`   - Original tweet: ${result.originalTweet ? 'Found' : 'Not found'}`);
-          console.log(`   - Replies scraped: ${result.replyCount}`);
+          console.log(`   - Replies scraped: ${result.replies?.length || 0}`);
           console.log(`   - Total tweets: ${result.tweets.length}`);
           if (result.runContext?.runDir) {
             console.log(`   - Output directory: ${result.runContext.runDir}`);
@@ -233,7 +235,7 @@ program
         console.warn(`Unknown mode "${options.mode}", falling back to "graphql".`);
         scrapeMode = 'graphql';
       }
-      const outputDir = path.resolve(options.output || './output');
+      const outputDir = path.resolve(options.output || outputConfig.baseDir);
       const timezoneInput = options.timezone || timeUtils.getDefaultTimezone();
       const timezone = timeUtils.resolveTimezone(timezoneInput);
 
@@ -249,7 +251,7 @@ program
       console.log(`⏱️ Using timezone: ${timezone}`);
 
       // 辅助函数: 归一化输入为用户名
-      const normalizeToUsername = (input) => {
+      const normalizeToUsername = (input: any): string | null => {
         if (!input) return null;
         const raw = String(input).trim();
         if (!raw) return null;
@@ -276,7 +278,7 @@ program
       };
 
       // 检测是否请求了 with_replies 标签
-      const isWithReplies = (input) => {
+      const isWithReplies = (input: any): boolean => {
         if (!input) return false;
         const raw = String(input).trim().toLowerCase();
         if (!raw) return false;
@@ -293,25 +295,12 @@ program
       };
 
       // 初始化用户列表
-      let usernames = [];
+      let usernames: TwitterUserIdentifier[] = [];
       let withReplies = !!options.withReplies;
 
       // 处理 Home 模式
       if (options.home) {
         console.log('🏠 Home Timeline Mode ENABLED');
-        // 我们使用一个特殊的占位符，scrape-unified.js 会识别它
-        // 但实际上 scrape-unified.js 的 scrapeTwitterUsers 是设计为遍历用户名的
-        // 所以我们需要稍微调整一下调用逻辑，或者把 "home" 当作一个特殊用户处理
-
-        // 让我们看看 scrape-unified.js 的 scrapeTwitterUsers
-        // 它接受一个数组。我们可以传入 [null] 或者 ['home'] 吗？
-        // scrapeTwitterUsers 会用这个名字创建目录。
-
-        // 更好的方式：直接调用 scrapeXFeed 或者构造一个特殊的 username 列表
-        // 但 scrapeTwitterUsers 内部有循环。
-
-        // 让我们修改 scrape-unified.js 来更好地支持 Home，现在先暂时用一个特殊标记
-        // 如果我们传入 null，scrapeTwitter 会默认去 X_HOME_URL
         usernames.push(null);
       }
 
@@ -340,7 +329,7 @@ program
         const lines = fileContent.split('\n');
         usernames = lines
           .map(line => normalizeToUsername(line))
-          .filter(line => line && !String(line).startsWith('#'));
+          .filter((line): line is string => line !== null && !String(line).startsWith('#'));
         // 如果文件里任一行包含 with_replies，则启用
         if (!withReplies) {
           withReplies = lines.some(line => isWithReplies(line));
@@ -397,17 +386,19 @@ program
         for (const result of results) {
           if (result.tweets && result.tweets.length > 0) {
             // 决定使用哪种 Prompt 模板
-            let promptType = 'persona'; // 默认人物画像
+            let promptType: 'persona' | 'feed_analysis' = 'persona'; // 默认人物画像
             if (!options.username && !options.url && !options.file && options.home) {
               promptType = 'feed_analysis'; // 如果是 Home 模式，改为信息流分析
             }
 
-            await aiExportUtils.generatePersonaAnalysis(
-              result.tweets,
-              result.profile,
-              result.runContext,
-              promptType // 传入类型
-            );
+            if (result.runContext) {
+              await aiExportUtils.generatePersonaAnalysis(
+                result.tweets,
+                result.profile || undefined,
+                result.runContext,
+                promptType // 传入类型
+              );
+            }
           }
         }
       }
@@ -418,23 +409,23 @@ program
       if (results && results.length > 0) {
         console.log('\n📊 Scraping results summary:');
         results.forEach(result => {
-          const p = result.profile || {};
-          const meta = [];
-          if (p.displayName) meta.push(`${p.displayName}`);
-          if (typeof p.followers === 'number') meta.push(`Followers: ${p.followers}`);
-          if (typeof p.following === 'number') meta.push(`Following: ${p.following}`);
+          const p = result.profile;
+          const meta: string[] = [];
+          if (p?.displayName) meta.push(`${p.displayName}`);
+          if (typeof p?.followers === 'number') meta.push(`Followers: ${p.followers}`);
+          if (typeof p?.following === 'number') meta.push(`Following: ${p.following}`);
           console.log(`- @${result.username}: ${result.tweetCount} tweets${meta.length ? ' | ' + meta.join(' · ') : ''}`);
         });
 
         const runDirs = results
           .map(result => result.runContext?.runDir)
-          .filter(Boolean);
+          .filter((dir): dir is string => dir !== undefined && dir !== null);
         if (runDirs.length > 0) {
           console.log('\n📂 Output directories:');
           runDirs.forEach(dir => console.log(`- ${dir}`));
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(`❌ Error: ${error.message}`);
       if (options.debug) {
         console.error(error);
@@ -452,7 +443,7 @@ program
   .option('-i, --interval <minutes>', 'Scraping interval (minutes)', '30')
   .option('--headless <boolean>', 'Run browser in headless mode', 'true')
   .option('--timezone <timezone>', 'Timezone for timestamp output (IANA name)')
-  .action(async (options) => {
+  .action(async (options: any) => {
     try {
       // 检查配置文件是否存在
       if (!fs.existsSync(options.config)) {
@@ -509,7 +500,7 @@ program
 
           // 仅抓取Twitter
           if (config.twitter && (config.twitter.usernames || config.twitter.usernameFile)) {
-            let usernames = [];
+            let usernames: string[] = [];
             if (config.twitter.usernames && Array.isArray(config.twitter.usernames)) {
               usernames = config.twitter.usernames;
             } else if (config.twitter.usernameFile && fs.existsSync(config.twitter.usernameFile)) {
@@ -531,7 +522,7 @@ program
           }
 
           console.log(`✅ Scheduled task completed!`);
-        } catch (schedulerError) {
+        } catch (schedulerError: any) {
           console.error(`❌ Scheduled task error: ${schedulerError.message}`);
           if (options.parent.debug) {
             console.error(schedulerError);
@@ -541,14 +532,14 @@ program
       }
 
       // 辅助函数 - 获取格式化日期
-      function getFormattedDate() {
+      function getFormattedDate(): string {
         const today = new Date();
         return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
       }
 
       // 保持进程活跃
       console.log('Scheduler started, press Ctrl+C to exit...');
-    } catch (error) {
+    } catch (error: any) {
       console.error(`❌ Error: ${error.message}`);
       if (options.parent.debug) {
         console.error(error);
@@ -595,7 +586,7 @@ if (require.main === module) {
     .command('monitor')
     .description('Monitor multiple users for new tweets and generate a daily report')
     .requiredOption('-u, --users <users>', 'Comma-separated list of usernames (e.g. elonmusk,trump)')
-    .action(async (options) => {
+    .action(async (options: any) => {
       try {
         // 统一使用编译后的 dist 目录
         const { ScraperEngine } = require('./dist/core/scraper-engine');
@@ -613,13 +604,13 @@ if (require.main === module) {
         }
 
         const monitor = new MonitorService(engine);
-        const usernames = options.users.split(',').map(u => u.trim());
+        const usernames = options.users.split(',').map((u: string) => u.trim());
 
         await monitor.runMonitor(usernames);
 
         await engine.close();
         process.exit(0);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Monitor failed:', error);
         process.exit(1);
       }
@@ -628,4 +619,5 @@ if (require.main === module) {
   program.parse(process.argv);
 }
 
-module.exports = program; 
+export default program;
+

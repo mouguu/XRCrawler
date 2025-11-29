@@ -8,7 +8,7 @@ import {
     X_API_FEATURES_USER_DETAILS
 } from '../config/constants';
 import { ScraperErrors } from './errors';
-import { RetryOnNetworkError, HandleRateLimit } from '../utils/decorators';
+import { RetryOnNetworkError, HandleRateLimit } from '../utils';
 
 export class XApiClient {
     private cookies: Protocol.Network.CookieParam[];

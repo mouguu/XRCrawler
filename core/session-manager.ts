@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { Page, Protocol } from 'puppeteer';
-import { CookieManager } from './cookie-manager';
 import { ScraperEventBus } from './event-bus';
+import { CookieManager, CookieLoadResult } from './cookie-manager';
 
 export interface Session {
     id: string;
@@ -15,23 +15,41 @@ export interface Session {
     username?: string | null;
 }
 
+/**
+ * SessionManager - 解耦重构
+ * 不再内部创建 CookieManager，而是接收 CookieManager 实例或直接使用 cookie 数据
+ */
 export class SessionManager {
     private sessions: Session[] = [];
     private currentSessionIndex: number = 0;
     private maxErrorCount: number = 3;
     private maxConsecutiveFailures: number = 2;
-    private cookieManager: CookieManager;
+    private cookieManager?: CookieManager; // 可选，用于加载 cookies
 
-    constructor(private cookieDir: string = './cookies', private eventBus?: ScraperEventBus) {
-        this.cookieManager = new CookieManager({ cookiesDir: this.cookieDir, enableRotation: false });
+    constructor(
+        private cookieDir: string = './cookies', 
+        private eventBus?: ScraperEventBus,
+        cookieManager?: CookieManager // 可选的 CookieManager 实例
+    ) {
+        // 如果提供了 CookieManager，使用它；否则在需要时创建
+        this.cookieManager = cookieManager;
     }
 
     /**
      * 初始化：加载所有 Cookie 文件
+     * 解耦：可以接收 CookieManager 或直接加载
      */
-    async init(): Promise<void> {
+    async init(cookieManager?: CookieManager): Promise<void> {
+        if (cookieManager) {
+            this.cookieManager = cookieManager;
+        } else if (!this.cookieManager) {
+            // 延迟创建 CookieManager
+            const { CookieManager } = await import('./cookie-manager');
+            this.cookieManager = new CookieManager({ cookiesDir: this.cookieDir, enableRotation: false });
+        }
+
         if (!fs.existsSync(this.cookieDir)) {
-            console.warn(`[SessionManager] Cookie directory not found: ${this.cookieDir}`);
+            this._log(`Cookie directory not found: ${this.cookieDir}`, 'warn');
             return;
         }
 
@@ -40,7 +58,7 @@ export class SessionManager {
         for (const file of files) {
             const filePath = path.join(this.cookieDir, file);
             try {
-                const cookieInfo = await this.cookieManager.loadFromFile(filePath);
+                const cookieInfo = await this.cookieManager!.loadFromFile(filePath);
                 this.sessions.push({
                     id: file.replace('.json', ''),
                     cookies: cookieInfo.cookies,
@@ -56,7 +74,7 @@ export class SessionManager {
             }
         }
 
-        this._log(`[SessionManager] Loaded ${this.sessions.length} sessions.`);
+        this._log(`Loaded ${this.sessions.length} sessions.`);
     }
 
     hasActiveSession(): boolean {

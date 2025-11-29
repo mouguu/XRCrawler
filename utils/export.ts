@@ -7,7 +7,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as fileUtils from './fileutils';
 import { RunContext } from './fileutils';
-import { Tweet } from '../types/tweet';
+import { Tweet } from '../types';
 
 export interface ExportOptions {
   filename?: string;

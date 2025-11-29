@@ -6,7 +6,7 @@ export interface RequestTask {
     id: string;
     url: string;
     uniqueKey: string;
-    type: 'timeline' | 'thread' | 'search' | 'monitor';
+    type: 'timeline' | 'thread' | 'search' | 'monitor' | 'reddit';
     priority: number; // Higher number = higher priority
     retryCount: number;
     payload?: any; // Extra data (e.g. maxTweets, search query)

@@ -1,5 +1,5 @@
 import { Page } from 'puppeteer';
-import * as retryUtils from '../utils/retry';
+import * as retryUtils from '../utils';
 import * as constants from '../config/constants';
 import { X_SELECTORS } from './data-extractor';
 import { ScraperEventBus } from './event-bus';

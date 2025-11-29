@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ScraperEngine } from './scraper-engine';
-import { Tweet } from '../types/tweet';
-import * as fileUtils from '../utils/fileutils';
+import { Tweet } from '../types';
+import * as fileUtils from '../utils';
 import { ScraperEventBus } from './event-bus';
 
 interface MonitorState {

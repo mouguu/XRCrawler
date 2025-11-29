@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { getConfigManager } from '../utils';
 
 function extractProvidedKey(req: Request): string | undefined {
     const headerVal = req.headers['x-api-key'];
@@ -28,5 +29,8 @@ export function createApiKeyMiddleware(apiKey?: string) {
     };
 }
 
-// Default middleware using process.env.API_KEY
-export const apiKeyMiddleware = createApiKeyMiddleware(process.env.API_KEY);
+const configManager = getConfigManager();
+const serverConfig = configManager.getServerConfig();
+
+// Default middleware uses server-level API key if configured
+export const apiKeyMiddleware = createApiKeyMiddleware(serverConfig.apiKey);

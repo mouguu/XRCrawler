@@ -1,6 +1,7 @@
 import * as path from 'path';
 import { Page } from 'puppeteer';
 import { BrowserLaunchOptions, BrowserManager, ProxyConfig } from './browser-manager';
+import { BrowserPool, BrowserPoolOptions, getBrowserPool } from './browser-pool';
 import { CookieManager } from './cookie-manager';
 import { SessionManager, Session } from './session-manager';
 import { ProxyManager } from './proxy-manager';
@@ -12,16 +13,16 @@ import { RateLimitManager } from './rate-limit-manager';
 import { PerformanceMonitor, PerformanceStats } from './performance-monitor';
 import eventBusInstance, { ScraperEventBus } from './event-bus';
 import { ProgressManager } from './progress-manager';
-import { DateUtils } from '../utils/date-utils';
-import * as fileUtils from '../utils/fileutils';
-import { RunContext } from '../utils/fileutils';
-import * as markdownUtils from '../utils/markdown';
-import * as exportUtils from '../utils/export';
-import * as screenshotUtils from '../utils/screenshot';
+import { createDefaultDependencies, ScraperDependencies } from './scraper-dependencies';
+import { DateUtils, RunContext } from '../utils';
+import * as fileUtils from '../utils';
+import * as markdownUtils from '../utils';
+import * as exportUtils from '../utils';
+import * as screenshotUtils from '../utils';
 import * as constants from '../config/constants';
 import { validateScrapeConfig } from '../config/constants';
 import { XApiClient } from './x-api';
-import { ScraperErrors, ScraperError } from './errors';
+import { ScraperErrors, ScraperError, ErrorCode, ErrorClassifier } from './errors';
 import {
     Tweet,
     ProfileInfo,
@@ -32,7 +33,7 @@ import {
     parseTweetsFromInstructions,
     extractNextCursor,
     parseTweetDetailResponse
-} from '../types/tweet';
+} from '../types';
 
 const throttle = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -46,6 +47,12 @@ export interface ScraperEngineOptions {
      * 适用于纯 GraphQL API 模式，节省资源
      */
     apiOnly?: boolean;
+    /** 依赖注入（用于测试和自定义配置） */
+    dependencies?: ScraperDependencies;
+    /** 浏览器池选项（如果提供，将使用浏览器池复用浏览器实例） */
+    browserPoolOptions?: BrowserPoolOptions;
+    /** 浏览器池实例（如果提供，直接使用此实例） */
+    browserPool?: BrowserPool;
 }
 
 export interface ScrapeTimelineConfig {
@@ -112,13 +119,7 @@ export interface ScrapeThreadResult {
 
 export class ScraperEngine {
     private eventBus: ScraperEventBus;
-    private navigationService: NavigationService;
-    private rateLimitManager: RateLimitManager;
-    private sessionManager: SessionManager;
-    private proxyManager: ProxyManager;
-    private errorSnapshotter: ErrorSnapshotter;
-    private fingerprintManager: FingerprintManager;
-    private performanceMonitor: PerformanceMonitor;
+    private deps: ScraperDependencies;
     private lastPerformanceEmit: number = 0;
     private currentSession: Session | null = null;
     private browserManager: BrowserManager | null;
@@ -129,11 +130,24 @@ export class ScraperEngine {
     private preferredSessionId?: string;
     /** 是否为纯 API 模式（不启动浏览器） */
     private apiOnlyMode: boolean;
-    private progressManager: ProgressManager;
     /** 是否允许自动轮换 session（由前端传入） */
     private enableRotation: boolean = true;
+    /** 浏览器池（可选，如果提供则复用浏览器实例） */
+    private browserPool?: BrowserPool;
+    /** 当前使用的浏览器实例（用于池管理） */
+    private pooledBrowser: any = null;
 
     private xApiClient: XApiClient | null = null;
+
+    // 便捷访问器
+    private get navigationService() { return this.deps.navigationService; }
+    private get rateLimitManager() { return this.deps.rateLimitManager; }
+    private get sessionManager() { return this.deps.sessionManager; }
+    private get proxyManager() { return this.deps.proxyManager; }
+    private get errorSnapshotter() { return this.deps.errorSnapshotter; }
+    private get fingerprintManager() { return this.deps.fingerprintManager; }
+    private get performanceMonitor() { return this.deps.performanceMonitor; }
+    private get progressManager() { return this.deps.progressManager; }
 
     /**
      * 检查是否为 API 模式（不启动浏览器）
@@ -171,13 +185,14 @@ export class ScraperEngine {
 
     constructor(shouldStopFunction?: () => boolean, options: ScraperEngineOptions = {}) {
         this.eventBus = options.eventBus || eventBusInstance;
-        this.navigationService = new NavigationService(this.eventBus);
-        this.sessionManager = new SessionManager('./cookies', this.eventBus);
-        this.proxyManager = new ProxyManager();
-        this.rateLimitManager = new RateLimitManager(this.sessionManager, this.eventBus);
-        this.errorSnapshotter = new ErrorSnapshotter();
-        this.fingerprintManager = new FingerprintManager();
-        this.performanceMonitor = new PerformanceMonitor();
+        
+        // 使用依赖注入，解耦依赖创建
+        this.deps = options.dependencies || createDefaultDependencies(
+            this.eventBus,
+            './cookies',
+            './data/progress'
+        );
+        
         this.browserManager = null;
         this.page = null;
         this.stopSignal = false;
@@ -188,7 +203,13 @@ export class ScraperEngine {
         };
         this.preferredSessionId = options.sessionId;
         this.apiOnlyMode = options.apiOnly ?? false;
-        this.progressManager = new ProgressManager('./data/progress', this.eventBus);
+        
+        // 初始化浏览器池（如果提供选项）
+        if (options.browserPool) {
+            this.browserPool = options.browserPool;
+        } else if (options.browserPoolOptions && !this.apiOnlyMode) {
+            this.browserPool = getBrowserPool(options.browserPoolOptions);
+        }
     }
 
     setStopSignal(value: boolean): void {
@@ -249,11 +270,11 @@ export class ScraperEngine {
     }
 
     async init(): Promise<void> {
-        // Initialize SessionManager (needed for both modes)
-        await this.sessionManager.init();
-        
         // Initialize ProxyManager (optional, won't fail if no proxies found)
         await this.proxyManager.init();
+
+        // Initialize SessionManager - 解耦：传递 CookieManager 或让 SessionManager 自己创建
+        await this.sessionManager.init();
 
         // 纯 API 模式：不启动浏览器
         if (this.apiOnlyMode) {
@@ -315,9 +336,19 @@ export class ScraperEngine {
 
         // 4. NOW launch browser with proxy config (if not already launched)
         if (!this.browserManager) {
-            this.browserManager = new BrowserManager();
-            await this.browserManager.init(this.browserOptions);
-            this.eventBus.emitLog('Browser launched and configured');
+            if (this.browserPool) {
+                // 使用浏览器池获取浏览器实例
+                const browser = await this.browserPool.acquire();
+                this.pooledBrowser = browser;
+                this.browserManager = new BrowserManager();
+                this.browserManager.initFromBrowser(browser);
+                this.eventBus.emitLog('Browser acquired from pool');
+            } else {
+                // 传统方式：创建新浏览器
+                this.browserManager = new BrowserManager();
+                await this.browserManager.init(this.browserOptions);
+                this.eventBus.emitLog('Browser launched and configured');
+            }
         }
 
         // 5. Ensure page is created
@@ -349,11 +380,26 @@ export class ScraperEngine {
     private async restartBrowserWithSession(session: Session): Promise<void> {
         this.eventBus.emitLog(`Restarting browser for session ${session.id}...`);
 
-        // 1. Close current browser
-        if (this.browserManager) {
-            await this.browserManager.close();
-            this.browserManager = null;
+        // 1. Close current browser/page
+        if (this.page) {
+            try {
+                await this.page.close();
+            } catch (error) {
+                // 忽略页面关闭错误
+            }
             this.page = null;
+        }
+        
+        if (this.browserManager) {
+            if (this.browserPool && this.pooledBrowser) {
+                // 如果使用浏览器池，释放浏览器
+                this.browserPool.release(this.pooledBrowser);
+                this.pooledBrowser = null;
+            } else {
+                // 传统方式：关闭浏览器
+                await this.browserManager.close();
+            }
+            this.browserManager = null;
         }
 
         // 2. Get proxy for the new session
@@ -375,8 +421,23 @@ export class ScraperEngine {
         this.browserOptions.proxy = proxyConfig;
 
         // 4. Re-initialize browser
-        this.browserManager = new BrowserManager();
-        await this.browserManager.init(this.browserOptions);
+        if (this.browserPool) {
+            // 如果之前使用了池，先释放
+            if (this.pooledBrowser) {
+                this.browserPool.release(this.pooledBrowser);
+                this.pooledBrowser = null;
+            }
+            // 从池中获取新浏览器
+            const browser = await this.browserPool.acquire();
+            this.pooledBrowser = browser;
+            this.browserManager = new BrowserManager();
+            this.browserManager.initFromBrowser(browser);
+            this.eventBus.emitLog('Browser re-acquired from pool');
+        } else {
+            // 传统方式：创建新浏览器
+            this.browserManager = new BrowserManager();
+            await this.browserManager.init(this.browserOptions);
+        }
         
         // 5. Create page and inject session
         await this.ensurePage();
@@ -930,7 +991,10 @@ export class ScraperEngine {
     public async scrapeSearchByDateChunks(config: ScrapeTimelineConfig): Promise<ScrapeTimelineResult> {
         const runContext = config.runContext!;
         if (!config.dateRange || !config.searchQuery) {
-            throw new Error('Date range and search query are required for chunked scraping');
+            throw ScraperErrors.invalidConfiguration(
+                'Date range and search query are required for chunked scraping',
+                { config }
+            );
         }
 
         const ranges = DateUtils.generateDateRanges(config.dateRange.start, config.dateRange.end, 'monthly');
@@ -1171,7 +1235,7 @@ export class ScraperEngine {
             }
 
             if (!navigationSuccess) {
-                throw new Error('Failed to navigate and load tweets after trying all available sessions');
+                throw ScraperErrors.navigationFailed('Failed to navigate and load tweets after trying all available sessions');
             }
 
             // 提取资料信息（如果是用户页面）
@@ -1210,7 +1274,11 @@ export class ScraperEngine {
                     const hasError = /rate limit|something went wrong|try again later|suspended|restricted|blocked/i.test(pageText);
 
                     if (hasError && tweetsOnPage.length === 0) {
-                        throw new Error('Page shows error or rate limit message');
+                        throw ScraperErrors.apiRequestFailed(
+                            'Page shows error or rate limit message',
+                            undefined,
+                            { url: 'https://x.com' }
+                        );
                     }
 
                     let addedCount = 0;
@@ -1920,7 +1988,26 @@ export class ScraperEngine {
 
     async close(): Promise<void> {
         if (this.browserManager) {
-            await this.browserManager.close();
+            if (this.browserPool && this.pooledBrowser) {
+                // 如果使用浏览器池，释放浏览器而不是关闭
+                // 先关闭页面
+                if (this.page) {
+                    try {
+                        await this.page.close();
+                    } catch (error) {
+                        // 忽略页面关闭错误
+                    }
+                    this.page = null;
+                }
+                // 释放浏览器回池中
+                this.browserPool.release(this.pooledBrowser);
+                this.pooledBrowser = null;
+                this.browserManager = null;
+                this.eventBus.emitLog('Browser released to pool');
+            } else {
+                // 传统方式：关闭浏览器
+                await this.browserManager.close();
+            }
         }
     }
 }

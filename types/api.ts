@@ -8,8 +8,9 @@
 // Request Types
 // ============================================================================
 
-export type ScrapeType = "profile" | "thread" | "search";
+export type ScrapeType = "profile" | "thread" | "search" | "reddit";
 export type ScrapeMode = "graphql" | "puppeteer" | "mixed";
+export type RedditStrategy = "auto" | "super_full" | "super_recent" | "new";
 
 export interface DateRange {
   start: string; // ISO date string
@@ -24,6 +25,8 @@ export interface ScrapeRequest {
   mode?: ScrapeMode;
   dateRange?: DateRange;
   enableRotation?: boolean;
+  /** Reddit only: subreddit scraping strategy */
+  strategy?: RedditStrategy;
 }
 
 export interface MonitorRequest {
@@ -113,7 +116,7 @@ export function isScrapeRequest(body: any): body is ScrapeRequest {
   return (
     body &&
     typeof body === "object" &&
-    ["profile", "thread", "search"].includes(body.type) &&
+    ["profile", "thread", "search", "reddit"].includes(body.type) &&
     typeof body.input === "string"
   );
 }

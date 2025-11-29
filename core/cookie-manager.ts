@@ -6,7 +6,7 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { Page, Protocol } from 'puppeteer';
-import * as validation from '../utils/validation';
+import * as validation from '../utils';
 import { ScraperErrors } from './errors';
 
 export interface CookieManagerOptions {
@@ -59,7 +59,7 @@ export class CookieManager {
       try {
         await fs.access(this.cookiesDir);
       } catch {
-        console.warn(`[CookieManager] Cookies directory not found: ${this.cookiesDir}`);
+        // 静默返回空数组
         return [];
       }
 
@@ -69,7 +69,7 @@ export class CookieManager {
         .map(file => path.join(this.cookiesDir, file));
       return [...this.cookieFiles];
     } catch (error: any) {
-      console.warn(`[CookieManager] Failed to scan cookies directory: ${error.message}`);
+      // 静默返回空数组
       return [];
     }
   }
@@ -110,9 +110,6 @@ export class CookieManager {
 
     if (this.enableRotation && this.cookieFiles.length > 1) {
       this.currentCookieIndex = (this.currentCookieIndex + 1) % this.cookieFiles.length;
-      console.log(`[CookieManager] Rotating to cookie file ${this.currentCookieIndex + 1}/${this.cookieFiles.length}: ${path.basename(cookieFile)}`);
-    } else {
-      console.log(`[CookieManager] Using cookie file: ${path.basename(cookieFile)}`);
     }
 
     return cookieFile;
@@ -152,9 +149,7 @@ export class CookieManager {
     this.username = cookieValidation.username || null;
     this.source = sourcePath;
 
-    if (cookieValidation.filteredCount && cookieValidation.filteredCount > 0) {
-      console.log(`[CookieManager] Filtered out ${cookieValidation.filteredCount} expired cookie(s), using ${this.cookies?.length || 0} valid cookies`);
-    }
+    // 移除 console.log，由调用方决定是否记录日志
 
     return {
       cookies: this.cookies || [],

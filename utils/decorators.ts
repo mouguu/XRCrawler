@@ -1,4 +1,4 @@
-import { ScraperErrors } from '../core/errors';
+import { ScraperErrors } from '../core';
 
 /**
  * Decorator to retry a method on network errors or specific exceptions.

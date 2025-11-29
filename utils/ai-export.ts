@@ -1,12 +1,12 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { RunContext } from './fileutils';
-import { Tweet, ProfileInfo } from '../types/tweet';
+import { Tweet, ProfileInfo } from '../types';
 
 type AnalysisType = 'persona' | 'feed_analysis';
 
 const buildSafeOutputPath = (runContext: RunContext | undefined, filename: string): string | null => {
-  const outputDir = runContext?.runDir || (runContext as any)?.outputDir; // fallback for legacy shape
+  const outputDir = runContext?.runDir;
   if (!outputDir) {
     console.error('Error: runContext.runDir is undefined');
     return null;

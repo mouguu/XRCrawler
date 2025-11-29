@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { ErrorNotification } from "./components/ErrorNotification";
@@ -21,6 +21,14 @@ export interface AppError {
   timestamp: Date;
   suggestion?: string;
   canRetry: boolean;
+}
+
+declare global {
+  interface Window {
+    __APP_CONFIG__?: {
+      apiBase?: string;
+    };
+  }
 }
 
 function classifyError(error: any): AppError {
@@ -125,6 +133,7 @@ function App() {
     useState<PerformanceStats | null>(null);
   const [apiKey, setApiKey] = useState<string>(""); // applied key
   const [apiKeyInput, setApiKeyInput] = useState<string>(""); // input buffer
+  const [apiBase, setApiBase] = useState<string>(window.__APP_CONFIG__?.apiBase || "");
 
   // Options
   const [scrapeLikes, setScrapeLikes] = useState(false);
@@ -155,6 +164,19 @@ function App() {
 
   const logEndRef = useRef<HTMLDivElement>(null);
 
+  const withBase = useCallback(
+    (path: string): string => {
+      if (!apiBase) return path;
+      if (/^https?:\/\//i.test(path)) return path;
+      const normalizedBase = apiBase.endsWith("/")
+        ? apiBase.slice(0, -1)
+        : apiBase;
+      const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+      return `${normalizedBase}${normalizedPath}`;
+    },
+    [apiBase]
+  );
+
   // Load saved API key
   useEffect(() => {
     const storedKey = localStorage.getItem("apiKey");
@@ -162,7 +184,31 @@ function App() {
       setApiKey(storedKey);
       setApiKeyInput(storedKey);
     }
+    if (window.__APP_CONFIG__?.apiBase) {
+      setApiBase(window.__APP_CONFIG__?.apiBase);
+    }
   }, []);
+
+  useEffect(() => {
+    if (apiBase) return;
+    const loadConfig = async () => {
+      try {
+        const response = await fetch("/api/config");
+        if (!response.ok) return;
+        const data = await response.json();
+        if (data?.apiBase) {
+          setApiBase(data.apiBase);
+          window.__APP_CONFIG__ = {
+            ...window.__APP_CONFIG__,
+            apiBase: data.apiBase,
+          };
+        }
+      } catch (error) {
+        console.warn("Failed to fetch server config", error);
+      }
+    };
+    loadConfig();
+  }, [apiBase]);
 
   // Persist API key
   useEffect(() => {
@@ -178,7 +224,7 @@ function App() {
       ? `/api/progress?api_key=${encodeURIComponent(apiKey)}`
       : "/api/progress";
 
-    const eventSource = new EventSource(url);
+    const eventSource = new EventSource(withBase(url));
 
     const handleLog = (event: MessageEvent) => {
       const data = JSON.parse(event.data);
@@ -218,7 +264,7 @@ function App() {
       eventSource.removeEventListener("performance", handlePerformance);
       eventSource.close();
     };
-  }, [apiKey]);
+  }, [apiKey, withBase]);
 
   // Auto-scroll removed as per user request
   // useEffect(() => {
@@ -227,10 +273,13 @@ function App() {
 
   const appendApiKey = (url: string | null): string | null => {
     if (!url) return null;
-    if (!apiKey) return url;
-    const hasQuery = url.includes("?");
-    const separator = hasQuery ? "&" : "?";
-    return `${url}${separator}api_key=${encodeURIComponent(apiKey)}`;
+    let finalUrl = url;
+    if (apiKey) {
+      const hasQuery = url.includes("?");
+      const separator = hasQuery ? "&" : "?";
+      finalUrl = `${url}${separator}api_key=${encodeURIComponent(apiKey)}`;
+    }
+    return withBase(finalUrl);
   };
 
   const buildHeaders = (hasBody: boolean = false) => {
@@ -248,7 +297,7 @@ function App() {
   useEffect(() => {
     const checkStatus = async () => {
       try {
-        const res = await fetch("/api/status", { headers: buildHeaders() });
+        const res = await fetch(withBase("/api/status"), { headers: buildHeaders() });
         const data = await res.json();
         if (data.isActive) {
           setIsScraping(true);
@@ -258,7 +307,7 @@ function App() {
       }
     };
     checkStatus();
-  }, [apiKey]);
+  }, [apiKey, withBase]);
 
   const applyApiKey = () => {
     setApiKey(apiKeyInput.trim());
@@ -316,7 +365,7 @@ function App() {
         };
       }
 
-      const response = await fetch(endpoint, {
+      const response = await fetch(withBase(endpoint), {
         method: "POST",
         headers: buildHeaders(true),
         body: JSON.stringify(body),
@@ -348,13 +397,13 @@ function App() {
   };
 
   const handleStop = async () => {
-    await fetch("/api/stop", { method: "POST", headers: buildHeaders() });
+    await fetch(withBase("/api/stop"), { method: "POST", headers: buildHeaders() });
     setLogs((prev) => [...prev, `🛑 Stop signal sent...`]);
 
     // Poll for result after stopping
     const pollInterval = setInterval(async () => {
       try {
-        const response = await fetch("/api/result", {
+        const response = await fetch(withBase("/api/result"), {
           headers: buildHeaders(),
         });
         const data = await response.json();

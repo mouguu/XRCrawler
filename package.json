@@ -2,12 +2,12 @@
   "name": "social-media-crawler",
   "version": "1.0.0",
   "description": "A tool to scrape Twitter/X content",
-  "main": "cli.js",
+  "main": "dist/cli.js",
   "scripts": {
-    "start": "node cli.js",
-    "examples": "node cli.js examples",
-    "twitter": "node cli.js twitter",
-    "schedule": "node cli.js schedule -c crawler-config.json -i 60",
+    "start": "node dist/cli.js",
+    "examples": "node dist/cli.js examples",
+    "twitter": "node dist/cli.js twitter",
+    "schedule": "node dist/cli.js schedule -c crawler-config.json -i 60",
     "test": "jest",
     "dev:server": "ts-node server.ts",
     "dev:server:watch": "nodemon --watch . --ext ts --ignore frontend --ignore public --exec ts-node server.ts",
@@ -45,7 +45,7 @@
     "winston": "^3.18.3"
   },
   "bin": {
-    "twitter-crawler": "./cli.js"
+    "twitter-crawler": "./dist/cli.js"
   },
   "devDependencies": {
     "@types/express": "^5.0.5",

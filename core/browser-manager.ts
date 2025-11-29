@@ -40,6 +40,13 @@ export class BrowserManager {
     }
 
     /**
+     * 从外部 Browser 实例初始化（用于浏览器池）
+     */
+    initFromBrowser(browser: Browser): void {
+        this.browser = browser;
+    }
+
+    /**
      * 启动浏览器 (Renamed from launch to match ScraperEngine usage)
      */
     async init(options: BrowserLaunchOptions = {}): Promise<void> {

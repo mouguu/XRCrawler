@@ -1,11 +1,13 @@
 /**
  * File utilities and run directory helpers for Twitter Crawler
  * 统一管理输出结构与目录创建
+ * 重构：使用 OutputPathManager 统一管理路径
  */
 
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as timeUtils from './time';
+import { getOutputPathManager } from './output-path-manager';
 
 const DEFAULT_OUTPUT_ROOT = path.resolve(process.cwd(), 'output');
 
@@ -29,24 +31,25 @@ export function sanitizeSegment(segment: string = ''): string {
  */
 export async function ensureDirExists(dir: string): Promise<boolean> {
   if (!dir) {
-    console.error('ensureDirExists requires directory path');
     return false;
   }
   try {
     await fs.mkdir(dir, { recursive: true });
     return true;
   } catch (error: any) {
-    console.error(`Failed to create directory: ${dir}`, error.message);
+    // 静默失败，由调用方处理错误
     return false;
   }
 }
 
 /**
  * 确保基础输出目录存在
+ * 重构：使用 OutputPathManager
  */
 export async function ensureBaseStructure(): Promise<boolean> {
-  await ensureDirExists(DEFAULT_OUTPUT_ROOT);
-  return true;
+  const pathManager = getOutputPathManager();
+  const baseDir = pathManager.getBaseDir();
+  return await ensureDirExists(baseDir);
 }
 
 /**
@@ -57,7 +60,13 @@ export async function ensureDirectories(): Promise<boolean> {
 }
 
 export function getDefaultOutputRoot(): string {
-  return DEFAULT_OUTPUT_ROOT;
+  // 使用 OutputPathManager 获取统一的基础目录
+  try {
+    const pathManager = getOutputPathManager();
+    return pathManager.getBaseDir();
+  } catch {
+    return DEFAULT_OUTPUT_ROOT;
+  }
 }
 
 export interface RunContextOptions {
@@ -88,10 +97,9 @@ export interface RunContext {
 
 /**
  * 创建一次抓取任务的运行目录上下文
+ * 重构：使用 OutputPathManager 统一管理
  */
 export async function createRunContext(options: RunContextOptions = {}): Promise<RunContext> {
-  await ensureBaseStructure();
-
   const platform = sanitizeSegment(options.platform || DEFAULT_PLATFORM);
   const identifier = sanitizeSegment(options.identifier || DEFAULT_IDENTIFIER);
   const timezone = timeUtils.resolveTimezone(options.timezone);
@@ -101,8 +109,6 @@ export async function createRunContext(options: RunContextOptions = {}): Promise
     const overrideDate = new Date(options.timestamp);
     if (!Number.isNaN(overrideDate.getTime())) {
       sourceDate = overrideDate;
-    } else {
-      console.warn(`[fileutils] Invalid timestamp override "${options.timestamp}", using current time instead.`);
     }
   }
 
@@ -116,40 +122,29 @@ export async function createRunContext(options: RunContextOptions = {}): Promise
   const runTimestampUtc = sourceDate.toISOString();
   const runId = `run-${runTimestamp}`;
 
-  const outputRoot = options.baseOutputDir
-    ? path.resolve(options.baseOutputDir)
-    : DEFAULT_OUTPUT_ROOT;
-
-  const platformDir = path.join(outputRoot, platform);
-  const subjectDir = path.join(platformDir, identifier);
-  const runDir = path.join(subjectDir, runId);
-  const markdownDir = path.join(runDir, 'markdown');
-  const screenshotDir = path.join(runDir, 'screenshots');
-
-  await Promise.all([
-    ensureDirExists(platformDir),
-    ensureDirExists(subjectDir),
-    ensureDirExists(runDir),
-    ensureDirExists(markdownDir),
-    ensureDirExists(screenshotDir)
-  ]);
+  // 使用 OutputPathManager 统一管理路径
+  const pathManager = getOutputPathManager({
+    baseDir: options.baseOutputDir
+  });
+  
+  const runPath = await pathManager.createRunPath(platform, identifier, runId);
 
   return {
-    platform,
-    identifier,
-    outputRoot,
-    runId,
+    platform: runPath.platform,
+    identifier: runPath.identifier,
+    outputRoot: pathManager.getBaseDir(),
+    runId: runPath.runId,
     timezone,
     runTimestamp,
     runTimestampIso,
     runTimestampUtc,
-    runDir,
-    markdownDir,
-    screenshotDir,
-    jsonPath: path.join(runDir, 'tweets.json'),
-    csvPath: path.join(runDir, 'tweets.csv'),
-    markdownIndexPath: path.join(runDir, 'index.md'),
-    metadataPath: path.join(runDir, 'metadata.json')
+    runDir: runPath.runDir,
+    markdownDir: runPath.markdownDir,
+    screenshotDir: runPath.screenshotDir,
+    jsonPath: runPath.jsonPath,
+    csvPath: runPath.csvPath,
+    markdownIndexPath: runPath.markdownIndexPath,
+    metadataPath: runPath.metadataPath
   };
 }
 
@@ -165,7 +160,6 @@ export function getTodayString(): string {
  */
 export async function getMarkdownFiles(dir: string): Promise<string[]> {
   if (!dir) {
-    console.error('getMarkdownFiles requires directory path');
     return [];
   }
   try {
@@ -174,11 +168,7 @@ export async function getMarkdownFiles(dir: string): Promise<string[]> {
       .filter(file => file.endsWith('.md') && !file.startsWith('merged-') && !file.startsWith('digest-'))
       .map(file => path.join(dir, file));
   } catch (error: any) {
-    if (error.code === 'ENOENT') {
-      console.warn(`Directory does not exist, cannot read Markdown files: ${dir}`);
-      return [];
-    }
-    console.error(`Failed to read Markdown files (${dir}):`, error.message);
+    // 静默返回空数组，由调用方处理
     return [];
   }
 }

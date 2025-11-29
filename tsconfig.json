@@ -17,7 +17,8 @@
         "middleware/**/*",
         "tests/**/*",
         "server.ts",
-        "scrape-unified.ts"
+        "scrape-unified.ts",
+        "cli.ts"
     ],
     "exclude": [
         "node_modules",
