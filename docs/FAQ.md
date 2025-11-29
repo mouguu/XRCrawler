@@ -172,19 +172,22 @@ The Monitor Service tracks multiple Twitter users for new tweets:
 
 ### How do I monitor users?
 
-Via CLI:
+Via CLI (basic monitoring only):
 
 ```bash
-node dist/cli.js monitor -u user1,user2 --keywords "AI,space"
+node dist/cli.js monitor -u user1,user2
 ```
 
-Via API:
+Via API (supports keywords and lookback hours):
 
 ```bash
 curl -X POST http://localhost:5001/api/monitor \
   -H "Content-Type: application/json" \
-  -d '{"usernames": ["user1", "user2"], "keywords": ["AI"]}'
+  -H "X-API-Key: your-api-key" \
+  -d '{"users": ["user1", "user2"], "keywords": "AI,space", "lookbackHours": 24}'
 ```
+
+**Note**: The CLI monitor command currently only supports basic monitoring. For keyword filtering and lookback hours, use the API or Web Interface.
 
 ## Output Questions
 

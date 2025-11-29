@@ -120,13 +120,9 @@ Track multiple users for new tweets and generate daily reports:
 ```bash
 # Monitor users for new tweets
 node dist/cli.js monitor -u elonmusk,trump,billgates
-
-# Monitor with keyword filtering
-node dist/cli.js monitor -u elonmusk --keywords "AI,space,tesla"
-
-# Monitor with lookback hours
-node dist/cli.js monitor -u elonmusk --lookback-hours 24
 ```
+
+**Note**: The CLI monitor command currently only supports basic monitoring. For keyword filtering and lookback hours, use the [Web Interface](./WEB_INTERFACE.md) or [API](./API_REFERENCE.md) endpoints which support these advanced features.
 
 ## Reddit Commands
 
@@ -138,6 +134,9 @@ node dist/cli.js reddit -r UofT -c 100
 
 # Deep scrape with specific strategy
 node dist/cli.js reddit -r AskReddit -c 500 -s super_full
+
+# Save individual JSON files
+node dist/cli.js reddit -r AskReddit -c 100 --save-json
 
 # Available strategies: auto, super_full, super_recent, new
 ```
@@ -158,23 +157,38 @@ curl -X POST http://127.0.0.1:5002/api/scrape/post \
 
 ### Common Options
 
+**User Identification:**
 - `-u, --username <username>` - Twitter username (without @)
 - `-U, --url <url>` - Twitter profile URL
+- `-f, --file <path>` - Batch process from file (one username/URL per line)
+- `--session <filename>` - Use specific cookie file (e.g., account1.json)
+
+**Scraping Configuration:**
 - `-c, --count <number>` - Number of tweets to scrape
-- `--mode <mode>` - Scraping mode: `graphql`, `puppeteer`, or `mixed`
+- `--mode <mode>` - Scraping mode: `graphql` (API, fast, <800 tweets), `puppeteer` (browser, unlimited), or `mixed` (auto-switch)
 - `--resume` - Resume from last checkpoint
 - `--resume-from <tweetId>` - Resume from specific tweet ID
-- `--session <filename>` - Use specific cookie file
-- `-f, --file <path>` - Batch process from file
-- `--merge` - Merge batch results into one file
-- `--separate` - Save batch results separately
-- `--persona` - Generate AI persona analysis
 - `--with-replies` - Include replies in timeline
 - `--likes` - Scrape liked tweets
-- `--home` - Scrape home timeline
-- `--thread <url>` - Scrape thread
-- `--max-replies <number>` - Max replies for thread
-- `--query <query>` - Search query
+- `--home` - Scrape home timeline (For You / Following)
+- `--thread <url>` - Scrape a specific tweet thread
+- `--max-replies <number>` - Max replies for thread mode (default: 100)
+- `--query <query>` - Search query (e.g., "climate change" or "from:username keyword")
+
+**Output Options:**
+- `-o, --output <dir>` - Output directory (default: from config)
+- `-m, --merge` - Merge batch results into one file
+- `--merge-file <filename>` - Merge file name (default: 'merged')
+- `-s, --separate` - Save batch results separately (each account in its own file)
+- `--format <format>` - Export format: `md` (default), `json`, or `csv`
+- `--json` - Additionally export as JSON (consolidated into one file)
+- `--csv` - Additionally export as CSV (consolidated into one file)
+- `--timezone <timezone>` - Timezone for timestamp output (IANA name, e.g., 'America/New_York')
+
+**Advanced Options:**
+- `--persona` - Generate AI persona analysis (auto-enables with-replies, increases count to 100)
+- `--headless <boolean>` - Run browser in headless mode (default: from config)
+- `-d, --debug` - Enable debug mode with verbose logs
 
 ### Full CLI Help
 

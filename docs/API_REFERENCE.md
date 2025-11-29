@@ -1,6 +1,6 @@
 # API Reference
 
-Complete REST API documentation for XRCrawler.
+REST API documentation for XRCrawler.
 
 ## Base URL
 
@@ -9,366 +9,79 @@ Complete REST API documentation for XRCrawler.
 
 ## Authentication
 
-If `API_KEY` is set in environment variables, all `/api/*` endpoints require authentication:
-
-- **Header**: `X-API-Key: your-api-key`
-- **Query Parameter**: `?api_key=your-api-key`
+If `API_KEY` is set, all `/api/*` endpoints require authentication via header `X-API-Key` or query parameter `api_key`.
 
 ## Endpoints
 
-### Scraping & Monitoring
+### Scraping
 
-#### Start Scraping Task
+**POST /api/scrape** - Start scraping task
 
-```http
-POST /api/scrape
-Content-Type: application/json
-```
-
-**Request Body**:
+Request:
 
 ```json
 {
-  "taskType": "profile" | "thread" | "search" | "reddit",
-  "target": "username or URL",
-  "options": {
-    "scrapeMode": "graphql" | "puppeteer" | "mixed",
-    "tweetCount": 100,
-    "dateRange": {
-      "start": "2024-01-01",
-      "end": "2024-12-31"
-    },
-    "includeReplies": false,
-    "persona": false,
-    "maxReplies": 100
-  }
+  "type": "profile" | "thread" | "search" | "reddit",
+  "input": "username or URL",
+  "limit": 100,
+  "mode": "graphql" | "puppeteer" | "mixed",
+  "dateRange": { "start": "2024-01-01", "end": "2024-12-31" },
+  "likes": false,
+  "enableRotation": true,
+  "strategy": "auto" | "super_full" | "super_recent" | "new"  // Reddit only
 }
 ```
 
-**Response**:
+Response: `{ "success": true, "downloadUrl": "/api/download?path=...", "stats": { "count": 100 } }`
 
-```json
-{
-  "success": true,
-  "taskId": "task-123",
-  "message": "Scraping started"
-}
-```
+**POST /api/monitor** - Start monitoring
 
-#### Start Monitoring
+Request: `{ "users": ["user1"], "keywords": "AI,space", "lookbackHours": 24, "enableRotation": true }`
 
-```http
-POST /api/monitor
-Content-Type: application/json
-```
+Response: `{ "success": true, "downloadUrl": "/api/download?path=..." }`
 
-**Request Body**:
+**POST /api/stop** - Stop current task
 
-```json
-{
-  "usernames": ["user1", "user2"],
-  "keywords": ["AI", "space"],
-  "lookbackHours": 24
-}
-```
+Response: `{ "success": true, "message": "Stop signal sent..." }`
 
-**Response**:
+### Status & Progress
 
-```json
-{
-  "success": true,
-  "taskId": "monitor-123",
-  "message": "Monitoring started"
-}
-```
+**GET /api/progress** - Server-Sent Events stream for real-time progress updates
 
-#### Stop Current Task
+**GET /api/status** - Get current scraping status
 
-```http
-POST /api/stop
-```
+Response: `{ "isActive": true, "shouldStop": false }`
 
-**Response**:
+**GET /api/result** - Get result after scraping completes
 
-```json
-{
-  "success": true,
-  "message": "Task stopped"
-}
-```
-
-### Progress & Status
-
-#### Get Progress Stream (SSE)
-
-```http
-GET /api/progress
-```
-
-Server-Sent Events stream with real-time updates:
-
-```
-event: progress
-data: {"progress": 50, "total": 100, "status": "scraping"}
-
-event: log
-data: {"level": "info", "message": "Scraped 50 tweets"}
-
-event: error
-data: {"error": "Rate limit exceeded"}
-```
-
-#### Get Current Status
-
-```http
-GET /api/status
-```
-
-**Response**:
-
-```json
-{
-  "isRunning": true,
-  "taskId": "task-123",
-  "progress": 50,
-  "total": 100,
-  "status": "scraping"
-}
-```
-
-#### Get Result
-
-```http
-GET /api/result
-```
-
-**Response**:
-
-```json
-{
-  "success": true,
-  "result": {
-    "markdownPath": "/output/x/username/run-123/index.md",
-    "jsonPath": "/output/x/username/run-123/tweets.json",
-    "metadataPath": "/output/x/username/run-123/metadata.json"
-  }
-}
-```
+Response: `{ "isActive": false, "downloadUrl": "/api/download?path=..." }`
 
 ### Metrics & Health
 
-#### Get Detailed Metrics
+**GET /api/metrics** - Get detailed metrics (speed, success rate, memory, etc.)
 
-```http
-GET /api/metrics
-```
+**GET /api/metrics/summary** - Get metrics summary
 
-**Response**:
-
-```json
-{
-  "scrapingSpeed": 2.5,
-  "successRate": 0.95,
-  "sessionRotations": 3,
-  "memoryUsage": 512,
-  "cpuUsage": 25.5,
-  "totalTweets": 1000,
-  "errors": 5
-}
-```
-
-#### Get Metrics Summary
-
-```http
-GET /api/metrics/summary
-```
-
-**Response**:
-
-```json
-{
-  "speed": "2.5 tweets/sec",
-  "successRate": "95%",
-  "rotations": 3
-}
-```
-
-#### Health Check
-
-```http
-GET /api/health
-```
-
-**Response**:
-
-```json
-{
-  "status": "healthy",
-  "version": "1.0.0",
-  "uptime": 3600,
-  "system": {
-    "node": "18.0.0",
-    "platform": "linux"
-  }
-}
-```
+**GET /api/health** - Health check (status, uptime, memory, active tasks)
 
 ### Session Management
 
-#### List Sessions
+**GET /api/sessions** - List available cookie sessions
 
-```http
-GET /api/sessions
-```
+Response: `{ "success": true, "sessions": [{ "filename": "account1.json", "valid": true, "username": "user1" }] }`
 
-**Response**:
+**POST /api/cookies** - Upload cookie file (multipart/form-data, field: `file`)
 
-```json
-{
-  "sessions": [
-    {
-      "filename": "account1.json",
-      "valid": true,
-      "username": "user1"
-    },
-    {
-      "filename": "account2.json",
-      "valid": true,
-      "username": "user2"
-    }
-  ]
-}
-```
-
-#### Upload Cookie File
-
-```http
-POST /api/cookies
-Content-Type: multipart/form-data
-```
-
-**Form Data**:
-- `file`: Cookie JSON file
-
-**Response**:
-
-```json
-{
-  "success": true,
-  "filename": "account1.json",
-  "message": "Cookie file uploaded and validated"
-}
-```
+Response: `{ "success": true, "filename": "account1.json" }`
 
 ### Configuration & Downloads
 
-#### Get Public Configuration
+**GET /api/config** - Get public configuration
 
-```http
-GET /api/config
-```
-
-**Response**:
-
-```json
-{
-  "apiKeyRequired": true,
-  "redditApiUrl": "http://127.0.0.1:5002",
-  "outputDir": "./output"
-}
-```
-
-#### Download Result
-
-```http
-GET /api/download?path=/output/x/username/run-123/index.md
-```
-
-Downloads the file at the specified path (validated for security).
+**GET /api/download?path=...** - Download result file (path validated for security)
 
 ## Error Responses
 
-All endpoints may return error responses:
+All endpoints return `{ "success": false, "error": "Error message", "code": "ERROR_CODE" }` on error.
 
-```json
-{
-  "success": false,
-  "error": "Error message",
-  "code": "ERROR_CODE"
-}
-```
-
-**Common Error Codes**:
-- `AUTH_REQUIRED`: API key required
-- `INVALID_API_KEY`: Invalid API key
-- `TASK_RUNNING`: Another task is already running
-- `INVALID_SESSION`: Invalid cookie file
-- `RATE_LIMITED`: Rate limit exceeded
-- `INVALID_PATH`: Invalid file path (security)
-
-## Example Usage
-
-### cURL Examples
-
-**Start Scraping**:
-
-```bash
-curl -X POST http://localhost:5001/api/scrape \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: your-api-key" \
-  -d '{
-    "taskType": "profile",
-    "target": "elonmusk",
-    "options": {
-      "scrapeMode": "mixed",
-      "tweetCount": 100
-    }
-  }'
-```
-
-**Get Progress**:
-
-```bash
-curl -N http://localhost:5001/api/progress \
-  -H "X-API-Key: your-api-key"
-```
-
-**Upload Cookie**:
-
-```bash
-curl -X POST http://localhost:5001/api/cookies \
-  -H "X-API-Key: your-api-key" \
-  -F "file=@cookies/account1.json"
-```
-
-### JavaScript Example
-
-```javascript
-// Start scraping
-const response = await fetch('http://localhost:5001/api/scrape', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'X-API-Key': 'your-api-key'
-  },
-  body: JSON.stringify({
-    taskType: 'profile',
-    target: 'elonmusk',
-    options: {
-      scrapeMode: 'mixed',
-      tweetCount: 100
-    }
-  })
-});
-
-const data = await response.json();
-console.log(data);
-
-// Listen to progress
-const eventSource = new EventSource('http://localhost:5001/api/progress?api_key=your-api-key');
-eventSource.addEventListener('progress', (e) => {
-  const progress = JSON.parse(e.data);
-  console.log('Progress:', progress);
-});
-```
-
+Common error codes: `AUTH_REQUIRED`, `INVALID_API_KEY`, `TASK_RUNNING`, `INVALID_SESSION`, `RATE_LIMITED`, `INVALID_PATH`
