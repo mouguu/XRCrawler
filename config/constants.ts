@@ -84,6 +84,93 @@ export const REFRESH_RETRY_CONFIG = {
     baseDelay: 2000
 };
 
+// ==================== 错误恢复配置 ====================
+
+/**
+ * 错误页面恢复配置
+ */
+export const ERROR_RECOVERY_CONFIG = {
+    /**
+     * 最大重试次数（尝试点击 "Try Again" 按钮）
+     */
+    maxRetries: 2,
+    
+    /**
+     * 点击按钮后初始等待时间（毫秒）
+     */
+    initialWaitAfterClick: 3000,
+    
+    /**
+     * 每次重试递增的等待时间（毫秒）
+     */
+    retryWaitIncrement: 1000,
+    
+    /**
+     * 重试之间的等待时间（毫秒）
+     */
+    retryInterval: 1000,
+    
+    /**
+     * 自动恢复检测等待时间（毫秒）- 即使没有找到按钮也等待看看是否自动恢复
+     */
+    autoRecoveryWait: 2000
+};
+
+/**
+ * Chunk 重试配置
+ */
+export const CHUNK_RETRY_CONFIG = {
+    /**
+     * 每个 chunk 的最大重试次数（带 session 轮换）
+     */
+    maxChunkRetries: 3,
+    
+    /**
+     * 全局重试阶段的最大重试次数
+     */
+    maxGlobalRetries: 2,
+    
+    /**
+     * Chunk 重试前的延迟基础时间（毫秒）
+     */
+    chunkRetryDelayBase: 500,
+    
+    /**
+     * Chunk 重试延迟的随机抖动（毫秒）
+     */
+    chunkRetryDelayJitter: 500
+};
+
+/**
+ * 滚动配置
+ */
+export const SCROLL_CONFIG = {
+    /**
+     * 智能滚动的默认超时时间（毫秒）
+     */
+    smartScrollTimeout: 5000,
+    
+    /**
+     * 等待新推文的默认超时时间（毫秒）
+     */
+    waitForNewTweetsTimeout: 3000,
+    
+    /**
+     * 网络稳定性检查间隔（毫秒）
+     */
+    networkStabilityCheckInterval: 200,
+    
+    /**
+     * 需要的连续稳定检查次数
+     */
+    requiredStableIntervals: 2,
+    
+    /**
+     * 点击 "Show more" 按钮后的等待时间（毫秒）
+     */
+    showMoreButtonWait: 2000
+};
+
 // ==================== 爬取策略配置 ====================
 
 /**

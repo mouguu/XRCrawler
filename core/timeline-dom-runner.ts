@@ -150,7 +150,7 @@ export async function runTimelineDom(engine: ScraperEngine, config: ScrapeTimeli
 
             try {
                 engine.performanceMonitor.startPhase('extraction');
-                const tweetsOnPage = await dataExtractor.extractTweetsFromPage(engine.getPageInstance()!);
+                let tweetsOnPage = await dataExtractor.extractTweetsFromPage(engine.getPageInstance()!);
                 engine.performanceMonitor.endPhase();
 
                 // 检查页面是否显示错误或限制（如 "Something went wrong", "Rate limit" 等）
@@ -158,11 +158,36 @@ export async function runTimelineDom(engine: ScraperEngine, config: ScrapeTimeli
                 const hasError = /rate limit|something went wrong|try again later|suspended|restricted|blocked/i.test(pageText);
 
                 if (hasError && tweetsOnPage.length === 0) {
-                    throw ScraperErrors.apiRequestFailed(
-                        'Page shows error or rate limit message',
-                        undefined,
-                        { url: 'https://x.com' }
+                    // 尝试从错误页面恢复：自动点击 "Try Again" 按钮
+                    engine.eventBus.emitLog(
+                        'Error page detected. Attempting to recover by clicking "Try Again" button...',
+                        'warn'
                     );
+                    
+                    const recovered = await dataExtractor.recoverFromErrorPage(engine.getPageInstance()!, 2);
+                    
+                    if (recovered) {
+                        engine.eventBus.emitLog(
+                            'Successfully recovered from error page. Re-extracting tweets...',
+                            'info'
+                        );
+                        // 重新提取推文
+                        await throttle(2000); // 等待页面加载
+                        tweetsOnPage = await dataExtractor.extractTweetsFromPage(engine.getPageInstance()!);
+                        if (tweetsOnPage.length > 0) {
+                            engine.eventBus.emitLog(`Recovery successful: found ${tweetsOnPage.length} tweets after retry.`);
+                        } else {
+                            // 恢复后仍然没有推文，可能是真的没有内容
+                            engine.eventBus.emitLog('Recovery successful but no tweets found. This may be normal.', 'info');
+                        }
+                    } else {
+                        // 恢复失败，抛出异常
+                        throw ScraperErrors.apiRequestFailed(
+                            'Page shows error or rate limit message and recovery failed',
+                            undefined,
+                            { url: 'https://x.com' }
+                        );
+                    }
                 }
 
                 let addedCount = 0;

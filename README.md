@@ -1,10 +1,27 @@
 # XRCrawler
 
-A powerful, multi-platform tool to scrape, archive, and analyze content from Twitter/X and Reddit. Designed for researchers, archivists, and AI developers.
+<div align="center">
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Node](https://img.shields.io/badge/node-%3E%3D18-green.svg)
-![TypeScript](https://img.shields.io/badge/typescript-%5E5.0-blue)
+**AI-powered social media crawler that bypasses Twitter's 800-tweet limit. Built by a non-coder using 100% AI-generated code.**
+
+[![GitHub stars](https://img.shields.io/github/stars/mouguu/XRCrawler?style=social)](https://github.com/mouguu/XRCrawler/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/mouguu/XRCrawler?style=social)](https://github.com/mouguu/XRCrawler/network/members)
+[![GitHub issues](https://img.shields.io/github/issues/mouguu/XRCrawler)](https://github.com/mouguu/XRCrawler/issues)
+[![GitHub license](https://img.shields.io/github/license/mouguu/XRCrawler)](https://github.com/mouguu/XRCrawler/blob/main/LICENSE)
+[![Node version](https://img.shields.io/badge/node-%3E%3D18-green.svg)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/typescript-%5E5.0-blue)](https://www.typescriptlang.org/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
+[![Tests](https://img.shields.io/badge/tests-356%20passed-brightgreen)](https://github.com/mouguu/XRCrawler/actions)
+
+**Features deep search, multi-account rotation, and zero data gaps.**
+
+[Features](#-features) • [Installation](#-installation) • [Quick Start](#-web-interface) • [Documentation](#-technical-architecture) • [Contributing](./CONTRIBUTING.md)
+
+</div>
+
+---
+
+A powerful, multi-platform tool to scrape, archive, and analyze content from Twitter/X and Reddit. Designed for researchers, archivists, and AI developers.
 
 ## 🚀 Features
 

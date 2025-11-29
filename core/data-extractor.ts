@@ -5,6 +5,7 @@
 
 import { Page } from 'puppeteer';
 import * as constants from '../config/constants';
+import { ERROR_RECOVERY_CONFIG, SCROLL_CONFIG } from '../config/constants';
 import { Tweet, ProfileInfo, RawTweetData, normalizeRawTweet } from '../types';
 
 // 重新导出统一类型
@@ -236,7 +237,7 @@ export async function extractTweetsFromPage(page: Page): Promise<RawTweetData[]>
 /**
  * 检查页面上推文数量是否增长
  */
-export async function waitForNewTweets(page: Page, previousCount: number, timeout: number = 3000): Promise<boolean> {
+export async function waitForNewTweets(page: Page, previousCount: number, timeout: number = SCROLL_CONFIG.waitForNewTweetsTimeout): Promise<boolean> {
     try {
         await page.waitForFunction(
             (selector, prevCount) => document.querySelectorAll(selector).length > prevCount,
@@ -258,7 +259,7 @@ export async function waitForNewTweets(page: Page, previousCount: number, timeou
  * 智能滚动页面到底部 (Mimicking Crawlee's Infinite Scroll)
  * 监控网络请求活动，确保数据加载完成
  */
-export async function scrollToBottomSmart(page: Page, timeout: number = 5000): Promise<void> {
+export async function scrollToBottomSmart(page: Page, timeout: number = SCROLL_CONFIG.smartScrollTimeout): Promise<void> {
     // 1. 设置网络监听
     let requestCount = 0;
     const relevantTypes = ['xhr', 'fetch', 'websocket', 'other'];
@@ -271,76 +272,249 @@ export async function scrollToBottomSmart(page: Page, timeout: number = 5000): P
 
     page.on('request', onRequest);
 
-    // 2. 执行滚动策略 (Keyboard Strategy - More reliable for infinite scroll)
     try {
-        // Press PageDown multiple times to trigger scroll events
-        // This is better than window.scrollTo because it fires all the native events
-        for (let i = 0; i < 5; i++) {
-            await page.keyboard.press('PageDown');
-            await new Promise(r => setTimeout(r, 200));
+        // 2. 执行滚动策略 (Keyboard Strategy - More reliable for infinite scroll)
+        try {
+            // Press PageDown multiple times to trigger scroll events
+            // This is better than window.scrollTo because it fires all the native events
+            for (let i = 0; i < 5; i++) {
+                await page.keyboard.press('PageDown');
+                await new Promise(r => setTimeout(r, 200));
+            }
+
+            // Final ensure bottom
+            await page.evaluate(() => {
+                window.scrollTo(0, document.body.scrollHeight);
+            });
+        } catch (e) {
+            console.warn('Scroll execution failed:', e);
         }
 
-        // Final ensure bottom
-        await page.evaluate(() => {
-            window.scrollTo(0, document.body.scrollHeight);
-        });
-    } catch (e) {
-        console.warn('Scroll execution failed:', e);
-    }
-
-    // 2.5 Check for "Show more" / "Load more" buttons
-    try {
-        const clicked = await page.evaluate(() => {
-            // Common selectors for "Show more" buttons in Twitter search
-            const buttons = Array.from(document.querySelectorAll('div[role="button"], button'));
-            const showMoreBtn = buttons.find(b => {
-                const text = b.textContent?.toLowerCase() || '';
-                return text.includes('show more') || 
-                       text.includes('show more results') || 
-                       text.includes('load more');
+        // 2.5 Check for "Show more" / "Load more" buttons
+        try {
+            const clicked = await page.evaluate(() => {
+                // Common selectors for "Show more" buttons in Twitter search
+                const buttons = Array.from(document.querySelectorAll('div[role="button"], button'));
+                const showMoreBtn = buttons.find(b => {
+                    const text = b.textContent?.toLowerCase() || '';
+                    return text.includes('show more') || 
+                           text.includes('show more results') || 
+                           text.includes('load more');
+                });
+                
+                if (showMoreBtn && (showMoreBtn as HTMLElement).click) {
+                    (showMoreBtn as HTMLElement).click();
+                    return true;
+                }
+                return false;
             });
             
-            if (showMoreBtn && (showMoreBtn as HTMLElement).click) {
-                (showMoreBtn as HTMLElement).click();
-                return true;
+            if (clicked) {
+                // If we clicked a button, wait a bit for new content
+                await new Promise(r => setTimeout(r, SCROLL_CONFIG.showMoreButtonWait));
             }
+        } catch (e) {
+            // Ignore errors checking for buttons
+        }
+
+        // 3. 智能等待 (等待网络空闲)
+        const checkInterval = SCROLL_CONFIG.networkStabilityCheckInterval;
+        let stableIntervals = 0;
+        const requiredStableIntervals = SCROLL_CONFIG.requiredStableIntervals;
+        let lastRequestCount = requestCount;
+
+        const startTime = Date.now();
+
+        while (Date.now() - startTime < timeout) {
+            await new Promise(r => setTimeout(r, checkInterval));
+
+            if (requestCount === lastRequestCount) {
+                stableIntervals++;
+            } else {
+                stableIntervals = 0;
+                lastRequestCount = requestCount;
+            }
+
+            // 如果网络稳定了，并且至少过了一小段时间
+            if (stableIntervals >= requiredStableIntervals) {
+                break;
+            }
+        }
+    } finally {
+        // 清理监听器，防止内存泄漏
+        page.off('request', onRequest);
+    }
+}
+
+/**
+ * 检测并点击 "Try Again" 按钮（处理 Twitter 错误页面）
+ * @param page Puppeteer Page 实例
+ * @returns 是否成功点击了按钮
+ */
+export async function clickTryAgainButton(page: Page): Promise<boolean> {
+    try {
+        const clicked = await page.evaluate(() => {
+            // 查找所有可能的按钮元素
+            const buttons = Array.from(document.querySelectorAll(
+                'div[role="button"], button, a[role="button"], span[role="button"]'
+            ));
+            
+            // 查找包含 "Try again"、"Try Again"、"Retry" 等文本的按钮
+            const tryAgainBtn = buttons.find(b => {
+                const text = (b.textContent || '').toLowerCase().trim();
+                const ariaLabel = (b.getAttribute('aria-label') || '').toLowerCase();
+                
+                return text.includes('try again') || 
+                       text === 'try again' ||
+                       text.includes('retry') ||
+                       ariaLabel.includes('try again') ||
+                       ariaLabel.includes('retry');
+            });
+            
+            if (tryAgainBtn) {
+                const element = tryAgainBtn as HTMLElement;
+                // 尝试多种点击方式
+                if (element.click) {
+                    element.click();
+                    return true;
+                } else if (element.dispatchEvent) {
+                    // 使用事件触发
+                    const clickEvent = new MouseEvent('click', {
+                        bubbles: true,
+                        cancelable: true,
+                        view: window
+                    });
+                    element.dispatchEvent(clickEvent);
+                    return true;
+                }
+            }
+            
+            // 也尝试查找包含特定 data-testid 的按钮
+            const testIdButtons = Array.from(document.querySelectorAll('[data-testid]'));
+            const retryButton = testIdButtons.find(btn => {
+                const testId = btn.getAttribute('data-testid') || '';
+                const text = (btn.textContent || '').toLowerCase();
+                return testId.includes('retry') || 
+                       testId.includes('try') ||
+                       (text.includes('try again') && testId);
+            });
+            
+            if (retryButton) {
+                const element = retryButton as HTMLElement;
+                if (element.click) {
+                    element.click();
+                    return true;
+                }
+            }
+            
             return false;
         });
         
         if (clicked) {
-            // If we clicked a button, wait a bit for new content
-            await new Promise(r => setTimeout(r, 2000));
+            // 点击后等待页面响应
+            await new Promise(r => setTimeout(r, ERROR_RECOVERY_CONFIG.initialWaitAfterClick));
+            return true;
         }
+        
+        return false;
     } catch (e) {
-        // Ignore errors checking for buttons
+        // 忽略错误，返回 false
+        return false;
     }
+}
 
-    // 3. 智能等待 (等待网络空闲)
-    const checkInterval = 200;
-    let stableIntervals = 0;
-    const requiredStableIntervals = 2; // 连续 2 次检查网络稳定再继续
-    let lastRequestCount = requestCount;
+/**
+ * 检测页面是否显示错误信息
+ * @param page Puppeteer Page 实例
+ * @returns 是否检测到错误页面
+ */
+export async function detectErrorPage(page: Page): Promise<boolean> {
+    try {
+        const hasError = await page.evaluate(() => {
+            const bodyText = document.body.innerText.toLowerCase();
+            const errorPatterns = [
+                'something went wrong',
+                'try again',
+                'rate limit',
+                'try again later',
+                'suspended',
+                'restricted',
+                'blocked',
+                'this page doesn\'t exist',
+                'something went wrong, but don\'t fret',
+                'something went wrong. try again'
+            ];
+            
+            return errorPatterns.some(pattern => bodyText.includes(pattern));
+        });
+        
+        return hasError;
+    } catch (e) {
+        return false;
+    }
+}
 
-    const startTime = Date.now();
-
-    while (Date.now() - startTime < timeout) {
-        await new Promise(r => setTimeout(r, checkInterval));
-
-        if (requestCount === lastRequestCount) {
-            stableIntervals++;
-        } else {
-            stableIntervals = 0;
-            lastRequestCount = requestCount;
-        }
-
-        // 如果网络稳定了，并且至少过了一小段时间
-        if (stableIntervals >= requiredStableIntervals) {
-            break;
+/**
+ * 尝试从错误页面恢复：检测错误并点击 "Try Again" 按钮
+ * @param page Puppeteer Page 实例
+ * @param maxRetries 最大重试次数
+ * @returns 是否成功恢复
+ */
+export async function recoverFromErrorPage(
+    page: Page, 
+    maxRetries: number = ERROR_RECOVERY_CONFIG.maxRetries
+): Promise<boolean> {
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+            const hasError = await detectErrorPage(page);
+            
+            if (!hasError) {
+                // 没有错误，页面正常
+                return true;
+            }
+            
+            // 检测到错误，尝试点击 "Try Again" 按钮
+            const clicked = await clickTryAgainButton(page);
+            
+            if (clicked) {
+                // 等待页面加载，给更多时间让页面响应
+                const waitTime = ERROR_RECOVERY_CONFIG.initialWaitAfterClick + 
+                                attempt * ERROR_RECOVERY_CONFIG.retryWaitIncrement;
+                await new Promise(r => setTimeout(r, waitTime));
+                
+                // 再次检查是否还有错误
+                const stillHasError = await detectErrorPage(page);
+                if (!stillHasError) {
+                    return true; // 成功恢复
+                }
+                
+                // 如果还有错误，继续重试
+                if (attempt < maxRetries - 1) {
+                    // 等待一下再重试
+                    await new Promise(r => setTimeout(r, ERROR_RECOVERY_CONFIG.retryInterval));
+                }
+            } else {
+                // 没有找到 "Try Again" 按钮，可能不是可恢复的错误
+                // 但如果是第一次尝试，可以再等一会儿看看页面是否自动恢复
+                if (attempt === 0) {
+                    await new Promise(r => setTimeout(r, ERROR_RECOVERY_CONFIG.autoRecoveryWait));
+                    const autoRecovered = !(await detectErrorPage(page));
+                    if (autoRecovered) {
+                        return true;
+                    }
+                }
+                break;
+            }
+        } catch (error) {
+            // 如果检测过程中出错，记录但不中断
+            console.warn(`Error during recovery attempt ${attempt + 1}:`, error);
+            if (attempt < maxRetries - 1) {
+                await new Promise(r => setTimeout(r, ERROR_RECOVERY_CONFIG.retryInterval));
+            }
         }
     }
-
-    // 清理监听器
-    page.off('request', onRequest);
+    
+    return false; // 未能恢复
 }
 
 /**

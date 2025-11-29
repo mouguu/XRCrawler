@@ -1,7 +1,7 @@
 import { Page } from 'puppeteer';
 import * as retryUtils from '../utils';
 import * as constants from '../config/constants';
-import { X_SELECTORS } from './data-extractor';
+import { X_SELECTORS, recoverFromErrorPage } from './data-extractor';
 import { ScraperEventBus } from './event-bus';
 import { ScraperErrors } from './errors';
 
@@ -36,6 +36,13 @@ export class NavigationService {
                     }
                 }
             );
+            
+            // 导航后检查是否有错误页面，尝试恢复
+            const recovered = await recoverFromErrorPage(page, 1); // 导航后只尝试一次快速恢复
+            if (recovered) {
+                this._log('Recovered from error page after navigation', 'info');
+            }
+            
             return true;
         } catch (error: any) {
             this._log(`Navigation failed: ${error.message}`, 'error');
