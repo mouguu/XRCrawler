@@ -284,7 +284,7 @@ export function TaskForm(props: TaskFormProps) {
                         </span>
                       </div>
                       <span className="text-[10px] text-stone/40 font-sans italic">
-                        GraphQL search 已停用（Twitter SearchTimeline 游标 404），搜索强制使用 Puppeteer 模式。
+                        GraphQL search is limited to 20 tweets. Puppeteer mode is used for deep search.
                       </span>
                     </div>
                   )}
@@ -403,72 +403,69 @@ export function TaskForm(props: TaskFormProps) {
                     </div>
                   </div>
 
-                  {/* Deep Search Toggle */}
-                  <div className="flex flex-col space-y-4">
-                    <div className="flex flex-col space-y-2">
-                      <span className="text-xs uppercase tracking-wider text-stone/60 font-sans">
-                        Deep Search
-                      </span>
-                      <label className="flex items-center space-x-4 cursor-pointer group select-none">
-                        <div className="w-6 h-6 border border-stone rounded-full flex items-center justify-center group-hover:border-rust transition-colors">
-                          <div
-                            className={cn(
-                              "w-3 h-3 bg-rust rounded-full transition-opacity checkbox-indicator",
-                              enableDeepSearch ? "opacity-100" : "opacity-0"
-                            )}
-                          ></div>
-                        </div>
-                        <input
-                          type="checkbox"
-                          checked={enableDeepSearch}
-                          onChange={(e) => onToggleDeepSearch(e.target.checked)}
-                          className="hidden"
-                        />
-                        <div className="flex flex-col">
-                          <span className="font-serif text-lg text-stone group-hover:text-charcoal transition-colors">
-                            Enable Date Chunking
-                          </span>
-                          <span className="text-[10px] text-stone/50 font-sans">
-                            Split search into monthly chunks (Newest → Oldest)
-                          </span>
-                        </div>
-                      </label>
-                    </div>
-
-                    {/* Parallel Chunks Control - Only show when Deep Search is enabled */}
-                    {enableDeepSearch && (
-                      <div className="flex flex-col space-y-2 pl-10">
-                        <label className="text-xs uppercase tracking-wider text-stone/60 font-sans">
-                          Parallel Processing
-                        </label>
-                        <div className="flex items-center space-x-4">
+                  {/* Deep Search Toggle - Only for Puppeteer mode */}
+                  {scrapeMode === "puppeteer" && (
+                    <div className="flex flex-col space-y-4">
+                      <div className="flex flex-col space-y-2">
+                        <span className="text-xs uppercase tracking-wider text-stone/60 font-sans">
+                          Deep Search
+                        </span>
+                        <label className="flex items-center space-x-4 cursor-pointer group select-none">
+                          <div className="w-6 h-6 border border-stone rounded-full flex items-center justify-center group-hover:border-rust transition-colors">
+                            <div
+                              className={cn(
+                                "w-3 h-3 bg-rust rounded-full transition-opacity checkbox-indicator",
+                                enableDeepSearch ? "opacity-100" : "opacity-0"
+                              )}
+                            ></div>
+                          </div>
                           <input
-                            type="number"
-                            min="1"
-                            max="3"
-                            value={parallelChunks}
-                            onChange={(e) => {
-                              const value = parseInt(e.target.value) || 1;
-                              const clamped = Math.max(1, Math.min(3, value));
-                              onParallelChunksChange(clamped);
-                            }}
-                            onWheel={(e) => e.currentTarget.blur()}
-                            className="w-20 bg-transparent border-b border-stone py-1 focus:outline-none focus:border-rust transition-colors text-sm font-serif text-charcoal text-center"
+                            type="checkbox"
+                            checked={enableDeepSearch}
+                            onChange={(e) => onToggleDeepSearch(e.target.checked)}
+                            className="hidden"
                           />
                           <div className="flex flex-col">
-                            <span className="font-serif text-sm text-stone">
-                              Parallel Chunks
+                            <span className="font-serif text-lg text-stone group-hover:text-charcoal transition-colors">
+                              Enable Date Chunking
                             </span>
                             <span className="text-[10px] text-stone/50 font-sans">
-                              {parallelChunks === 1 
-                                ? "Serial (1 chunk at a time)" 
-                                : `Parallel (${parallelChunks} chunks simultaneously, 2-3x faster)`}
+                              Split search into monthly chunks (Newest → Oldest)
                             </span>
                           </div>
-                        </div>
+                        </label>
                       </div>
-                    )}
-                  </div>
+
+                      {/* Parallel Chunks Control - Only show when Deep Search is enabled */}
+                      {enableDeepSearch && (
+                        <div className="flex flex-col space-y-2 pl-10">
+                          <label className="text-xs uppercase tracking-wider text-stone/60 font-sans">
+                            Parallel Processing
+                          </label>
+                          <div className="flex items-center space-x-4">
+                            <input
+                              type="number"
+                              min="1"
+                              max="3"
+                              value={parallelChunks}
+                              onChange={(e) => onParallelChunksChange(parseInt(e.target.value, 10))}
+                              className="w-20 bg-transparent border-b border-stone py-1 focus:outline-none focus:border-rust transition-colors text-sm font-serif text-charcoal text-center"
+                            />
+                            <div className="flex flex-col">
+                              <span className="font-serif text-sm text-stone">
+                                Parallel Chunks
+                              </span>
+                              <span className="text-[10px] text-stone/50 font-sans">
+                                {parallelChunks === 1
+                                  ? "Serial (1 chunk at a time)"
+                                  : `${parallelChunks} chunks running simultaneously`}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </>

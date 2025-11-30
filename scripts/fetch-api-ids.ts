@@ -59,6 +59,10 @@ async function main() {
     await page.goto('https://x.com/search?q=twitter&src=typed_query');
     await page.waitForSelector('article', { timeout: 15000 }).catch(() => console.log('Timeout waiting for search results'));
 
+    console.log('Navigating to tweet detail...');
+    await page.goto('https://x.com/DevinAI/status/1994649536397283575');
+    await page.waitForSelector('article', { timeout: 15000 }).catch(() => console.log('Timeout waiting for tweet detail'));
+
     console.log('Operations found:', ops);
     
     await browser.close();

@@ -317,7 +317,7 @@ export async function runTimelineDom(engine: ScraperEngine, config: ScrapeTimeli
                                 // waitForTweets 失败时快速重试一次，减少超时时间
                                 try {
                                     await engine.navigationService.waitForTweets(engine.getPageInstance()!, { 
-                                        timeout: 5000, // 减少超时到5秒
+                                        timeout: 3000, // 从5秒减少到3秒
                                         maxRetries: 0 // 不重试，直接快速切换
                                     });
                                 } catch (navErr) {
@@ -326,8 +326,8 @@ export async function runTimelineDom(engine: ScraperEngine, config: ScrapeTimeli
                                 }
 
                                 // Fast scroll to discover new tweets with new session
-                                const maxScrollAttempts = 20;
-                                const scrollsPerExtraction = 3;
+                                const maxScrollAttempts = 10; // 从20减少到10，加快失败检测
+                                const scrollsPerExtraction = 2; // 从3减少到2，更频繁检查
 
                                 engine.eventBus.emitLog(`Performing rapid deep scroll: ${maxScrollAttempts} scrolls, extracting every ${scrollsPerExtraction} scrolls to check for new tweets...`, 'debug');
 
@@ -351,7 +351,7 @@ export async function runTimelineDom(engine: ScraperEngine, config: ScrapeTimeli
                                         await engine.getPageInstance()!.evaluate(() => {
                                             window.scrollTo(0, document.body.scrollHeight);
                                         });
-                                        await throttle(800 + Math.random() * 400); // 0.8-1.2秒，快速滚动
+                                        await throttle(500 + Math.random() * 300); // 0.5-0.8秒，更快速滚动
                                         scrollCount++;
 
                                         // 在等待后再次检查
@@ -416,8 +416,8 @@ export async function runTimelineDom(engine: ScraperEngine, config: ScrapeTimeli
                                             engine.eventBus.emitLog(`Deep scroll progress: ${scrollCount}/${maxScrollAttempts} scrolls, ${tweetCountOnPage} tweets on page, ${currentCount} collected`, 'debug');
                                         }
 
-                                        // 如果页面上推文数量稳定在很低的值（<50条），说明可能无法加载更多
-                                        if (tweetCountOnPage < 50 && scrollCount >= 20) {
+                                        // 如果页面上推文数量稳定在很低的值（<30条），说明可能无法加载更多
+                                        if (tweetCountOnPage < 30 && scrollCount >= 10) {
                                             engine.eventBus.emitLog(`Tweet count on page is low (${tweetCountOnPage}) after ${scrollCount} scrolls. This session cannot load deeper content. Platform limit likely reached.`, 'warn');
                                             break;
                                         }

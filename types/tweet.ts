@@ -183,7 +183,7 @@ export interface TweetResult {
 /**
  * 从 API 响应解析推文
  */
-export function parseTweetFromApiResult(result: TweetResult): Tweet | null {
+export function parseTweetFromApiResult(result: TweetResult, fallbackUsername?: string): Tweet | null {
     try {
         const legacy = result.legacy || result.tweet?.legacy;
         const core = result.core || result.tweet?.core;
@@ -191,7 +191,13 @@ export function parseTweetFromApiResult(result: TweetResult): Tweet | null {
         if (!legacy) return null;
 
         const user = core?.user_results?.result?.legacy;
-        const username = user?.screen_name || 'unknown';
+        let username = user?.screen_name || 'unknown';
+        
+        // Use fallback username if available and username is unknown
+        if (username === 'unknown' && fallbackUsername) {
+            username = fallbackUsername;
+        }
+
         const tweetId = legacy.id_str || result.rest_id;
 
         // 优先获取长推文文本
@@ -238,12 +244,9 @@ export function parseTweetsFromInstructions(instructions: any[], fallbackUsernam
             const tweetResult = entry.content?.itemContent?.tweet_results?.result;
             if (!tweetResult) continue;
             
-            const tweet = parseTweetFromApiResult(tweetResult);
+            // Pass fallbackUsername to ensure URL is generated correctly
+            const tweet = parseTweetFromApiResult(tweetResult, fallbackUsername);
             if (tweet) {
-                // 如果解析失败使用 fallback username
-                if (!tweet.username || tweet.username === 'unknown') {
-                    tweet.username = fallbackUsername;
-                }
                 tweets.push(tweet);
             }
         }

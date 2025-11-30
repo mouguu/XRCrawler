@@ -287,8 +287,31 @@ export const ScraperErrors = {
   rateLimitExceeded: (message: string = 'Rate limit exceeded') =>
     new ScraperError(ErrorCode.RATE_LIMIT_EXCEEDED, message, { statusCode: 429, retryable: true }),
   
-  apiRequestFailed: (message: string, statusCode?: number, context?: ErrorContext) =>
-    new ScraperError(ErrorCode.API_REQUEST_FAILED, message, { statusCode, context, retryable: statusCode ? statusCode >= 500 : true }),
+  apiRequestFailed: (message: string, statusCode?: number, context?: ErrorContext) => {
+    // Enhanced error message for 400 errors that might indicate Query ID expiration
+    let enhancedMessage = message;
+    let enhancedContext = { ...context };
+    
+    if (statusCode === 400 && context?.operation) {
+      const operation = context.operation;
+      enhancedMessage = `${message}\n⚠️  提示：如果此错误持续出现，可能是 Query ID 已过期。\n请参考 docs/maintaining-query-ids.md 更新 ${operation} 的 Query ID。`;
+      enhancedContext = {
+        ...context,
+        possibleQueryIdExpiration: true,
+        maintenanceGuide: 'docs/maintaining-query-ids.md'
+      };
+    }
+    
+    return new ScraperError(
+      ErrorCode.API_REQUEST_FAILED,
+      enhancedMessage,
+      {
+        retryable: statusCode === 429 || statusCode === 502 || statusCode === 503,
+        statusCode,
+        context: enhancedContext,
+      }
+    );
+  },
   
   apiClientNotInitialized: () =>
     new ScraperError(ErrorCode.API_CLIENT_NOT_INITIALIZED, 'API Client not initialized', { retryable: false }),

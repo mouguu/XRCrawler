@@ -55,7 +55,7 @@ export class XApiClient {
         }
     }
 
-    private async request(op: typeof X_API_OPS.UserTweets | typeof X_API_OPS.SearchTimeline | typeof X_API_OPS.UserByScreenName | typeof X_API_OPS.TweetDetail, variables: any) {
+    private async request(op: typeof X_API_OPS.UserTweets | typeof X_API_OPS.SearchTimeline | typeof X_API_OPS.UserByScreenName | typeof X_API_OPS.TweetDetail | typeof X_API_OPS.TweetResultsByRestIds | typeof X_API_OPS.TweetResultByRestId, variables: any) {
         let delay = RETRY_INITIAL_DELAY_MS;
 
         for (let attempt = 0; attempt <= RETRY_MAX_ATTEMPTS; attempt++) {
@@ -105,7 +105,7 @@ export class XApiClient {
             code === 'RATE_LIMIT_EXCEEDED';
     }
 
-    private async performRequest(op: typeof X_API_OPS.UserTweets | typeof X_API_OPS.SearchTimeline | typeof X_API_OPS.UserByScreenName | typeof X_API_OPS.TweetDetail, variables: any) {
+    private async performRequest(op: typeof X_API_OPS.UserTweets | typeof X_API_OPS.SearchTimeline | typeof X_API_OPS.UserByScreenName | typeof X_API_OPS.TweetDetail | typeof X_API_OPS.TweetResultsByRestIds | typeof X_API_OPS.TweetResultByRestId, variables: any) {
         const queryId = op.operationName === 'SearchTimeline' ? this.searchQueryId : op.queryId;
         const url = `https://x.com/i/api/graphql/${queryId}/${op.operationName}`;
         
@@ -225,28 +225,75 @@ export class XApiClient {
     }
 
     /**
-     * 获取推文详情及其对话/回复
+     * 获取推文详情 (Conversation View)
+     * 用于 Thread 模式，包含完整的对话树
      * @param tweetId 推文 ID
-     * @param cursor 分页游标（用于加载更多回复）
+     * @param cursor 可选的分页游标（用于获取更多回复）
      */
     async getTweetDetail(tweetId: string, cursor?: string) {
         const variables: any = {
-            focalTweetId: tweetId,
-            with_rux_injections: false,
-            rankingMode: "Relevance",
+            focalTweetId: tweetId, // Updated to focalTweetId for TweetDetail (conversation)
             includePromotedContent: true,
-            withCommunity: true,
-            withQuickPromoteEligibilityTweetFields: true,
             withBirdwatchNotes: true,
-            withVoice: true
+            withVoice: true,
+            withCommunity: true,
+            // Additional variables often required for TweetDetail
+            referrer: "tweet",
+            controller_data: "DAACDAABDAABCgABAAAAAAAAAAgAAgAAAAA=",
         };
         
+        // Add cursor if provided (for paginated replies)
         if (cursor) {
             variables.cursor = cursor;
-            variables.referrer = "tweet";
         }
 
         return this.request(X_API_OPS.TweetDetail, variables);
+    }
+
+    /**
+     * 获取单条推文详情 (Single Tweet View)
+     * 用于批量查询或简单获取推文信息
+     * @param tweetId 推文 ID
+     */
+    async getTweetResult(tweetId: string) {
+        const variables: any = {
+            tweetId: tweetId,
+            includePromotedContent: true,
+            withBirdwatchNotes: true,
+            withVoice: true,
+            withCommunity: true
+        };
+
+        return this.request(X_API_OPS.TweetResultByRestId, variables);
+    }
+
+    /**
+     * 批量获取推文详情 (使用并发查询实现)
+     * 
+     * 由于 TweetResultsByRestIds 批量端点的 Query ID 难以获取/过期，
+     * 我们使用并发的单条查询来实现批量效果
+     * 
+     * @param tweet_ids 推文 ID 列表
+     * @param concurrency 并发数量，默认 5
+     */
+    async getTweetsByIds(tweet_ids: string[], concurrency: number = 5): Promise<any[]> {
+        const results: any[] = [];
+        
+        // Process in batches for controlled concurrency
+        for (let i = 0; i < tweet_ids.length; i += concurrency) {
+            const batch = tweet_ids.slice(i, i + concurrency);
+            const batchPromises = batch.map(id => 
+                this.getTweetResult(id).catch(err => {
+                    console.error(`Failed to fetch tweet ${id}:`, err.message);
+                    return null; // Return null for failed requests
+                })
+            );
+            
+            const batchResults = await Promise.all(batchPromises);
+            results.push(...batchResults.filter(r => r !== null));
+        }
+
+        return results;
     }
 
     private async searchTweetsViaBrowser(query: string, count: number = 20) {

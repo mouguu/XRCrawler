@@ -144,10 +144,13 @@ export async function saveTweetsAsMarkdown(
       metrics.push('🖼️ Media');
     }
 
+    // Replace "RT @" with "Retweet @" for better readability
+    const displayText = (tweet.text || '(No text content)').replace(/^RT @/g, 'Retweet @');
+    
     aggregatedSections.push([
       `## ${index + 1}. ${formattedTimestamp}`,
       '',
-      tweet.text || '(No text content)',
+      displayText,
       '',
       metrics.join(' · '),
       `[View Tweet](${tweet.url})`
