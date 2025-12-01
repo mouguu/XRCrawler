@@ -403,8 +403,8 @@ export function TaskForm(props: TaskFormProps) {
                     </div>
                   </div>
 
-                  {/* Deep Search Toggle - Only for Puppeteer mode */}
-                  {scrapeMode === "puppeteer" && (
+                  {/* Deep Search Toggle - Only for Puppeteer mode or Search tab (which forces puppeteer) */}
+                  {(scrapeMode === "puppeteer" || activeTab === "search") && (
                     <div className="flex flex-col space-y-4">
                       <div className="flex flex-col space-y-2">
                         <span className="text-xs uppercase tracking-wider text-stone/60 font-sans">

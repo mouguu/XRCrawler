@@ -11,11 +11,13 @@ import os
 # Ensure we can import from the same directory
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from enhanced_scraper import run_scraping_session
+from scraper import scrape_reddit
 
 def main():
     parser = argparse.ArgumentParser(description='Reddit Scraper CLI')
-    parser.add_argument('--subreddit', type=str, default='UofT', help='Target subreddit')
+    parser.add_argument('--target', type=str, required=True, help='Target subreddit (r/python) or user (u/spez)')
+    parser.add_argument('--subreddit', type=str, help='(Deprecated) Use --target instead')
+    parser.add_argument('--user', type=str, help='Target user (alternative to --target u/username)')
     parser.add_argument('--max_posts', type=int, default=100, help='Maximum number of posts to scrape')
     parser.add_argument('--strategy', type=str, default='auto', help='Scraping strategy (auto, super_full, super_recent, new)')
     parser.add_argument('--save_json', action='store_true', help='Save individual JSON files')
@@ -84,7 +86,7 @@ def main():
     
     else:
         # Subreddit mode (existing logic)
-        # Map 'auto' strategy based on count if needed, similar to reddit_system.py
+        # Map 'auto' strategy based on count if needed
         strategy = args.strategy
         if strategy == 'auto':
             if args.max_posts > 5000:
@@ -94,19 +96,21 @@ def main():
             else:
                 strategy = 'new'
             
-        config = {
-            'subreddit': args.subreddit,
-            'max_posts': args.max_posts,
-            'strategy': strategy,
-            'save_json': args.save_json,
-            'mode': 'incremental'  # Default to incremental for subreddit mode
-        }
-        
         try:
             print(f"🚀 Starting Reddit Scraper via CLI...")
-            print(f"📊 Config: {json.dumps(config, indent=2)}")
+            target = args.target or args.subreddit or (f"u/{args.user}" if args.user else None)
             
-            result = run_scraping_session(config)
+            if not target:
+                 # Fallback for old calls
+                 target = "r/UofT" 
+            
+            print(f"📊 Config: target={target}, max_posts={args.max_posts}, strategy={strategy}")
+            
+            result = scrape_reddit(
+                target=target,
+                max_posts=args.max_posts,
+                sort_type=strategy
+            )
             
             # Output special delimiter and JSON result for Node.js to parse
             print("\n__JSON_RESULT__")

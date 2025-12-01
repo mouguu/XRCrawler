@@ -17,9 +17,14 @@ import {
   ScraperErrors,
   ScraperError,
   createCookieManager,
-  RedditApiClient
+  RedditApiClient,
 } from "./core";
-import { createEnhancedLogger, getOutputPathManager, getConfigManager, setLogLevel } from "./utils";
+import {
+  createEnhancedLogger,
+  getOutputPathManager,
+  getConfigManager,
+  setLogLevel,
+} from "./utils";
 import * as fileUtils from "./utils/fileutils";
 import { apiKeyMiddleware } from "./middleware/api-key";
 import {
@@ -84,7 +89,9 @@ setLogLevel(LOG_CONFIG.level);
 const PORT = serverConfig.port;
 
 // 统一使用 OutputPathManager，删除 legacy 路径
-const outputPathManager = getOutputPathManager({ baseDir: outputConfig.baseDir });
+const outputPathManager = getOutputPathManager({
+  baseDir: outputConfig.baseDir,
+});
 const OUTPUT_ROOT = outputPathManager.getBaseDir();
 const STATIC_DIR = path.resolve(process.cwd(), "public");
 
@@ -173,10 +180,10 @@ app.post(
       req.body?.type === "thread"
         ? "thread"
         : req.body?.type === "search"
-          ? "search"
-          : req.body?.type === "reddit"
-            ? "reddit"
-            : "timeline";
+        ? "search"
+        : req.body?.type === "reddit"
+        ? "reddit"
+        : "timeline";
     const queueKey =
       typeof req.body?.input === "string" && req.body.input
         ? req.body.input
@@ -196,6 +203,7 @@ app.post(
                 mode,
                 dateRange,
                 enableRotation = true,
+                enableProxy = false,
               } = req.body;
 
               serverLogger.info("收到爬取请求", { type, input, limit });
@@ -217,9 +225,7 @@ app.post(
                   .replace("https://x.com/", "")
                   .replace("/", "");
                 const scrapeMode =
-                  mode === "graphql" || mode === "mixed"
-                    ? mode
-                    : "puppeteer";
+                  mode === "graphql" || mode === "mixed" ? mode : "puppeteer";
                 const apiOnly = scrapeMode === "graphql"; // graphql 模式不需要浏览器
 
                 const engine = new ScraperEngine(
@@ -229,6 +235,9 @@ app.post(
 
                 try {
                   await engine.init();
+                  // Apply proxy setting from UI
+                  engine.proxyManager.setEnabled(enableProxy);
+
                   const cookiesLoaded = await engine.loadCookies(
                     enableRotation
                   );
@@ -283,6 +292,9 @@ app.post(
 
                 try {
                   await engine.init();
+                  // Apply proxy setting from UI
+                  engine.proxyManager.setEnabled(enableProxy);
+
                   const cookiesLoaded = await engine.loadCookies(
                     enableRotation
                   );
@@ -314,6 +326,9 @@ app.post(
 
                 try {
                   await engine.init();
+                  // Apply proxy setting from UI
+                  engine.proxyManager.setEnabled(enableProxy);
+
                   const cookiesLoaded = await engine.loadCookies(
                     enableRotation
                   );
@@ -329,7 +344,7 @@ app.post(
                     searchQuery: input,
                     limit,
                     saveMarkdown: true,
-                    scrapeMode,  // 使用用户选择的模式，而不是强制 puppeteer
+                    scrapeMode, // 使用用户选择的模式，而不是强制 puppeteer
                     dateRange,
                   });
                 } finally {
@@ -337,16 +352,28 @@ app.post(
                 }
               } else if (type === "reddit") {
                 // Reddit Scrape - 使用 HTTP API 替代 spawn
-                const redditClient = new RedditApiClient(redditConfig.apiUrl, redditConfig.apiTimeout);
-                
+                const redditClient = new RedditApiClient(
+                  redditConfig.apiUrl,
+                  redditConfig.apiTimeout
+                );
+
                 // Detect if input is a URL or subreddit name
-                const isPostUrl = input && ((input.includes('reddit.com/r/') && input.includes('/comments/')) || input.includes('redd.it/'));
-                
-                serverLogger.info("开始 Reddit 爬取", { 
-                  mode: isPostUrl ? 'post' : 'subreddit', 
-                  input 
+                const isPostUrl =
+                  input &&
+                  ((input.includes("reddit.com/r/") &&
+                    input.includes("/comments/")) ||
+                    input.includes("redd.it/"));
+
+                serverLogger.info("开始 Reddit 爬取", {
+                  mode: isPostUrl ? "post" : "subreddit",
+                  input,
                 });
-                eventBusInstance.emitLog(`Starting Reddit scraper for ${isPostUrl ? 'post URL' : `r/${input || 'UofT'}`}...`, "info");
+                eventBusInstance.emitLog(
+                  `Starting Reddit scraper for ${
+                    isPostUrl ? "post URL" : `r/${input || "UofT"}`
+                  }...`,
+                  "info"
+                );
 
                 try {
                   // 检查服务健康状态
@@ -355,12 +382,13 @@ app.post(
                     throw ScraperErrors.apiRequestFailed(
                       "Reddit API server is not available. Please start it with: python3 platforms/reddit/reddit_api_server.py",
                       undefined,
-                      { type: 'reddit', service: 'health_check_failed' }
+                      { type: "reddit", service: "health_check_failed" }
                     );
                   }
 
                   let redditResult;
-                  const redditStrategy = req.body?.strategy || redditConfig.defaultStrategy;
+                  const redditStrategy =
+                    req.body?.strategy || redditConfig.defaultStrategy;
 
                   if (isPostUrl) {
                     redditResult = await redditClient.scrapePost(input);
@@ -374,97 +402,108 @@ app.post(
                         eventBusInstance.emitProgress({
                           current,
                           target: total,
-                          action: message
+                          action: message,
                         });
-                      }
+                      },
                     });
                   }
 
                   if (redditResult.success && redditResult.data) {
                     const data = redditResult.data;
-                    const tweetCount = isPostUrl 
+                    const tweetCount = isPostUrl
                       ? data.comment_count || 0
                       : data.scraped_count || 0;
-                    
+
                     // Emit progress update for Reddit
                     eventBusInstance.emitProgress({
                       current: tweetCount,
                       target: isPostUrl ? tweetCount : limit,
-                      action: isPostUrl 
+                      action: isPostUrl
                         ? `Scraped ${tweetCount} comments`
-                        : `Scraped ${tweetCount} posts`
+                        : `Scraped ${tweetCount} posts`,
                     });
-                    
+
                     // Use actual file path from API response
                     let filePath: string;
-                    
+
                     if (data.file_path) {
                       // API returned a file path - use it
                       filePath = path.resolve(data.file_path);
-                      
+
                       // Validate it's within output directory
                       if (!outputPathManager.isPathSafe(filePath)) {
-                        serverLogger.warn("Reddit API returned file outside output directory", {
-                          apiPath: data.file_path,
-                          resolved: filePath,
-                          outputDir: OUTPUT_ROOT
-                        });
+                        serverLogger.warn(
+                          "Reddit API returned file outside output directory",
+                          {
+                            apiPath: data.file_path,
+                            resolved: filePath,
+                            outputDir: OUTPUT_ROOT,
+                          }
+                        );
                         // Security: don't use paths outside output dir
                         throw ScraperErrors.apiRequestFailed(
                           "Reddit API returned invalid file path",
                           undefined,
-                          { type: 'reddit', path: data.file_path } as any
+                          { type: "reddit", path: data.file_path } as any
                         );
                       }
-                      
+
                       // Verify file actually exists
                       if (!fs.existsSync(filePath)) {
-                        serverLogger.error("Reddit API returned non-existent file", undefined, { filePath });
+                        serverLogger.error(
+                          "Reddit API returned non-existent file",
+                          undefined,
+                          { filePath }
+                        );
                         throw ScraperErrors.apiRequestFailed(
                           `Reddit output file not found: ${filePath}`,
                           undefined,
-                          { type: 'reddit', path: filePath } as any
+                          { type: "reddit", path: filePath } as any
                         );
                       }
                     } else {
                       // No file_path in response - this shouldn't happen for successful scrapes
-                      serverLogger.error("Reddit API succeeded but returned no file_path", undefined, { data });
+                      serverLogger.error(
+                        "Reddit API succeeded but returned no file_path",
+                        undefined,
+                        { data }
+                      );
                       throw ScraperErrors.apiRequestFailed(
                         "Reddit scraping completed but no output file was generated",
                         undefined,
-                        { type: 'reddit', data } as any
+                        { type: "reddit", data } as any
                       );
                     }
-                    
+
                     result = {
                       success: true,
                       tweets: Array(tweetCount).fill({}),
                       runContext: {
                         markdownIndexPath: filePath,
                       },
-                      message: data.message || "Reddit scraping completed"
+                      message: data.message || "Reddit scraping completed",
                     } as any;
                   } else {
                     throw ScraperErrors.apiRequestFailed(
                       redditResult.error || "Reddit scraping failed",
                       undefined,
-                      { type: 'reddit', result: redditResult } as any
+                      { type: "reddit", result: redditResult } as any
                     );
                   }
                 } catch (error: any) {
                   serverLogger.error("Reddit 爬取失败", error);
                   eventBusInstance.emitLog(`Error: ${error.message}`, "error");
-                  
+
                   // 统一使用 ScraperError，不再回退到 spawn
                   if (error instanceof ScraperError) {
                     throw error;
                   }
-                  
+
                   // 包装为 ScraperError
                   throw ScraperErrors.apiRequestFailed(
                     error.message || "Reddit scraping failed",
                     undefined,
-                    { type: 'reddit', originalError: error }
+                    { type: "reddit", originalError: error }
                   );
                 }
               } else {
@@ -475,13 +514,14 @@ app.post(
                 return;
               }
 
-              const hasTweets = result && result.tweets && result.tweets.length > 0;
+              const hasTweets =
+                result && result.tweets && result.tweets.length > 0;
 
               if (result && (result.success || hasTweets)) {
                 serverLogger.debug("爬取结果", {
                   success: result.success,
                   tweetsCount: result.tweets?.length,
-                  hasRunContext: !!result.runContext
+                  hasRunContext: !!result.runContext,
                 });
 
                 const runContext = result.runContext;
@@ -492,7 +532,9 @@ app.post(
                     runContext.markdownIndexPath
                   )}`;
                   lastDownloadUrl = downloadUrl; // Save for later retrieval
-                  serverLogger.debug("返回成功响应", { downloadUrl: runContext.markdownIndexPath });
+                  serverLogger.debug("返回成功响应", {
+                    downloadUrl: runContext.markdownIndexPath,
+                  });
 
                   // If success is false but we have tweets, treat it as a warning/partial success
                   const message = result.success
@@ -518,7 +560,10 @@ app.post(
                 }
               } else {
                 // Error and no tweets
-                serverLogger.error("爬取失败", new Error(result?.error || "Unknown error"));
+                serverLogger.error(
+                  "爬取失败",
+                  new Error(result?.error || "Unknown error")
+                );
                 res.status(500).json({
                   success: false,
                   error: result?.error || "Scraping failed",
@@ -541,14 +586,12 @@ app.post(
       serverLogger.error("队列错误", error);
       const shuttingDown =
         isShuttingDown || (error?.message || "").includes("shutting down");
-      res
-        .status(shuttingDown ? 503 : 429)
-        .json({
-          success: false,
-          error: shuttingDown
-            ? "Server is shutting down"
-            : "Another task is already queued or running",
-        });
+      res.status(shuttingDown ? 503 : 429).json({
+        success: false,
+        error: shuttingDown
+          ? "Server is shutting down"
+          : "Another task is already queued or running",
+      });
     }
   }
 );
@@ -577,6 +620,7 @@ app.post(
                 lookbackHours,
                 keywords,
                 enableRotation = true,
+                enableProxy = false,
               } = req.body;
               if (!users || users.length === 0) {
                 res
@@ -592,6 +636,9 @@ app.post(
 
               const engine = new ScraperEngine(() => getShouldStopScraping());
               await engine.init();
+              // Apply proxy setting from UI
+              engine.proxyManager.setEnabled(enableProxy);
+
               const cookiesLoaded = await engine.loadCookies(enableRotation);
               if (!cookiesLoaded) {
                 res
@@ -608,9 +655,9 @@ app.post(
                 lookbackHours: lookbackHours || undefined,
                 keywords: keywords
                   ? keywords
-                    .split(",")
-                    .map((k: string) => k.trim())
-                    .filter(Boolean)
+                      .split(",")
+                      .map((k: string) => k.trim())
+                      .filter(Boolean)
                   : undefined,
               });
 
@@ -652,14 +699,12 @@ app.post(
       serverLogger.error("队列错误", error);
       const shuttingDown =
         isShuttingDown || (error?.message || "").includes("shutting down");
-      res
-        .status(shuttingDown ? 503 : 429)
-        .json({
-          success: false,
-          error: shuttingDown
-            ? "Server is shutting down"
-            : "Another task is already queued or running",
-        });
+      res.status(shuttingDown ? 503 : 429).json({
+        success: false,
+        error: shuttingDown
+          ? "Server is shutting down"
+          : "Another task is already queued or running",
+      });
     }
   }
 );
@@ -766,7 +811,7 @@ app.get("/api/metrics/summary", (req: Request, res: Response) => {
     const collector = getMetricsCollector();
     res.json({
       summary: collector.getSummary(),
-      metrics: collector.getMetrics()
+      metrics: collector.getMetrics(),
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -782,10 +827,10 @@ app.get("/api/health", (req: Request, res: Response) => {
     memory: {
       used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
       total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
-      rss: Math.round(process.memoryUsage().rss / 1024 / 1024)
+      rss: Math.round(process.memoryUsage().rss / 1024 / 1024),
     },
     activeTasks: activeTasks.size,
-    isScraping: isScrapingActive
+    isScraping: isScrapingActive,
   };
 
   res.json(health);
@@ -808,7 +853,7 @@ app.get("/api/result", (req: Request, res: Response) => {
 app.get("/api/download", (req: Request, res: Response) => {
   const filePathParam =
     typeof req.query.path === "string" ? req.query.path : "";
-  
+
   if (!filePathParam) {
     return res.status(400).send("Invalid file path");
   }
@@ -817,10 +862,10 @@ app.get("/api/download", (req: Request, res: Response) => {
 
   // 检查路径是否安全（在 output 目录内）
   if (!outputPathManager.isPathSafe(resolvedPath)) {
-    serverLogger.warn("下载路径不安全", { 
-      path: filePathParam, 
+    serverLogger.warn("下载路径不安全", {
+      path: filePathParam,
       resolved: resolvedPath,
-      baseDir: outputPathManager.getBaseDir()
+      baseDir: outputPathManager.getBaseDir(),
     });
     return res.status(400).send("Invalid file path");
   }
@@ -863,11 +908,14 @@ app.get("/api/sessions", async (req, res) => {
     const sessions = await cookieManager.listSessions();
     res.json({ success: true, sessions });
   } catch (error: any) {
-      if (error.code === "COOKIE_LOAD_FAILED" || error.message?.includes("No cookie files found")) {
-        serverLogger.warn("/api/sessions: 未找到 cookies（首次运行正常）");
-        res.json({ success: true, sessions: [] }); // Return empty list instead of error
-      } else {
-        serverLogger.error("获取会话列表失败", error);
+    if (
+      error.code === "COOKIE_LOAD_FAILED" ||
+      error.message?.includes("No cookie files found")
+    ) {
+      serverLogger.warn("/api/sessions: 未找到 cookies（首次运行正常）");
+      res.json({ success: true, sessions: [] }); // Return empty list instead of error
+    } else {
+      serverLogger.error("获取会话列表失败", error);
       res.status(500).json({ success: false, error: error.message });
     }
   }

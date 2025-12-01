@@ -14,7 +14,7 @@ import traceback
 # 添加当前目录到路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from enhanced_scraper import run_scraping_session
+from scraper import scrape_reddit
 from post_scraper import RedditPostScraper
 
 app = Flask(__name__)
@@ -30,47 +30,43 @@ def health():
     })
 
 @app.route('/api/scrape/subreddit', methods=['POST'])
-@app.route('/api/scrape/subreddit', methods=['POST'])
 def scrape_subreddit():
     """爬取 subreddit (流式响应)"""
-    data = request.get_json() or {}
+    data = request.get_json()
     
-    subreddit = data.get('subreddit', 'UofT')
+    subreddit = data.get('subreddit')
+    if not subreddit:
+        return jsonify({'error': 'Missing required parameter: subreddit'}), 400
     max_posts = data.get('max_posts', 100)
     strategy = data.get('strategy', 'auto')
     save_json = data.get('save_json', False)
     
-    # 自动选择策略
+    # Map 'auto' strategy
     if strategy == 'auto':
-        if max_posts > 5000:
+        if max_posts > 2000:
             strategy = 'super_full'
-        elif max_posts > 2000:
-            strategy = 'super_recent'
         else:
             strategy = 'new'
-    
-    def generate():
-        try:
-            # 进度回调
-            def progress_callback(current, total, message):
-                progress_data = {
-                    'type': 'progress',
-                    'current': current,
-                    'total': total,
-                    'message': message
-                }
-                yield json.dumps(progress_data) + '\n'
-
-            config = {
-                'subreddit': subreddit,
-                'max_posts': max_posts,
-                'strategy': strategy,
-                'save_json': save_json,
-                'mode': 'incremental',
-                'progress_callback': progress_callback
-            }
             
-            result = run_scraping_session(config)
+    def generate():
+        # Use a queue or similar if we want real streaming, 
+        # but for now we'll just yield the final result as a single event
+        # because the new scraper is synchronous. 
+        # To make it truly streaming, we'd need to pass a callback that yields events.
+        
+        result_container = {}
+        
+        def progress_callback(current, total, message):
+            # This is where we could yield progress events
+            pass
+            
+        try:
+            result = scrape_reddit(
+                target=f"r/{subreddit}",
+                max_posts=max_posts,
+                sort_type=strategy,
+                progress_callback=progress_callback
+            )
             
             # 发送最终结果
             final_data = {

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-UofT Reddit Data System - Unified Interface
-Integrates scraping, standardization, and export into one cohesive system
+Reddit Data System - Unified Interface
+
+A comprehensive system for scraping, storing, and analyzing Reddit data.
 """
 
 import os
@@ -9,24 +10,24 @@ import sys
 import json
 import csv
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Optional, Dict, List, Any
+
+# Add parent directory to path
+sys.path.append(os.path.dirname(__file__))
 
 # Import existing modules
-try:
-    from local_storage import local_data_manager
-    from reddit_standardizer import RedditStandardizer
-except ImportError as e:
-    print(f"❌ Import error: {e}")
-    print("Make sure all required files are in the same directory")
-    sys.exit(1)
+from local_storage import local_data_manager
+from reddit_standardizer import RedditStandardizer
 
-class UofTRedditSystem:
-    """Unified Reddit data management system"""
+
+class RedditSystem:
+    """Reddit数据系统 - 统一接口"""
     
     def __init__(self):
+        """Initialize Reddit system"""
         self.standardizer = RedditStandardizer()
         self.db = local_data_manager
-        print("🚀 UofT Reddit System initialized")
+        print("🚀 Reddit System initialized")
         
     def get_system_status(self) -> Dict[str, Any]:
         """Get current system status with retry mechanism"""
@@ -43,88 +44,55 @@ class UofTRedditSystem:
             'system_ready': db_connected
         }
     
-    def scrape_posts(self, target_count: int = 6000, strategy: str = 'auto', save_json: bool = False, mode: str = 'incremental') -> Dict[str, Any]:
+    def scrape_posts(self, target: str, target_count: int = 100, strategy: str = 'auto', save_json: bool = False) -> Dict[str, Any]:
         """
-        Scrape Reddit posts using the enhanced scraper (modular integration)
+        Scrape Reddit posts using the modular scraper
 
         Args:
+            target: Target subreddit (r/name) or user (u/name)
             target_count: Target number of posts
-            mode: 'incremental' or 'fresh'
-            strategy: Scraping strategy ('auto', 'super_full', 'super_recent', etc.)
+            strategy: Scraping strategy ('auto', 'hot', 'new', etc.)
+            save_json: Whether to save individual JSON files
         """
-        print(f"🔄 Starting scraping process (target: {target_count}, mode: {mode})")
+        print(f"🔄 Starting scraping process (target: {target}, count: {target_count})")
 
-        if mode == 'fresh':
-            # Clear existing data (optional)
-            confirm = input("⚠️  Fresh mode will clear existing data. Continue? (y/N): ")
-            if confirm.lower() != 'y':
-                return {'status': 'cancelled', 'message': 'User cancelled fresh mode'}
-
-        # 真正的模块化集成 - 不再使用subprocess
         try:
-            from enhanced_scraper import run_scraping_session
+            from scraper import scrape_reddit
 
-            # Auto-determine strategy based on target count
+            # Auto-determine strategy based on target count if auto
             if strategy == 'auto':
-                if target_count > 5000:
+                if target_count > 2000:
                     strategy = 'super_full'
-                elif target_count > 2000:
-                    strategy = 'super_recent'
                 else:
                     strategy = 'new'
 
             print("🚀 Initializing modular scraper...")
-            print(f"📊 Configuration: {target_count} posts, {strategy} strategy")
+            print(f"📊 Configuration: {target}, {target_count} posts, {strategy} strategy")
             print("-" * 50)
 
-            # 构建配置字典
-            config = {
-                'max_posts': target_count,
-                'strategy': strategy,
-                'save_json': save_json,  # 用户可配置
-                'mode': mode
-            }
-
             # 直接调用爬虫的核心功能
-            result = run_scraping_session(config)
+            result = scrape_reddit(
+                target=target,
+                max_posts=target_count,
+                sort_type=strategy
+            )
 
             if result['status'] == 'success':
                 print("\n" + "=" * 50)
                 print("✅ Scraping process completed!")
                 print(f"📊 Results: {result['scraped_count']} posts scraped")
-                print(f"🎯 Strategy used: {result.get('strategy_used', strategy)}")
                 print("📊 Returning to main system...")
                 return {
                     'status': 'success',
-                    'message': result['message'],
-                    'posts_scraped': result['scraped_count'],
-                    'strategy_used': result.get('strategy_used', strategy)
+                    'message': 'Scraping completed successfully',
+                    'posts_scraped': result['scraped_count']
                 }
             else:
-                print(f"\n❌ Scraping failed: {result['message']}")
-                return {'status': 'error', 'message': result['message']}
+                print(f"\n❌ Scraping failed: {result.get('message', 'Unknown error')}")
+                return {'status': 'error', 'message': result.get('message', 'Unknown error')}
 
-        except ImportError as e:
-            # Fallback to subprocess if import fails
-            print("⚠️  Modular integration failed, falling back to subprocess...")
-            return self._fallback_subprocess_scraper(target_count, mode)
         except Exception as e:
             return {'status': 'error', 'message': f'Scraping failed: {str(e)}'}
-
-    def _fallback_subprocess_scraper(self, target_count: int, mode: str) -> Dict[str, Any]:
-        """Fallback method using subprocess for compatibility"""
-        import subprocess
-        import os
-
-        print("🚀 Launching enhanced scraper (subprocess mode)...")
-        cmd = [sys.executable, 'enhanced_scraper.py']
-
-        result = subprocess.run(cmd, cwd=os.getcwd())
-
-        if result.returncode == 0:
-            return {'status': 'success', 'message': 'Scraping completed successfully (subprocess)'}
-        else:
-            return {'status': 'error', 'message': f'Scraper exited with code {result.returncode}'}
 
     def export_professional_csv(self, output_file: str = None, quality_filter: str = 'all') -> Dict[str, Any]:
         """
@@ -253,8 +221,8 @@ class UofTRedditSystem:
         # Essential data dictionary (static information)
         data_dictionary = {
             "dataset_info": {
-                "name": "University of Toronto (r/UofT) Student Life Dataset",
-                "description": "A comprehensive dataset of posts and comments from the r/UofT subreddit",
+                "name": "Reddit Dataset",
+                "description": "A comprehensive dataset of Reddit posts and comments",
                 "collection_method": "Reddit API via PRAW and JSON endpoints",
                 "preprocessing": "Automated cleaning, standardization, and quality assessment",
                 "exported_posts": exported_count,
@@ -374,7 +342,7 @@ class UofTRedditSystem:
         """Interactive command-line interface"""
         while True:
             print("\n" + "="*60)
-            print("🎯 UofT Reddit Data System")
+            print("🎯 Reddit Data System")
             print("="*60)
             
             # Show system status
@@ -401,10 +369,14 @@ class UofTRedditSystem:
 
                 # 统一的用户输入界面
                 try:
+                    # 目标选择
+                    target_input = input(f"目标 (例如 r/python 或 u/spez) [r/UofT]: ").strip()
+                    target = target_input if target_input else "r/UofT"
+
                     # 目标数量
-                    default_target = current_count + 1000
-                    target_input = input(f"目标帖子总数 (当前: {current_count}, 默认: {default_target}): ").strip()
-                    target_count = int(target_input) if target_input.isdigit() else default_target
+                    default_target = 100
+                    target_count_input = input(f"目标帖子数量 [100]: ").strip()
+                    target_count = int(target_count_input) if target_count_input.isdigit() else default_target
 
                     # 策略选择
                     print("\n🎯 策略选择:")
@@ -420,13 +392,14 @@ class UofTRedditSystem:
                     save_json = input("是否保存JSON文件? (y/n) [n]: ").lower().startswith('y')
 
                     print(f"\n🚀 配置确认:")
-                    print(f"  📊 目标: {target_count} 帖子 (需新增: {max(0, target_count - current_count)})")
-                    print(f"  🎯 策略: {strategy}")
+                    print(f"  🎯 目标: {target}")
+                    print(f"  📊 数量: {target_count}")
+                    print(f"  ⚙️  策略: {strategy}")
                     print(f"  💾 JSON: {'是' if save_json else '否'}")
 
                     confirm = input("\n确认开始抓取? (y/n) [y]: ").strip()
                     if confirm.lower() in ['', 'y', 'yes']:
-                        result = self.scrape_posts(target_count=target_count, strategy=strategy, save_json=save_json)
+                        result = self.scrape_posts(target=target, target_count=target_count, strategy=strategy, save_json=save_json)
 
                         if result['status'] == 'success':
                             print(f"✅ {result['message']}")
@@ -476,7 +449,7 @@ class UofTRedditSystem:
 
 def main():
     """Main entry point - Enhanced with better error handling"""
-    print("🚀 UofT Reddit System")
+    print("🚀 Reddit System")
     print("="*50)
     print("📊 University of Toronto Reddit Data System")
     print("🎯 Professional dataset creation and analysis")
@@ -484,7 +457,7 @@ def main():
 
     try:
         print("🔄 Initializing system...")
-        system = UofTRedditSystem()
+        system = RedditSystem()
         print("✅ System ready!\n")
         system.interactive_menu()
 

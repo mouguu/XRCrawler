@@ -57,21 +57,29 @@ class LocalDataManager:
         """Save a single post to JSON and CSV"""
         post_id = post_data.get('id')
         if not post_id:
+            print(f"⚠️ Save failed: Missing post ID in data")
             return False
             
         if post_id in self.existing_ids:
+            print(f"⚠️ Save failed: Post {post_id} already exists in current session")
             return False
 
-        # Save JSON
-        json_path = os.path.join(self.json_dir, f"{post_id}.json")
-        with open(json_path, 'w', encoding='utf-8') as f:
-            json.dump(post_data, f, ensure_ascii=False, indent=2)
+        try:
+            # Save JSON
+            json_path = os.path.join(self.json_dir, f"{post_id}.json")
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(post_data, f, ensure_ascii=False, indent=2)
 
-        # Save to CSV
-        self._append_to_csv(post_data)
-        
-        self.existing_ids.add(post_id)
-        return True
+            # Save to CSV
+            self._append_to_csv(post_data)
+            
+            self.existing_ids.add(post_id)
+            return True
+        except Exception as e:
+            print(f"❌ Save failed for {post_id}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return False
 
     def save_posts_batch(self, posts):
         """Save a batch of posts"""
@@ -83,25 +91,28 @@ class LocalDataManager:
 
     def _append_to_csv(self, post):
         """Append post summary to CSV"""
-        created_utc = post.get('created_utc', 0)
-        created_date = datetime.fromtimestamp(created_utc).strftime('%Y-%m-%d %H:%M:%S')
-        
-        row = [
-            post.get('id'),
-            post.get('title'),
-            post.get('author'),
-            post.get('score'),
-            post.get('url'),
-            created_utc,
-            created_date,
-            post.get('num_comments'),
-            post.get('subreddit'),
-            'text' if post.get('selftext') else 'link'
-        ]
-        
-        with open(self.csv_path, 'a', newline='', encoding='utf-8') as f:
-            writer = csv.writer(f)
-            writer.writerow(row)
+        try:
+            created_utc = post.get('created_utc', 0)
+            created_date = datetime.fromtimestamp(created_utc).strftime('%Y-%m-%d %H:%M:%S')
+            
+            row = [
+                post.get('id'),
+                post.get('title'),
+                post.get('author'),
+                post.get('score'),
+                post.get('url'),
+                created_utc,
+                created_date,
+                post.get('num_comments'),
+                post.get('subreddit'),
+                'text' if post.get('selftext') else 'link'
+            ]
+            
+            with open(self.csv_path, 'a', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                writer.writerow(row)
+        except Exception as e:
+            print(f"❌ CSV append failed: {str(e)}")
 
     def check_post_exists(self, post_id):
         """Check if post exists in current session"""
