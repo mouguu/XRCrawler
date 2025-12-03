@@ -1,7 +1,7 @@
 import { Page } from 'puppeteer';
 import * as retryUtils from '../utils';
 import * as constants from '../config/constants';
-import { X_SELECTORS, recoverFromErrorPage } from './data-extractor';
+import { X_SELECTORS, recoverFromErrorPage, detectNoResultsPage, detectErrorPage } from './data-extractor';
 import { ScraperEventBus } from './event-bus';
 import { ScraperErrors } from './errors';
 
@@ -61,34 +61,17 @@ export class NavigationService {
                 if (tweetsFound) return true;
 
                 // 2. Check for no results (valid empty state)
-                // We import detectNoResultsPage dynamically or assume it's imported
-                // Since I can't easily change imports in this tool without replacing the whole file header,
-                // I'll assume I need to add the import too. 
-                // Wait, I can use the imported function if I added it to the imports.
-                // I need to check if I added the import. I didn't.
-                // I will use a separate tool call to add the import first.
-                
-                // For now, let's just use the logic here or call the function if available.
-                // I'll use the function `recoverFromErrorPage` is imported from `./data-extractor`.
-                // I should check if `detectNoResultsPage` is exported from there. Yes I added it.
-                // But I need to update the import statement in this file.
-                
-                // Let's assume I'll update imports in a separate step or this step if I can.
-                // I'll just write the logic here to be safe and avoid import issues for now, 
-                // OR I'll do a separate edit for imports.
-                
-                // Let's do the loop logic first.
-                const noResults = await import('./data-extractor').then(m => m.detectNoResultsPage(page));
+                const noResults = await detectNoResultsPage(page);
                 if (noResults) {
                     this._log('No results found for query (valid empty state).', 'info');
                     return false; // Return false to indicate "no tweets but valid state"
                 }
 
                 // 3. Check for error page
-                const hasError = await import('./data-extractor').then(m => m.detectErrorPage(page));
+                const hasError = await detectErrorPage(page);
                 if (hasError) {
                     this._log('Error page detected during wait. Attempting recovery...', 'warn');
-                    const recovered = await import('./data-extractor').then(m => m.recoverFromErrorPage(page));
+                    const recovered = await recoverFromErrorPage(page);
                     if (recovered) {
                         this._log('Recovered from error page. Continuing wait...', 'info');
                         continue; // Continue waiting for tweets

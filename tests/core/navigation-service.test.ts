@@ -1,13 +1,18 @@
-/**
- * NavigationService 单元测试
- */
-
 import { NavigationService } from '../../core/navigation-service';
 import { ScraperEventBus } from '../../core/event-bus';
 import { Page } from 'puppeteer';
+import * as dataExtractor from '../../core/data-extractor';
 
 // Mock puppeteer
 jest.mock('puppeteer');
+
+// Mock data-extractor
+jest.mock('../../core/data-extractor', () => ({
+  X_SELECTORS: { TWEET: '[data-testid="tweet"]' },
+  detectNoResultsPage: jest.fn(),
+  detectErrorPage: jest.fn(),
+  recoverFromErrorPage: jest.fn()
+}));
 
 describe('NavigationService', () => {
   let service: NavigationService;
@@ -28,10 +33,14 @@ describe('NavigationService', () => {
       waitForSelector: jest.fn().mockResolvedValue(undefined),
       waitForNavigation: jest.fn().mockResolvedValue(undefined),
       url: jest.fn().mockReturnValue('https://example.com'),
-      evaluate: jest.fn().mockResolvedValue(undefined)
+      evaluate: jest.fn().mockResolvedValue(undefined),
+      $: jest.fn().mockResolvedValue({ textContent: 'tweet' }) // Mock tweet element found
     } as any;
 
     service = new NavigationService(mockEventBus);
+
+    // Reset all mocks before each test
+    jest.clearAllMocks();
   });
 
   describe('navigateToUrl', () => {
@@ -58,14 +67,32 @@ describe('NavigationService', () => {
   });
 
   describe('waitForTweets', () => {
-    it('should wait for tweets selector', async () => {
-      await service.waitForTweets(mockPage);
+    it('should return true when tweets are found', async () => {
+      mockPage.$ = jest.fn().mockResolvedValue({ textContent: 'tweet' }); // Tweets found
+      (dataExtractor.detectNoResultsPage as jest.Mock).mockResolvedValue(false);
+      (dataExtractor.detectErrorPage as jest.Mock).mockResolvedValue(false);
       
-      expect(mockPage.waitForSelector).toHaveBeenCalled();
+      const result = await service.waitForTweets(mockPage);
+      
+      expect(result).toBe(true);
+      expect(mockPage.$).toHaveBeenCalled();
     });
 
-    it('should handle timeout', async () => {
-      mockPage.waitForSelector = jest.fn().mockRejectedValue(new Error('Timeout'));
+    it('should return false when no results page is detected', async () => {
+      mockPage.$ = jest.fn().mockResolvedValue(null); // No tweets
+      (dataExtractor.detectNoResultsPage as jest.Mock).mockResolvedValue(true); // No results detected
+      (dataExtractor.detectErrorPage as jest.Mock).mockResolvedValue(false);
+      
+      const result = await service.waitForTweets(mockPage);
+      
+      expect(result).toBe(false);
+      expect(dataExtractor.detectNoResultsPage).toHaveBeenCalled();
+    });
+
+    it('should timeout if neither tweets nor empty state is found', async () => {
+      mockPage.$ = jest.fn().mockResolvedValue(null); // Always return null
+      (dataExtractor.detectNoResultsPage as jest.Mock).mockResolvedValue(false);
+      (dataExtractor.detectErrorPage as jest.Mock).mockResolvedValue(false);
       
       await expect(service.waitForTweets(mockPage, { timeout: 1000 })).rejects.toThrow();
     });
