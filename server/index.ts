@@ -2,21 +2,21 @@ import express, { Request, Response } from "express";
 import * as path from "path";
 import * as fs from "fs";
 // 注意: scrapeProfileGraphql 已废弃，统一使用 ScraperEngine
-import { createCookieManager, scrapeQueue } from "./core";
+import { createCookieManager, scrapeQueue } from "../core";
 import {
   createEnhancedLogger,
   getOutputPathManager,
   getConfigManager,
   setLogLevel,
-} from "./utils";
-import * as fileUtils from "./utils/fileutils";
-import { apiKeyMiddleware } from "./middleware/api-key";
-import { ScrapeRequest } from "./types";
+} from "../utils";
+import * as fileUtils from "../utils/fileutils";
+import { apiKeyMiddleware } from "../middleware/api-key";
+import { ScrapeRequest } from "../types";
 import multer from "multer";
 import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ExpressAdapter } from '@bull-board/express';
-import jobRoutes from './server/routes/jobs';
+import jobRoutes from './routes/jobs';
 
 // 创建服务器日志器
 const serverLogger = createEnhancedLogger("Server");
@@ -248,7 +248,7 @@ app.post(
 // API: Get metrics (简单 JSON 格式)
 app.get("/api/metrics", (req: Request, res: Response) => {
   try {
-    const { getMetricsCollector } = require("./core/metrics-collector");
+    const { getMetricsCollector } = require("../core/metrics-collector");
     const collector = getMetricsCollector();
     res.json(collector.getMetrics());
   } catch (error: any) {
@@ -259,7 +259,7 @@ app.get("/api/metrics", (req: Request, res: Response) => {
 // API: Get metrics summary
 app.get("/api/metrics/summary", (req: Request, res: Response) => {
   try {
-    const { getMetricsCollector } = require("./core/metrics-collector");
+    const { getMetricsCollector } = require("../core/metrics-collector");
     const collector = getMetricsCollector();
     res.json({
       summary: collector.getSummary(),

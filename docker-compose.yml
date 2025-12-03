@@ -21,14 +21,11 @@ services:
       - REDDIT_API_PORT=5002
     volumes:
       - ./data:/app/data
+      - ./data/output:/app/output
+      - ./data/cookies:/app/cookies
     ports:
       - "5001:5001"
-    command:
-      [
-        "/bin/sh",
-        "-c",
-        "mkdir -p /app/data/output /app/data/cookies && ln -sf /app/data/output /app/output && ln -sf /app/data/cookies /app/cookies && /app/entrypoint.sh",
-      ]
+    command: ["/app/entrypoint.sh"]
     restart: unless-stopped
 
   worker:
@@ -43,12 +40,9 @@ services:
       - REDDIT_API_PORT=5002
     volumes:
       - ./data:/app/data
-    command:
-      [
-        "/bin/sh",
-        "-c",
-        "mkdir -p /app/data/output /app/data/cookies && ln -sf /app/data/output /app/output && ln -sf /app/data/cookies /app/cookies && node dist/worker.js",
-      ]
+      - ./data/output:/app/output
+      - ./data/cookies:/app/cookies
+    command: ["node", "dist/worker.js"]
     restart: unless-stopped
 
   reddit-helper:
@@ -59,12 +53,7 @@ services:
       - ./data:/app/data
     environment:
       - REDDIT_OUTPUT_DIR=/app/data/output/reddit
-    command:
-      [
-        "/bin/sh",
-        "-c",
-        "mkdir -p /app/data/output /app/data/cookies && rm -rf /app/output && ln -s /app/data/output /app/output && pip install -r requirements.txt && python reddit_api_server.py",
-      ]
+    command: ["/bin/sh", "-c", "pip install -r requirements.txt && python reddit_api_server.py"]
     ports:
       - "5002:5002"
     restart: unless-stopped
