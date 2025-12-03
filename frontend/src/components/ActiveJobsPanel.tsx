@@ -6,9 +6,26 @@
 import { useState, useEffect } from 'react';
 import { connectToJobStream, cancelJob, type JobProgressEvent } from '../utils/queueClient';
 
+type PlatformName = string;
+
+const platformBadges: Record<string, { label: string; badge: string }> = {
+  twitter: { label: 'Twitter/X', badge: '𝕏' },
+  reddit: { label: 'Reddit', badge: '👽' },
+};
+
+const renderPlatform = (platform: PlatformName) => {
+  const meta = platformBadges[platform.toLowerCase()] || { label: platform, badge: '🌐' };
+  return (
+    <span className="ml-2 inline-flex items-center gap-1 text-xs px-2 py-1 bg-stone-100 rounded">
+      <span className="opacity-70">{meta.badge}</span>
+      <span>{meta.label}</span>
+    </span>
+  );
+};
+
 interface ActiveJob {
   jobId: string;
-  type: 'twitter' | 'reddit';
+  type: PlatformName;
   state: string;
   progress?: JobProgressEvent;
   logs: string[];
@@ -44,7 +61,7 @@ export function ActiveJobsPanel({ onJobComplete }: ActiveJobsPanelProps) {
   };
 
   // Add a new job and connect to its stream
-  const addJob = (jobId: string, type: 'twitter' | 'reddit') => {
+  const addJob = (jobId: string, type: PlatformName) => {
     const job: ActiveJob = {
       jobId,
       type,
@@ -196,9 +213,7 @@ export function ActiveJobsPanel({ onJobComplete }: ActiveJobsPanelProps) {
                 <span className="font-mono text-sm text-stone-600">
                   {job.jobId.slice(0, 20)}...
                 </span>
-                <span className="ml-2 text-xs px-2 py-1 bg-stone-100 rounded">
-                  {job.type}
-                </span>
+                {renderPlatform(job.type)}
                 <span className="ml-2 text-xs text-stone-500">
                   {job.state}
                 </span>

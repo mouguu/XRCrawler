@@ -50,6 +50,15 @@ pnpm run dev
 ```
 > Ensure Redis is running; otherwise progress/log streaming will be missing.
 
+### 🐳 One-command Docker Compose
+```bash
+docker compose up --build -d
+```
+- Services: `redis`, `app` (server + static UI), `worker`, `reddit-helper`.
+- Volumes: binds `./data` into `/app/data` for cookies/output sharing. Put cookies as `./data/cookies/account1.json` etc.; outputs land in `./data/output`.
+- Ports: `5001` (server/UI), `5002` (reddit helper), `6379` (redis).
+- Logs: `docker compose logs -f app worker reddit-helper`.
+
 ---
 
 ## 🛠️ Run (CLI)
@@ -67,6 +76,11 @@ More options: `docs/CLI_USAGE.md` (profile/thread/search, limits, date ranges, e
 3. Server streams via SSE at `/api/job/:id/stream`.  
 4. Mission Control renders live progress/logs; on completion shows **Download .md**.  
    If SSE payload lacks `downloadUrl`, UI fetches `/api/job/{id}` as a fallback.
+
+### Platform Adapter Contract (plugin style)
+- Core worker dispatches by platform name via adapters (`core/platforms/*-adapter.ts`), registered in `core/platforms/registry.ts`.
+- Contract: `PlatformAdapter.process(job, ctx)` → `ScrapeJobResult`; optional `init`/`classifyError`. Shared types live in `core/platforms/types.ts`.
+- Twitter/X and Reddit already use adapters; to add a new platform, implement an adapter file, `registerAdapter(newAdapter)`, and make the API layer pass `job.data.type` to match.
 
 ---
 

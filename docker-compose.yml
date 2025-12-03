@@ -1,0 +1,57 @@
+version: '3.9'
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  app:
+    build: .
+    depends_on:
+      - redis
+      - reddit-helper
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PORT=5001
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+      - REDDIT_API_URL=http://reddit-helper:5002
+      - REDDIT_API_PORT=5002
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "5001:5001"
+    command: ["/app/entrypoint.sh"]
+    restart: unless-stopped
+
+  worker:
+    build: .
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+      - REDDIT_API_URL=http://reddit-helper:5002
+      - REDDIT_API_PORT=5002
+    volumes:
+      - ./data:/app/data
+    command: ["/bin/sh", "-c", "mkdir -p /app/data/output /app/data/cookies && ln -sf /app/data/output /app/output && ln -sf /app/data/cookies /app/cookies && node dist/worker.js"]
+    restart: unless-stopped
+
+  reddit-helper:
+    image: python:3.11-slim
+    working_dir: /app/platforms/reddit
+    volumes:
+      - ./:/app
+    command: ["/bin/sh", "-c", "pip install -r requirements.txt && python reddit_api_server.py"]
+    ports:
+      - "5002:5002"
+    restart: unless-stopped
+
+volumes:
+  redis-data:

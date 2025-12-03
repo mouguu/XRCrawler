@@ -64,3 +64,7 @@ export { scrapeQueue, scrapeQueueEvents, closeScrapeQueue } from './queue/scrape
 export { createScrapeWorker, shutdownWorker } from './queue/worker';
 export { redisConnection, redisPublisher, redisSubscriber, closeRedisConnections } from './queue/connection';
 export type { ScrapeJobData, ScrapeJobResult, JobProgress, JobLog } from './queue/types';
+
+// Platform adapters
+export { registerAdapter, getAdapter, listAdapters } from './platforms/registry';
+export type { PlatformAdapter, PlatformName, PlatformErrorCategory, NormalizedItem, CrawlJobConfig, CrawlTarget } from './platforms/types';

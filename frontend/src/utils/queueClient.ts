@@ -12,7 +12,7 @@ export interface JobInfo {
 
 export interface JobStatus {
   id: string;
-  type: 'twitter' | 'reddit';
+  type: string;
   state: 'waiting' | 'active' | 'completed' | 'failed' | 'delayed';
   progress?: {
     current: number;
@@ -157,7 +157,7 @@ export function connectToJobStream(
  */
 export async function listJobs(filters?: {
   state?: 'waiting' | 'active' | 'completed' | 'failed';
-  type?: 'twitter' | 'reddit';
+  type?: string;
 }): Promise<JobStatus[]> {
   const params = new URLSearchParams();
   if (filters?.state) params.append('state', filters.state);

@@ -6,7 +6,7 @@
 
 export interface ScrapeJobData {
   jobId: string;
-  type: 'twitter' | 'reddit';
+  type: 'twitter' | 'reddit' | string;
   config: {
     // Twitter options
     username?: string;
