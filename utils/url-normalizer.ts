@@ -3,6 +3,10 @@
  * 优先使用WASM，失败时回退到TypeScript实现
  */
 
+import { existsSync } from "fs";
+import path from "path";
+import { pathToFileURL } from "url";
+
 export interface NormalizeResult {
   urls: string[];
   stats: {
@@ -26,21 +30,44 @@ async function loadWasmModule(): Promise<any> {
 
   wasmLoadAttempted = true;
 
-  try {
-    // 尝试从编译后的pkg目录加载
-    const wasm = await import(
-      "../../wasm/url-normalizer/pkg/url_normalizer.js"
-    );
-    wasmModule = wasm;
-    console.log("[url-normalizer] WASM module loaded successfully");
-    return wasm;
-  } catch (error) {
-    console.warn(
-      "[url-normalizer] WASM module not available, using TypeScript fallback:",
-      error
-    );
-    return null;
+  // 在开发（TypeScript源代码）、测试（ts-jest）和编译后的dist中加载路径不同，
+  // 这里按顺序尝试几个可能的位置。
+  const candidatePaths = [
+    // TS 源代码运行（utils -> wasm）
+    path.resolve(__dirname, "../wasm/url-normalizer/pkg/url_normalizer.js"),
+    // 编译后 dist 目录运行（dist/utils -> wasm 在项目根）
+    path.resolve(__dirname, "../../wasm/url-normalizer/pkg/url_normalizer.js"),
+    // 兜底：基于 CWD
+    path.resolve(
+      process.cwd(),
+      "wasm/url-normalizer/pkg/url_normalizer.js"
+    ),
+  ];
+
+  let lastError: unknown = null;
+
+  for (const candidate of candidatePaths) {
+    if (!existsSync(candidate)) {
+      continue;
+    }
+
+    try {
+      const wasm = await import(pathToFileURL(candidate).href);
+      wasmModule = wasm;
+      console.log(
+        `[url-normalizer] WASM module loaded successfully from ${candidate}`
+      );
+      return wasm;
+    } catch (error) {
+      lastError = error;
+    }
   }
+
+  console.warn(
+    "[url-normalizer] WASM module not available, using TypeScript fallback:",
+    lastError
+  );
+  return null;
 }
 
 /**

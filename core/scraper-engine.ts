@@ -20,14 +20,15 @@ import * as markdownUtils from '../utils';
 import * as exportUtils from '../utils';
 import * as screenshotUtils from '../utils';
 import * as constants from '../config/constants';
-import { validateScrapeConfig } from '../config/constants';
+import { getThreadDetailWaitTime, validateScrapeConfig } from '../config/constants';
 import { XApiClient } from './x-api';
 import { ScraperErrors, ScraperError, ErrorCode, ErrorClassifier } from './errors';
 import { runTimelineApi } from './timeline-api-runner';
 import { runTimelineDom } from './timeline-dom-runner';
 import { runTimelineDateChunks } from './timeline-date-chunker';
-import { runThreadGraphql } from './thread-graphql-runner';
-import { runThreadDom } from './thread-dom-runner';
+// Legacy thread runners moved to archive/deprecated/
+// import { ThreadGraphqlRunner } from './thread-graphql-runner';
+// import { ThreadDomRunner } from './thread-dom-runner';
 import {
     Tweet,
     ProfileInfo,
@@ -626,21 +627,360 @@ export class ScraperEngine {
     /**
      * 使用 GraphQL API 爬取推文串
      */
-    /**
-     * 使用 GraphQL API 爬取推文串
-     */
     private async scrapeThreadGraphql(options: ScrapeThreadOptions): Promise<ScrapeThreadResult> {
-        return runThreadGraphql(this, options);
+        try {
+            this.ensureApiClient();
+        } catch (error) {
+            return {
+                success: false,
+                tweets: [],
+                error: error instanceof ScraperError ? error.message : 'API Client not initialized'
+            };
+        }
+
+        const {
+            tweetUrl,
+            maxReplies = 100,
+            saveMarkdown = true,
+            exportCsv = false,
+            exportJson = false,
+            outputDir
+        } = options;
+        let { runContext } = options;
+
+        if (!tweetUrl || !tweetUrl.includes('/status/')) {
+            return { success: false, tweets: [], error: 'Invalid tweet URL' };
+        }
+
+        const parsedUrl = this.parseTweetUrl(tweetUrl);
+        if (!parsedUrl) {
+            return { success: false, tweets: [], error: 'Could not parse tweet URL' };
+        }
+        const { username, tweetId } = parsedUrl;
+
+        // Initialize runContext if missing
+        if (!runContext) {
+            runContext = await fileUtils.createRunContext({
+                platform: 'x',
+                identifier: `thread-${username}`,
+                baseOutputDir: outputDir
+            });
+            this.eventBus.emitLog(`Created new run context for thread: ${runContext.runId}`);
+        }
+
+        this.performanceMonitor.reset();
+        this.performanceMonitor.setMode('graphql');
+        this.performanceMonitor.start();
+        this.emitPerformanceUpdate(true);
+
+        // Track progress (thread replies only; original tweet + replies = total)
+        this.progressManager.startScraping('thread', tweetId, maxReplies);
+
+        const apiClient = this.ensureApiClient();
+        let originalTweet: Tweet | null = null;
+        const replies: Tweet[] = [];
+        const scrapedReplyIds = new Set<string>();
+        let cursor: string | undefined;
+
+        try {
+            this.eventBus.emitLog(`Fetching thread for tweet ${tweetId}...`);
+
+            const apiStartTime = Date.now();
+            this.performanceMonitor.startPhase('api-fetch-thread');
+            const response = await apiClient.getTweetDetail(tweetId);
+            const apiLatency = Date.now() - apiStartTime;
+            this.performanceMonitor.endPhase();
+            this.performanceMonitor.recordApiRequest(apiLatency, false);
+
+            this.performanceMonitor.startPhase('parse-thread-response');
+            const parsed = parseTweetDetailResponse(response, tweetId);
+            const parseTime = Date.now() - apiStartTime - apiLatency;
+            this.performanceMonitor.endPhase();
+            this.performanceMonitor.recordApiParse(parseTime);
+
+            originalTweet = parsed.originalTweet;
+
+            for (const reply of [...parsed.conversationTweets, ...parsed.replies]) {
+                if (!scrapedReplyIds.has(reply.id)) {
+                    replies.push(reply);
+                    scrapedReplyIds.add(reply.id);
+                }
+            }
+
+            cursor = parsed.nextCursor;
+            this.performanceMonitor.recordTweets(replies.length + (originalTweet ? 1 : 0));
+            this.eventBus.emitProgress({
+                current: replies.length,
+                target: maxReplies,
+                action: 'fetching replies'
+            });
+            this.progressManager.updateProgress(replies.length, undefined, cursor);
+
+            // Fetch more replies with pagination
+            let consecutiveEmptyFetches = 0;
+            const MAX_CONSECUTIVE_EMPTY_FETCHES = 3;
+
+            while (replies.length < maxReplies && cursor) {
+                if (this.shouldStop()) {
+                    this.eventBus.emitLog('Manual stop signal received.');
+                    break;
+                }
+
+                const waitTime = getThreadDetailWaitTime();
+                await throttle(waitTime);
+
+                const moreApiStartTime = Date.now();
+                this.performanceMonitor.startPhase('api-fetch-more-replies');
+                const moreResponse = await apiClient.getTweetDetail(tweetId, cursor);
+                const moreApiLatency = Date.now() - moreApiStartTime;
+                this.performanceMonitor.endPhase();
+                this.performanceMonitor.recordApiRequest(moreApiLatency, false);
+
+                const moreParsed = parseTweetDetailResponse(moreResponse, tweetId);
+
+                let addedCount = 0;
+                for (const reply of [...moreParsed.conversationTweets, ...moreParsed.replies]) {
+                    if (replies.length >= maxReplies) break;
+                    if (!scrapedReplyIds.has(reply.id)) {
+                        replies.push(reply);
+                        scrapedReplyIds.add(reply.id);
+                        addedCount++;
+                    }
+                }
+
+                this.performanceMonitor.recordTweets(replies.length + (originalTweet ? 1 : 0));
+                this.eventBus.emitLog(`Fetched ${addedCount} more replies. Total: ${replies.length}`);
+                this.eventBus.emitProgress({
+                    current: replies.length,
+                    target: maxReplies,
+                    action: 'fetching replies'
+                });
+                this.progressManager.updateProgress(replies.length, undefined, moreParsed.nextCursor);
+
+                if (addedCount === 0) {
+                    consecutiveEmptyFetches++;
+                    if (consecutiveEmptyFetches >= MAX_CONSECUTIVE_EMPTY_FETCHES) {
+                        this.eventBus.emitLog(`No new replies found after ${MAX_CONSECUTIVE_EMPTY_FETCHES} attempts. Stopping.`);
+                        break;
+                    }
+                } else {
+                    consecutiveEmptyFetches = 0;
+                }
+
+                if (!moreParsed.nextCursor || moreParsed.nextCursor === cursor) {
+                    this.eventBus.emitLog('Reached end of replies.');
+                    break;
+                }
+                cursor = moreParsed.nextCursor;
+            }
+
+            const allTweets = originalTweet ? [originalTweet, ...replies] : replies;
+
+            this.performanceMonitor.startPhase('save-results');
+            if (allTweets.length > 0 && runContext) {
+                if (saveMarkdown) await markdownUtils.saveTweetsAsMarkdown(allTweets, runContext);
+                if (exportCsv) await exportUtils.exportToCsv(allTweets, runContext);
+                if (exportJson) await exportUtils.exportToJson(allTweets, runContext);
+            }
+            this.performanceMonitor.endPhase();
+
+            const activeSession = this.getCurrentSession();
+            if (activeSession) {
+                this.sessionManager.markGood(activeSession.id);
+            }
+
+            this.performanceMonitor.stop();
+            this.emitPerformanceUpdate(true);
+            this.eventBus.emitLog(this.performanceMonitor.getReport());
+            this.progressManager.completeScraping();
+
+            return {
+                success: true,
+                tweets: allTweets,
+                originalTweet,
+                replies,
+                runContext,
+                performance: this.performanceMonitor.getStats()
+            };
+        } catch (error: unknown) {
+            const scraperError = ErrorClassifier.classify(error);
+            this.performanceMonitor.stop();
+            this.eventBus.emitError(scraperError);
+            return {
+                success: false,
+                tweets: [],
+                error: scraperError.getUserMessage(),
+                code: scraperError.code,
+                retryable: scraperError.retryable
+            };
+        }
     }
 
     /**
      * 使用 Puppeteer DOM 爬取推文串（原有逻辑）
      */
-    /**
-     * 使用 Puppeteer DOM 爬取推文串（原有逻辑）
-     */
     private async scrapeThreadDom(options: ScrapeThreadOptions): Promise<ScrapeThreadResult> {
-        return runThreadDom(this, options);
+        const {
+            tweetUrl,
+            maxReplies = 100,
+            saveMarkdown = true,
+            exportCsv = false,
+            exportJson = false,
+            outputDir
+        } = options;
+        let { runContext } = options;
+
+        if (!tweetUrl || !tweetUrl.includes('/status/')) {
+            return { success: false, tweets: [], error: 'Invalid tweet URL' };
+        }
+
+        const parsedUrl = this.parseTweetUrl(tweetUrl);
+        if (!parsedUrl) {
+            return { success: false, tweets: [], error: 'Could not parse tweet URL' };
+        }
+        const { username, tweetId } = parsedUrl;
+
+        // Ensure page is available for DOM operations.
+        const page = await this.ensureBrowserPage();
+
+        // Initialize runContext if missing
+        if (!runContext) {
+            runContext = await fileUtils.createRunContext({
+                platform: 'x',
+                identifier: `thread-${username}`,
+                baseOutputDir: outputDir
+            });
+            this.eventBus.emitLog(`Created new run context for thread: ${runContext.runId}`);
+        }
+
+        this.performanceMonitor.reset();
+        this.performanceMonitor.setMode('puppeteer');
+        this.performanceMonitor.start();
+        this.emitPerformanceUpdate(true);
+
+        this.progressManager.startScraping('thread', tweetId, maxReplies);
+
+        const replies: Tweet[] = [];
+        const scrapedReplyIds = new Set<string>();
+        let originalTweet: Tweet | null = null;
+
+        const extractAndProcessTweets = async (): Promise<number> => {
+            this.performanceMonitor.startPhase('extract-thread');
+            const tweetsOnPage = await dataExtractor.extractTweetsFromPage(page);
+            this.performanceMonitor.endPhase();
+
+            let added = 0;
+            if (tweetsOnPage.length > 0) {
+                if (!originalTweet) {
+                    originalTweet = tweetsOnPage.find(t => t.id === tweetId || t.url.includes(tweetId)) || tweetsOnPage[0];
+                }
+
+                for (const tweet of tweetsOnPage) {
+                    if (originalTweet && tweet.id === originalTweet.id) continue;
+                    if (!scrapedReplyIds.has(tweet.id) && replies.length < maxReplies) {
+                        replies.push(tweet as Tweet);
+                        scrapedReplyIds.add(tweet.id);
+                        added++;
+                    }
+                }
+            }
+
+            this.performanceMonitor.recordTweets(replies.length + (originalTweet ? 1 : 0));
+            this.eventBus.emitProgress({
+                current: replies.length,
+                target: maxReplies,
+                action: 'fetching replies'
+            });
+            this.progressManager.updateProgress(replies.length, originalTweet?.id);
+            return added;
+        };
+
+        try {
+            // Navigate to tweet page and wait for tweets to render
+            this.performanceMonitor.startPhase('navigation');
+            await this.navigationService.navigateToUrl(page, tweetUrl);
+            await this.navigationService.waitForTweets(page, { timeout: 12000, maxRetries: 1 });
+            this.performanceMonitor.endPhase();
+
+            // Initial extraction
+            await extractAndProcessTweets();
+
+            // Scroll to gather more replies
+            let scrollAttempts = 0;
+            let consecutiveNoNew = 0;
+            const maxScrollAttempts = Math.max(50, Math.ceil(maxReplies / 5));
+            const maxNoNew = constants.MAX_CONSECUTIVE_NO_NEW_TWEETS;
+
+            while (replies.length < maxReplies && scrollAttempts < maxScrollAttempts && consecutiveNoNew < maxNoNew) {
+                if (this.shouldStop()) {
+                    this.eventBus.emitLog('Manual stop signal received.');
+                    break;
+                }
+
+                scrollAttempts++;
+                this.performanceMonitor.startPhase('scroll-thread');
+                await dataExtractor.scrollToBottomSmart(page, constants.WAIT_FOR_NEW_TWEETS_TIMEOUT);
+                this.performanceMonitor.endPhase();
+
+                await dataExtractor.waitForNewTweets(page, replies.length + (originalTweet ? 1 : 0), 2000);
+                const added = await extractAndProcessTweets();
+
+                if (added === 0) {
+                    consecutiveNoNew++;
+                } else {
+                    consecutiveNoNew = 0;
+                }
+            }
+
+            const allTweets = originalTweet ? [originalTweet, ...replies] : replies;
+
+            this.performanceMonitor.startPhase('save-results');
+            if (allTweets.length > 0 && runContext) {
+                if (saveMarkdown) await markdownUtils.saveTweetsAsMarkdown(allTweets, runContext);
+                if (exportCsv) await exportUtils.exportToCsv(allTweets, runContext);
+                if (exportJson) await exportUtils.exportToJson(allTweets, runContext);
+            }
+            this.performanceMonitor.endPhase();
+
+            const activeSession = this.getCurrentSession();
+            if (activeSession) {
+                this.sessionManager.markGood(activeSession.id);
+            }
+
+            this.performanceMonitor.stop();
+            this.emitPerformanceUpdate(true);
+            this.eventBus.emitLog(this.performanceMonitor.getReport());
+            this.progressManager.completeScraping();
+
+            return {
+                success: true,
+                tweets: allTweets,
+                originalTweet,
+                replies,
+                runContext,
+                performance: this.performanceMonitor.getStats()
+            };
+        } catch (error: unknown) {
+            const scraperError = ErrorClassifier.classify(error);
+            this.performanceMonitor.stop();
+            this.eventBus.emitError(new Error(`Thread scraping (DOM) failed: ${scraperError.message}`));
+            return {
+                success: false,
+                tweets: [],
+                error: scraperError.getUserMessage(),
+                code: scraperError.code,
+                retryable: scraperError.retryable
+            };
+        }
+    }
+
+    private parseTweetUrl(tweetUrl: string): { username: string; tweetId: string } | null {
+        const match = tweetUrl.match(/(?:x|twitter)\.com\/([^\/]+)\/status\/(\d+)/i);
+        if (!match) return null;
+        return {
+            username: match[1],
+            tweetId: match[2]
+        };
     }
 
     async close(): Promise<void> {
