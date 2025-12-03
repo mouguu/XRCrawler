@@ -249,10 +249,12 @@ class RedditScraper:
         
         # Auto-export to Markdown with user comment filter
         print("\n📝 自动导出Markdown...", flush=True)
+        export_file_path = None
         try:
             from export_to_markdown import export_to_markdown
             json_dir = local_data_manager.json_dir
             export_file = local_data_manager.current_session_dir + "/posts_export_filtered.md"
+            export_file_path = export_file  # Store for return value
             
             # Extract username from target_name
             username = self.target_name
@@ -268,7 +270,8 @@ class RedditScraper:
             'scraped_count': self.scraped_count,
             'message': 'Scraping completed successfully',
             'total_posts_in_db': local_data_manager.get_posts_count(),
-            'elapsed_time': elapsed_time
+            'elapsed_time': elapsed_time,
+            'file_path': export_file_path  # Add file path to return value
         }
     
     def _filter_existing_posts(self, post_urls: List[Tuple[str, str]], batch_size: int = 100) -> List[Tuple[str, str]]:
