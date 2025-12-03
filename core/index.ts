@@ -49,9 +49,7 @@ export { ErrorSnapshotter } from './error-snapshotter';
 export { FingerprintManager } from './fingerprint-manager';
 export { MonitorService } from './monitor-service';
 
-// API Clients
 export { XApiClient } from './x-api';
-export { RedditApiClient } from './reddit-api-client';
 
 // Utilities
 export { getShouldStopScraping, setShouldStopScraping, resetShouldStopScraping } from './stop-signal';
