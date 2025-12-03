@@ -54,7 +54,6 @@ export { XApiClient } from './x-api';
 export { RedditApiClient } from './reddit-api-client';
 
 // Utilities
-export { RequestQueue, type RequestTask } from './request-queue';
 export { getShouldStopScraping, setShouldStopScraping, resetShouldStopScraping } from './stop-signal';
 
 // Cookie Manager Factory

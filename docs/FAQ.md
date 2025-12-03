@@ -178,16 +178,7 @@ Via CLI (basic monitoring only):
 node dist/cli.js monitor -u user1,user2
 ```
 
-Via API (supports keywords and lookback hours):
-
-```bash
-curl -X POST http://localhost:5001/api/monitor \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: your-api-key" \
-  -d '{"users": ["user1", "user2"], "keywords": "AI,space", "lookbackHours": 24}'
-```
-
-**Note**: The CLI monitor command currently only supports basic monitoring. For keyword filtering and lookback hours, use the API or Web Interface.
+**Note**: API-based monitoring endpoints were removed when migrating to BullMQ/Redis. Use the CLI for basic monitoring or the Web UI for richer options.
 
 ## Output Questions
 
@@ -255,4 +246,3 @@ Create an issue on GitHub with:
 - Feature description
 - Use case
 - Proposed implementation (if any)
-

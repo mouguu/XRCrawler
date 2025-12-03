@@ -122,7 +122,7 @@ Track multiple users for new tweets and generate daily reports:
 node dist/cli.js monitor -u elonmusk,trump,billgates
 ```
 
-**Note**: The CLI monitor command currently only supports basic monitoring. For keyword filtering and lookback hours, use the [Web Interface](./WEB_INTERFACE.md) or [API](./API_REFERENCE.md) endpoints which support these advanced features.
+**Note**: Monitor API endpoints were removed with the migration to BullMQ/Redis. The CLI monitor command remains for basic use; advanced keyword/lookback settings are available in the Web UI.
 
 ## Reddit Commands
 
@@ -198,4 +198,3 @@ node dist/cli.js twitter --help
 node dist/cli.js reddit --help
 node dist/cli.js monitor --help
 ```
-

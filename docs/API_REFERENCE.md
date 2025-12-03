@@ -13,9 +13,9 @@ If `API_KEY` is set, all `/api/*` endpoints require authentication via header `X
 
 ## Endpoints
 
-### Scraping
+### Scraping (Queue)
 
-**POST /api/scrape** - Start scraping task
+**POST /api/scrape-v2** — Queue a scraping job (BullMQ + Redis)
 
 Request:
 
@@ -28,33 +28,34 @@ Request:
   "dateRange": { "start": "2024-01-01", "end": "2024-12-31" },
   "likes": false,
   "enableRotation": true,
+  "enableProxy": false,
   "strategy": "auto" | "super_full" | "super_recent" | "new"  // Reddit only
 }
 ```
 
-Response: `{ "success": true, "downloadUrl": "/api/download?path=...", "stats": { "count": 100 } }`
+Response:
+```json
+{
+  "success": true,
+  "jobId": "profile-1700000000-abc123",
+  "statusUrl": "/api/job/<jobId>",
+  "progressUrl": "/api/job/<jobId>/stream",
+  "message": "Task queued successfully"
+}
+```
 
-**POST /api/monitor** - Start monitoring
+### Status & Progress (Queue)
 
-Request: `{ "users": ["user1"], "keywords": "AI,space", "lookbackHours": 24, "enableRotation": true }`
+**GET /api/job/:jobId** — Get job status/result  
+Returns `{ id, state, progress, result }`
 
-Response: `{ "success": true, "downloadUrl": "/api/download?path=..." }`
+**GET /api/job/:jobId/stream** — SSE for progress/log events (EventSource)
 
-**POST /api/stop** - Stop current task
+**GET /api/jobs?state=completed|failed|active|waiting&type=twitter|reddit** — List jobs (paged)
 
-Response: `{ "success": true, "message": "Stop signal sent..." }`
-
-### Status & Progress
-
-**GET /api/progress** - Server-Sent Events stream for real-time progress updates
-
-**GET /api/status** - Get current scraping status
-
-Response: `{ "isActive": true, "shouldStop": false }`
-
-**GET /api/result** - Get result after scraping completes
-
-Response: `{ "isActive": false, "downloadUrl": "/api/download?path=..." }`
+Legacy status endpoints remain for compatibility:
+- **GET /api/status** — Basic scraper activity flag
+- **GET /api/result** — Last download URL (non-queued fallback)
 
 ### Metrics & Health
 
