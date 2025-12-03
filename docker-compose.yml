@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   redis:
     image: redis:7-alpine
@@ -25,7 +23,12 @@ services:
       - ./data:/app/data
     ports:
       - "5001:5001"
-    command: ["/app/entrypoint.sh"]
+    command:
+      [
+        "/bin/sh",
+        "-c",
+        "mkdir -p /app/data/output /app/data/cookies && ln -sf /app/data/output /app/output && ln -sf /app/data/cookies /app/cookies && /app/entrypoint.sh",
+      ]
     restart: unless-stopped
 
   worker:
@@ -40,7 +43,12 @@ services:
       - REDDIT_API_PORT=5002
     volumes:
       - ./data:/app/data
-    command: ["/bin/sh", "-c", "mkdir -p /app/data/output /app/data/cookies && ln -sf /app/data/output /app/output && ln -sf /app/data/cookies /app/cookies && node dist/worker.js"]
+    command:
+      [
+        "/bin/sh",
+        "-c",
+        "mkdir -p /app/data/output /app/data/cookies && ln -sf /app/data/output /app/output && ln -sf /app/data/cookies /app/cookies && node dist/worker.js",
+      ]
     restart: unless-stopped
 
   reddit-helper:
@@ -51,7 +59,12 @@ services:
       - ./data:/app/data
     environment:
       - REDDIT_OUTPUT_DIR=/app/data/output/reddit
-    command: ["/bin/sh", "-c", "mkdir -p /app/data/output /app/data/cookies && rm -rf /app/output && ln -s /app/data/output /app/output && pip install -r requirements.txt && python reddit_api_server.py"]
+    command:
+      [
+        "/bin/sh",
+        "-c",
+        "mkdir -p /app/data/output /app/data/cookies && rm -rf /app/output && ln -s /app/data/output /app/output && pip install -r requirements.txt && python reddit_api_server.py",
+      ]
     ports:
       - "5002:5002"
     restart: unless-stopped
