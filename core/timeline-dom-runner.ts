@@ -307,13 +307,23 @@ export async function runTimelineDom(engine: ScraperEngine, config: ScrapeTimeli
                     if (isLowCount && !isChunkMode) {
                         sessionSwitchThreshold = 5; // session问题，尽快切换（仅非chunk模式）
                     } else if (isHighCount) {
-                        sessionSwitchThreshold = Math.min(maxNoNew, 8); // 深度限制，可以多尝试
+                        sessionSwitchThreshold = Math.min(maxNoNew, 8); // 深度限制,可以多尝试
                     } else {
                         // 在 chunk 模式下，这段代码已经不会被触发（因为上面会 break）
                         sessionSwitchThreshold = Math.min(maxNoNew, 6);
                     }
 
+                    // Check if this is Home Timeline mode (username is null/undefined)
+                    // In Home Timeline mode, session rotation is meaningless because each account has different feed
+                    const isHomeTimeline = !username && !searchQuery;
+
                     if (consecutiveNoNew >= sessionSwitchThreshold && attemptedSessions.size < 4 && !isLikelyBoundary) {
+                        // Skip session rotation for Home Timeline mode
+                        if (isHomeTimeline) {
+                            engine.eventBus.emitLog(`Home Timeline mode detected. Session rotation skipped (each account has different feed). Reached platform limit of ~${collectedTweets.length} tweets.`, 'warn');
+                            break; // Stop scraping, we've hit the platform limit
+                        }
+
                         if (isLowCount) {
                             engine.eventBus.emitLog(`Low tweet count (${collectedTweets.length}) with ${consecutiveNoNew} consecutive no-new cycles. Likely session issue. Rotating session...`, 'warn');
                         } else {
