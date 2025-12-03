@@ -15,18 +15,32 @@ dist/
 frontend/dist/
 public/
 
+# WASM & Rust build artifacts
+wasm/**/target/
+wasm/**/Cargo.lock
+wasm/**/.cargo-ok
+# Keep pkg directory for deployment, but ignore internal .gitignore
+wasm/**/pkg/.gitignore
+
 # Queue state
 .queue/
 
-# Scraping output (sensitive data!)
+# Output & Data
 output/
 data/
+logs/
+*.log
+screenshots/
+cookies/*.json
+!cookies/README.md
 
-# Cookies (sensitive!)
-cookies/*
-!cookies/.gitkeep
+# Temporary & old output formats
+output/reddit/scraped_*/
+output/reddit/run-*/
+test-progress/
+examples/
 
-# Runtime state
+# Session & Cache
 monitor_state.json
 
 # Editor/IDE

@@ -19,6 +19,8 @@
     "build": "tsc",
     "build:wasm": "cd wasm/tweet-cleaner && wasm-pack build --target nodejs --out-dir pkg",
     "build:wasm:reddit": "cd wasm/reddit-cleaner && wasm-pack build --target nodejs --out-dir pkg",
+    "build:wasm:url": "cd wasm/url-normalizer && wasm-pack build --target nodejs --out-dir pkg",
+    "build:wasm:all": "pnpm run build:wasm && pnpm run build:wasm:reddit && pnpm run build:wasm:url",
     "serve": "node dist/server.js",
     "install:frontend": "cd frontend && pnpm install",
     "build:frontend": "cd frontend && pnpm run build",

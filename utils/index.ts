@@ -78,3 +78,6 @@ export { isPathInsideBase } from './path-utils';
 
 // Cookie Conversion
 export * from './convert-cookies';
+
+// URL Normalization
+export * from './url-normalizer';
