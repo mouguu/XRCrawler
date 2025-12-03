@@ -32,16 +32,16 @@ export function ResultsPanel({
   return (
     <section
       id="results"
-      className="py-16 px-6 bg-charcoal text-washi min-h-[40vh] relative transition-colors duration-1000 border-t border-white/5"
+      className="py-16 px-6 relative transition-colors duration-1000 border-t border-stone/10"
     >
-      <div className="max-w-4xl mx-auto">
-        <div className="mb-12">
-          <div className="flex justify-between items-end mb-4">
-            <div>
-              <h2 className="text-2xl mb-1 font-display tracking-wide text-stone/80">
+      <div className="max-w-5xl mx-auto">
+        <div className="mb-16">
+          <div className="flex justify-between items-end mb-6">
+            <div className="space-organic-sm">
+              <h2 className="text-2xl md:text-3xl mb-2 font-display tracking-tight text-charcoal">
                 Process Status
               </h2>
-              <p className="text-stone/60 text-sm font-serif italic">
+              <p className="text-stone/60 text-sm font-serif italic pl-1 border-l-2 border-stone/20">
                 {isScraping
                   ? "Extracting digital fragments..."
                   : downloadUrl
@@ -50,84 +50,105 @@ export function ResultsPanel({
               </p>
             </div>
             <div className="text-right">
-              <p className="text-3xl font-display text-rust">
+              <p className="text-4xl font-display text-rust">
                 {isRedditPost ? (
                   <>
                     {progress.current || 0}{" "}
-                    <span className="text-sm text-stone/50">comments</span>
+                    <span className="text-sm text-stone/50 font-serif italic">comments</span>
                   </>
                 ) : (
                   <>
                     {progress.current}{" "}
-                    <span className="text-sm text-stone/50">/ {progress.target}</span>
+                    <span className="text-sm text-stone/50 font-serif italic">/ {progress.target}</span>
                   </>
                 )}
               </p>
             </div>
           </div>
 
-          <div className="h-px w-full bg-stone/10 overflow-hidden">
+          {/* Organic Progress Bar */}
+          <div className="h-1.5 w-full bg-stone/5 relative overflow-hidden rounded-full">
+             <div className="absolute inset-0 opacity-20" style={{
+                backgroundImage: `url("data:image/svg+xml,%3Csvg width='4' height='4' viewBox='0 0 4 4' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M-1,1 l2,-2 M0,4 l4,-4 M3,5 l2,-2' stroke='%23000' stroke-width='1' opacity='0.1'/%3E%3C/svg%3E")`
+            }}></div>
             <div
-              className="h-full bg-rust transition-all duration-500 ease-out"
+              className="h-full bg-rust transition-all duration-700 ease-out relative"
               style={{
                 width: `${Math.min(
                   100,
                   (progress.current / Math.max(progress.target, 1)) * 100
                 )}%`,
               }}
-            ></div>
+            >
+               <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3 h-3 rounded-full bg-inherit blur-[1px]"></div>
+            </div>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
-            <h3 className="text-[10px] uppercase tracking-[0.2em] text-stone/30 mb-3 font-sans">
+            <h3 className="text-[10px] uppercase tracking-[0.2em] text-stone/40 mb-4 font-sans flex items-center gap-2">
+              <span className="w-1 h-1 rounded-full bg-stone/40"></span>
               System Journal
             </h3>
-            <div className="font-mono text-[11px] leading-relaxed text-stone/10 space-y-1 h-[180px] overflow-y-auto p-4 border border-white/10 rounded-sm bg-white/5 scrollbar-thin scrollbar-thumb-stone/30 backdrop-blur-sm transition-all hover:border-white/20">
-              {logs.length === 0 && (
-                <p className="opacity-70 italic text-stone">
-                  Waiting for command input...
-                </p>
-              )}
-              {logs.map((log, i) => (
-                <div
-                  key={`${log}-${i}`}
-                  className="break-all border-l border-transparent hover:border-rust/60 pl-2 transition-colors duration-200 text-washi"
-                >
-                  {log}
-                </div>
-              ))}
-              <div ref={logEndRef} />
+            
+            {/* Logs Container - Paper Style */}
+            <div className="relative bg-stone/5 border border-stone/10 rounded-organic overflow-hidden h-[220px] group">
+              {/* Inner shadow */}
+              <div className="absolute inset-x-0 top-0 h-6 bg-gradient-to-b from-stone/5 to-transparent pointer-events-none z-10"></div>
+              
+              <div className="font-mono text-[11px] leading-relaxed text-stone/70 space-y-1.5 h-full overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-stone/20 scrollbar-track-transparent">
+                {logs.length === 0 && (
+                  <p className="opacity-40 italic text-stone font-serif">
+                    Waiting for command input...
+                  </p>
+                )}
+                {logs.map((log, i) => (
+                  <div
+                    key={`${log}-${i}`}
+                    className="break-all border-l-2 border-transparent hover:border-rust/30 pl-3 transition-colors duration-200 hover:text-charcoal"
+                  >
+                    {log}
+                  </div>
+                ))}
+                <div ref={logEndRef} />
+              </div>
             </div>
           </div>
 
           <div className="lg:col-span-1">
             {downloadUrl ? (
-              <div className="h-full flex flex-col justify-center animate-in fade-in slide-in-from-bottom-4 duration-700">
-                <div className="p-6 border border-rust/20 bg-rust/5 rounded-sm text-center space-y-4 hover:bg-rust/10 transition-colors duration-500">
-                  <div className="w-10 h-10 mx-auto bg-rust text-washi rounded-full flex items-center justify-center text-lg shadow-lg shadow-rust/20">
+              <div className="h-full flex flex-col justify-center animate-fade-in-organic">
+                <div className="p-8 card-paper rounded-organic-lg text-center space-y-6 hover:shadow-paper-lg transition-all duration-500 group">
+                  <div className="w-16 h-16 mx-auto bg-rust/10 text-rust rounded-full flex items-center justify-center text-2xl shadow-sm group-hover:scale-110 transition-transform duration-500">
                     <i className="ph ph-check"></i>
                   </div>
                   <div>
-                    <h3 className="text-lg font-display mb-1 text-washi/90">
+                    <h3 className="text-xl font-display mb-2 text-charcoal">
                       Extraction Complete
                     </h3>
-                    <p className="text-stone/60 font-serif text-xs italic">
+                    <p className="text-stone/60 font-serif text-sm italic">
                       Your archive is ready.
                     </p>
                   </div>
                   <a
                     href={appendApiKey(downloadUrl) || undefined}
-                    className="block w-full py-3 bg-stone/10 border border-stone/20 text-stone hover:bg-rust hover:border-rust hover:text-washi transition-all duration-300 uppercase tracking-widest text-[10px] font-sans"
+                    className="
+                      block w-full py-4 
+                      bg-charcoal text-washi 
+                      hover:bg-rust hover:text-washi 
+                      transition-all duration-500 
+                      uppercase tracking-[0.2em] text-[10px] font-bold 
+                      rounded-full btn-organic shadow-paper
+                    "
                   >
                     Download Artifact
                   </a>
                 </div>
               </div>
             ) : (
-              <div className="h-full flex items-center justify-center border border-dashed border-stone/10 rounded-sm opacity-20">
-                <p className="font-serif italic text-stone text-xs">
+              <div className="h-full flex items-center justify-center border border-dashed border-stone/20 rounded-organic bg-stone/5 opacity-40">
+                <p className="font-serif italic text-stone text-sm">
                   Artifact will appear here
                 </p>
               </div>
@@ -140,8 +161,11 @@ export function ResultsPanel({
         )}
       </div>
 
-      <div className="absolute bottom-4 left-0 w-full text-center text-stone/20 text-[10px] uppercase tracking-[0.3em] font-sans">
-        © 2024 Mono no Aware
+      <div className="mt-24 text-center">
+        <div className="w-8 h-px bg-stone/20 mx-auto mb-4"></div>
+        <p className="text-stone/30 text-[10px] uppercase tracking-[0.3em] font-sans">
+          © 2024 Mono no Aware
+        </p>
       </div>
     </section>
   );
@@ -156,18 +180,19 @@ function PerformanceGrid({ stats }: PerformanceGridProps) {
     ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.floor(ms / 60000)}m ${((ms % 60000) / 1000).toFixed(0)}s`;
 
   return (
-    <div className="mt-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <h3 className="text-[10px] uppercase tracking-[0.2em] text-stone/30 mb-4 font-sans">
+    <div className="mt-16 animate-fade-in-organic">
+      <h3 className="text-[10px] uppercase tracking-[0.2em] text-stone/40 mb-6 font-sans flex items-center gap-2">
+        <span className="w-1 h-1 rounded-full bg-stone/40"></span>
         Performance Metrics
       </h3>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
         <MetricCard label="Duration" value={formatDuration(stats.totalDuration)} />
         <MetricCard
           label="Speed"
           value={
             <>
               {stats.tweetsPerSecond.toFixed(2)}{" "}
-              <span className="text-xs text-stone/50">t/s</span>
+              <span className="text-xs text-stone/50 font-serif italic lowercase">t/s</span>
             </>
           }
         />
@@ -191,7 +216,7 @@ function PerformanceGrid({ stats }: PerformanceGridProps) {
               value={
                 <>
                   {stats.peakMemoryUsage.toFixed(0)}{" "}
-                  <span className="text-xs text-stone/50">MB</span>
+                  <span className="text-xs text-stone/50 font-serif italic lowercase">MB</span>
                 </>
               }
             />
@@ -199,7 +224,7 @@ function PerformanceGrid({ stats }: PerformanceGridProps) {
         )}
       </div>
 
-      <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
         <DetailCard title={stats.mode !== "puppeteer" ? "API Time Breakdown" : "Time Breakdown"}>
           {stats.mode !== "puppeteer" && stats.apiRequestTime !== undefined ? (
             <>
@@ -220,18 +245,18 @@ function PerformanceGrid({ stats }: PerformanceGridProps) {
           <DetailRow
             label="Session Switches"
             value={stats.sessionSwitches}
-            valueClass={stats.sessionSwitches > 0 ? "text-yellow-400" : "text-green-400"}
+            valueClass={stats.sessionSwitches > 0 ? "text-rust" : "text-moss"}
           />
           <DetailRow
             label="Rate Limits Hit"
             value={stats.rateLimitHits}
-            valueClass={stats.rateLimitHits > 0 ? "text-red-400" : "text-green-400"}
+            valueClass={stats.rateLimitHits > 0 ? "text-red-700" : "text-moss"}
           />
           {stats.rateLimitWaitTime ? (
             <DetailRow label="Rate Limit Wait" value={formatDuration(stats.rateLimitWaitTime)} />
           ) : null}
           {stats.mode !== "puppeteer" && stats.apiRetryCount ? (
-            <DetailRow label="API Retries" value={stats.apiRetryCount} valueClass="text-yellow-400" />
+            <DetailRow label="API Retries" value={stats.apiRetryCount} valueClass="text-rust" />
           ) : null}
         </DetailCard>
 
@@ -269,9 +294,9 @@ interface MetricCardProps {
 
 function MetricCard({ label, value }: MetricCardProps) {
   return (
-    <div className="p-4 border border-white/10 rounded-sm bg-white/5">
-      <p className="text-[10px] uppercase tracking-wider text-stone/50 mb-1">{label}</p>
-      <p className="text-xl font-display text-rust">{value}</p>
+    <div className="p-6 border border-stone/10 rounded-organic bg-white/40 hover:shadow-paper transition-shadow duration-300">
+      <p className="text-[10px] uppercase tracking-[0.2em] text-stone/40 mb-2 font-sans">{label}</p>
+      <p className="text-2xl font-display text-charcoal">{value}</p>
     </div>
   );
 }
@@ -283,11 +308,11 @@ interface DetailCardProps {
 
 function DetailCard({ title, children }: DetailCardProps) {
   return (
-    <div className="p-4 border border-white/10 rounded-sm bg-white/5">
-      <p className="text-[10px] uppercase tracking-wider text-stone/50 mb-3">
+    <div className="p-6 border border-stone/10 rounded-organic bg-white/40 hover:shadow-paper transition-shadow duration-300">
+      <p className="text-[10px] uppercase tracking-[0.2em] text-stone/40 mb-4 font-sans">
         {title}
       </p>
-      <div className="space-y-2 text-xs">{children}</div>
+      <div className="space-y-3 text-xs">{children}</div>
     </div>
   );
 }
@@ -300,9 +325,9 @@ interface DetailRowProps {
 
 function DetailRow({ label, value, valueClass }: DetailRowProps) {
   return (
-    <div className="flex justify-between">
-      <span className="text-stone/60">{label}</span>
-      <span className={valueClass ?? "text-washi/80"}>{value}</span>
+    <div className="flex justify-between items-center border-b border-stone/5 pb-2 last:border-0 last:pb-0">
+      <span className="text-stone/60 font-serif italic">{label}</span>
+      <span className={valueClass ?? "text-charcoal/80 font-mono"}>{value}</span>
     </div>
   );
 }

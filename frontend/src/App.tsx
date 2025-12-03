@@ -3,8 +3,10 @@ import { ErrorNotification } from "./components/ErrorNotification";
 import { SessionManager } from "./components/SessionManager";
 import { HeaderBar } from "./components/HeaderBar";
 import { TaskForm } from "./components/TaskForm";
+import { DashboardPanel } from "./components/DashboardPanel";
 import { ResultsPanel } from "./components/ResultsPanel";
-import type { PerformanceStats, Progress, TabType } from "./types/ui";
+import { submitJob } from "./utils/queueClient";
+import type { TabType, Progress, PerformanceStats } from "./types/ui";
 
 // Error types
 export enum ErrorType {
@@ -93,15 +95,20 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabType>("profile");
   const [input, setInput] = useState("");
   const [limit, setLimit] = useState(50);
+  
+  // Legacy single-task state (kept for ResultsPanel compatibility)
   const [isScraping, setIsScraping] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [progress, setProgress] = useState<Progress>({ current: 0, target: 0 });
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
-  const [performanceStats, setPerformanceStats] =
-    useState<PerformanceStats | null>(null);
+  const [performanceStats, setPerformanceStats] = useState<PerformanceStats | null>(null);
+  
   const [apiKey, setApiKey] = useState<string>(""); // applied key
   const [apiKeyInput, setApiKeyInput] = useState<string>(""); // input buffer
   const [apiBase, setApiBase] = useState<string>(window.__APP_CONFIG__?.apiBase || "");
+  
+  // Queue Mode is now the ONLY mode.
+  // const [useQueueAPI, setUseQueueAPI] = useState(true);
 
   // Options
   const [scrapeLikes, setScrapeLikes] = useState(false);
@@ -302,88 +309,32 @@ function App() {
   };
 
   const handleScrape = async () => {
-    if (isScraping) return;
-    setIsScraping(true);
-    setLogs([]);
-    setDownloadUrl(null);
-    setPerformanceStats(null);
-    setProgress({ current: 0, target: limit });
-    setCurrentError(null);
-
+    // Always use Queue API
     try {
-      // Search 只能使用 Puppeteer（GraphQL 搜索分页 404）
-      const resolvedMode = activeTab === "search" ? "puppeteer" : scrapeMode;
-      let endpoint = "/api/scrape";
-      let body: any = {
-        type: activeTab,
+      const jobInfo = await submitJob({
+        type: activeTab === "profile" || activeTab === "thread" || activeTab === "search" ? activeTab : "reddit",
         input,
         limit,
+        mode: activeTab === "search" ? "puppeteer" : scrapeMode,
         likes: scrapeLikes,
-        mode: resolvedMode,
-        dateRange:
-          startDate && endDate ? { start: startDate, end: endDate } : undefined,
         enableRotation: autoRotateSessions,
-        enableDeepSearch: activeTab === "search" ? enableDeepSearch : undefined,
-        parallelChunks: activeTab === "search" && enableDeepSearch ? parallelChunks : undefined,
-        enableProxy: enableProxy,
-      };
-
-      if (activeTab === "monitor") {
-        endpoint = "/api/monitor";
-        body = {
-          users: input
-            .split(",")
-            .map((u) => u.trim())
-            .filter(Boolean),
-          lookbackHours,
-          keywords,
-          enableRotation: autoRotateSessions,
-          enableProxy: enableProxy,
-        };
-      }
-
-      if (activeTab === "reddit") {
-        // Reddit Scrape Payload
-        // We reuse 'input' for subreddit name
-        // We reuse 'limit' for max_posts
-        // We add 'strategy'
-        body = {
-          type: "reddit",
-          input: input, 
-          limit,
-          strategy: redditStrategy,
-          save_json: true // Default to true for now
-        };
-      }
-
-      const response = await fetch(withBase(endpoint), {
-        method: "POST",
-        headers: buildHeaders(true),
-        body: JSON.stringify(body),
+        enableProxy,
+        dateRange: startDate && endDate ? { start: startDate, end: endDate } : undefined,
+        strategy: activeTab === "reddit" ? redditStrategy : undefined,
       });
 
-      const result = await response.json();
-      if (result.success) {
-        setDownloadUrl(result.downloadUrl);
-        if (result.performance) {
-          setPerformanceStats(result.performance);
-        }
-        setLogs((prev) => [
-          ...prev,
-          `✅ Operation completed! ${result.downloadUrl ? "Download available." : ""
-          }`,
-        ]);
-      } else {
-        const error = classifyError(new Error(result.error || "Server error"));
-        setCurrentError(error);
-        setLogs((prev) => [...prev, `❌ Error: ${result.error}`]);
+      // Add job to Dashboard Panel
+      const addJobFn = (window as any).__addJobToPanel;
+      if (addJobFn) {
+        addJobFn(jobInfo.jobId, activeTab === "reddit" ? "reddit" : "twitter");
       }
+      
+      // Optional: Clear input after successful submission?
+      // setInput(""); 
+      
     } catch (error) {
       const appError = classifyError(error);
       setCurrentError(appError);
-      setLogs((prev) => [...prev, `❌ ${appError.message}`]);
-    } finally {
-      setIsScraping(false);
     }
   };
 
@@ -430,10 +381,10 @@ function App() {
   };
 
   return (
-    <div className="antialiased selection:bg-stone selection:text-washi min-h-screen">
+    <div className="antialiased selection:bg-stone selection:text-washi min-h-screen relative">
       {/* Error Notification */}
       {currentError && (
-        <div className="fixed top-4 right-4 left-4 md:left-auto md:w-96 z-50">
+        <div className="fixed top-6 right-6 left-6 md:left-auto md:w-96 z-50 animate-fade-in-organic">
           <ErrorNotification
             error={currentError}
             onDismiss={() => setCurrentError(null)}
@@ -443,17 +394,17 @@ function App() {
       )}
 
       <div>
-        <div className="antialiased selection:bg-stone selection:text-washi min-h-screen">
-          {/* Noise Texture Overlay */}
-          <div className="noise-overlay"></div>
+        {/* Noise Texture Overlay */}
+        <div className="noise-overlay"></div>
 
-          <HeaderBar
-            apiKey={apiKey}
-            apiKeyInput={apiKeyInput}
-            onApiKeyInputChange={setApiKeyInput}
-            onApply={applyApiKey}
-          />
+        <HeaderBar
+          apiKey={apiKey}
+          apiKeyInput={apiKeyInput}
+          onApiKeyInputChange={setApiKeyInput}
+          onApply={applyApiKey}
+        />
 
+        <main className="space-y-24 pb-32">
           <TaskForm
             activeTab={activeTab}
             input={input}
@@ -489,25 +440,39 @@ function App() {
             onStop={handleStop}
           />
 
-          <ResultsPanel
-            isScraping={isScraping}
-            progress={progress}
-            logs={logs}
-            downloadUrl={downloadUrl}
-            appendApiKey={appendApiKey}
-            performanceStats={performanceStats}
-            activeTab={activeTab}
-            input={input}
-            logEndRef={logEndRef}
-          />
-        </div>
-        {/* Performance Dashboard */}
-        {/* Session Management - Only for Twitter, not Reddit */}
-        {activeTab !== "reddit" && (
-          <div className="mt-16 border-t border-stone/20 pt-16">
-            <SessionManager />
+          {/* Active Jobs Panel - Queue Mode */}
+          <div className="max-w-6xl mx-auto px-6">
+            <DashboardPanel
+              onJobComplete={(jobId, downloadUrl) => {
+                console.log(`Job ${jobId} completed`, downloadUrl);
+              }}
+              appendApiKey={appendApiKey}
+            />
           </div>
-        )}
+
+          {/* Legacy Results Panel - Only show if there's active state or history */}
+          {(isScraping || logs.length > 0 || downloadUrl) && (
+            <ResultsPanel
+              isScraping={isScraping}
+              progress={progress}
+              logs={logs}
+              downloadUrl={downloadUrl}
+              appendApiKey={appendApiKey}
+              performanceStats={performanceStats}
+              activeTab={activeTab}
+              input={input}
+              logEndRef={logEndRef}
+            />
+          )}
+          
+          {/* Session Management - Only for Twitter, not Reddit */}
+          {activeTab !== "reddit" && (
+            <div className="max-w-4xl mx-auto px-6">
+               <div className="h-px w-full bg-stone/10 mb-16"></div>
+               <SessionManager />
+            </div>
+          )}
+        </main>
       </div>
     </div>
   );

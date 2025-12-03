@@ -22,6 +22,23 @@ export interface AppConfig {
     enableLegacyCompat: boolean;
   };
 
+  // Redis 配置
+  redis: {
+    host: string;
+    port: number;
+    db: number;
+    password?: string;
+  };
+
+  // 队列配置
+  queue: {
+    concurrency: number;
+    rateLimit: {
+      max: number;
+      duration: number;
+    };
+  };
+
   // Twitter 配置
   twitter: {
     defaultMode: 'graphql' | 'puppeteer' | 'mixed';
@@ -74,6 +91,19 @@ const DEFAULT_CONFIG: AppConfig = {
   output: {
     baseDir: path.resolve(process.cwd(), 'output'),
     enableLegacyCompat: false
+  },
+  redis: {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+    db: 0,
+    password: process.env.REDIS_PASSWORD
+  },
+  queue: {
+    concurrency: 2,
+    rateLimit: {
+      max: 10,
+      duration: 60000
+    }
   },
   twitter: {
     defaultMode: 'graphql',
@@ -303,6 +333,20 @@ export class ConfigManager {
    */
   getRateLimitConfig(): AppConfig['rateLimit'] {
     return { ...this.config.rateLimit };
+  }
+
+  /**
+   * 获取 Redis 配置
+   */
+  getRedisConfig(): AppConfig['redis'] {
+    return { ...this.config.redis };
+  }
+
+  /**
+   * 获取队列配置
+   */
+  getQueueConfig(): AppConfig['queue'] {
+    return { ...this.config.queue };
   }
 
   /**

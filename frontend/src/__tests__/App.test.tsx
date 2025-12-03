@@ -7,9 +7,18 @@ describe('App form submission', () => {
     let fetchMock: ReturnType<typeof vi.fn>;
 
     beforeEach(() => {
-        fetchMock = vi.fn().mockResolvedValue({
-            json: () => Promise.resolve({ success: true })
-        } as Response);
+        fetchMock = vi.fn().mockImplementation((url) => {
+            if (url === '/api/sessions') {
+                return Promise.resolve({
+                    json: () => Promise.resolve({ success: true, sessions: [] }),
+                    ok: true
+                } as Response);
+            }
+            return Promise.resolve({
+                json: () => Promise.resolve({ success: true }),
+                ok: true
+            } as Response);
+        });
         globalThis.fetch = fetchMock as unknown as typeof fetch;
     });
 
@@ -26,15 +35,18 @@ describe('App form submission', () => {
 
         await user.click(screen.getByRole('button', { name: /begin extraction/i }));
 
-        await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-
-        const [, options] = fetchMock.mock.calls[0];
-        const payload = JSON.parse((options as RequestInit).body as string);
-
-        expect(payload).toMatchObject({
-            type: 'profile',
-            mode: 'graphql',
-            input: 'elonmusk'
+        await waitFor(() => {
+            const calls = fetchMock.mock.calls;
+            const submitCall = calls.find((call: any[]) => call[0] === '/api/scrape-v2' && call[1]?.method === 'POST');
+            expect(submitCall).toBeTruthy();
+            if (!submitCall) throw new Error('No submit call found');
+            
+            const payload = JSON.parse(submitCall[1].body as string);
+            expect(payload).toMatchObject({
+                type: 'profile',
+                mode: 'puppeteer',
+                input: 'elonmusk'
+            });
         });
     });
 
@@ -49,15 +61,18 @@ describe('App form submission', () => {
 
         await user.click(screen.getByRole('button', { name: /begin extraction/i }));
 
-        await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+        await waitFor(() => {
+            const calls = fetchMock.mock.calls;
+            const submitCall = calls.find((call: any[]) => call[0] === '/api/scrape-v2' && call[1]?.method === 'POST');
+            expect(submitCall).toBeTruthy();
+            if (!submitCall) throw new Error('No submit call found');
 
-        const [, options] = fetchMock.mock.calls[0];
-        const payload = JSON.parse((options as RequestInit).body as string);
-
-        expect(payload).toMatchObject({
-            type: 'search',
-            mode: 'puppeteer',
-            input: '#AI'
+            const payload = JSON.parse(submitCall[1].body as string);
+            expect(payload).toMatchObject({
+                type: 'search',
+                mode: 'puppeteer',
+                input: '#AI'
+            });
         });
     });
 });

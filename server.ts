@@ -18,6 +18,7 @@ import {
   ScraperError,
   createCookieManager,
   RedditApiClient,
+  scrapeQueue,
 } from "./core";
 import {
   createEnhancedLogger,
@@ -37,6 +38,10 @@ import {
 } from "./types";
 import multer from "multer";
 import { TaskQueueManager } from "./server/task-queue";
+import { createBullBoard } from '@bull-board/api';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
+import { ExpressAdapter } from '@bull-board/express';
+import jobRoutes from './server/routes/jobs';
 
 // 创建服务器日志器
 const serverLogger = createEnhancedLogger("Server");
@@ -127,6 +132,20 @@ function rejectIfShuttingDown(res: Response): boolean {
 app.use(express.json());
 app.use(express.static(STATIC_DIR));
 app.use("/api", apiKeyMiddleware);
+
+// Bull Board - Queue Monitoring Dashboard
+const serverAdapter = new ExpressAdapter();
+serverAdapter.setBasePath('/admin/queues');
+
+createBullBoard({
+  queues: [new BullMQAdapter(scrapeQueue)],
+  serverAdapter,
+});
+
+app.use('/admin/queues', serverAdapter.getRouter());
+
+// Job Management Routes
+app.use('/api/job', jobRoutes);
 
 function getSafePathInfo(resolvedPath: string): {
   identifier?: string;
@@ -594,6 +613,93 @@ app.post(
         error: shuttingDown
           ? "Server is shutting down"
           : "Another task is already queued or running",
+      });
+    }
+  }
+);
+
+// API: Scrape V2 (Queue-based - Supports Multiple Concurrent Tasks)
+app.post(
+  "/api/scrape-v2",
+  async (
+    req: Request<{}, {}, ScrapeRequest>,
+    res: Response
+  ) => {
+    if (rejectIfShuttingDown(res)) return;
+
+    try {
+      const { type, input, limit, likes, mode, dateRange, enableRotation, enableProxy, strategy } = req.body;
+
+      serverLogger.info('收到队列爬取请求', { type, input, limit });
+
+      // Generate unique job ID
+      const jobId = `${type}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+      // Prepare job data based on type
+      const isTwitter = type === 'profile' || type === 'thread' || type === 'search';
+      const isReddit = type === 'reddit';
+
+      if (!isTwitter && !isReddit) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid scrape type. Must be profile, thread, search, or reddit'
+        });
+      }
+
+      const jobData: any = {
+        jobId,
+        type: isTwitter ? 'twitter' : 'reddit',
+        config: {}
+      };
+
+      // Configure based on type
+      if (isTwitter) {
+        jobData.config = {
+          username: type === 'profile' ? input : undefined,
+          tweetUrl: type === 'thread' ? input : undefined,
+          searchQuery: type === 'search' ? input : undefined,
+          limit: limit || 50,
+          mode: mode || 'puppeteer',
+          likes: likes || false,
+          enableRotation: enableRotation !== false,
+          enableProxy: enableProxy || false,
+          dateRange,
+        };
+      } else if (isReddit) {
+        const isPostUrl = input && (
+          input.includes('reddit.com/r/') && input.includes('/comments/') ||
+          input.includes('redd.it/')
+        );
+
+        jobData.config = {
+          subreddit: !isPostUrl ? input : undefined,
+          postUrl: isPostUrl ? input : undefined,
+          limit: limit || 500,
+          strategy: strategy || 'auto',
+        };
+      }
+
+      // Add job to queue
+      const job = await scrapeQueue.add(jobId, jobData, {
+        priority: type === 'thread' ? 10 : 5, // Threads have higher priority
+      });
+
+      serverLogger.info('任务已加入队列', { jobId: job.id, type });
+
+      // Return immediately with job info
+      res.json({
+        success: true,
+        jobId: job.id,
+        message: 'Task queued successfully',
+        statusUrl: `/api/job/${job.id}`,
+        progressUrl: `/api/job/${job.id}/stream`,
+      });
+
+    } catch (error: any) {
+      serverLogger.error('队列添加失败', error);
+      res.status(500).json({
+        success: false,
+        error: error.message || 'Failed to queue task'
       });
     }
   }

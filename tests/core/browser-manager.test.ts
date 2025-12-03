@@ -39,13 +39,19 @@ describe('BrowserManager', () => {
 
   beforeEach(() => {
     browserManager = new BrowserManager();
+    const mockCDPSession = {
+      send: jest.fn().mockResolvedValue(undefined)
+    };
     mockPage = {
       setUserAgent: jest.fn().mockResolvedValue(undefined),
       setViewport: jest.fn().mockResolvedValue(undefined),
       setRequestInterception: jest.fn().mockResolvedValue(undefined),
       on: jest.fn(),
       authenticate: jest.fn().mockResolvedValue(undefined),
-      close: jest.fn().mockResolvedValue(undefined)
+      close: jest.fn().mockResolvedValue(undefined),
+      target: jest.fn().mockReturnValue({
+        createCDPSession: jest.fn().mockResolvedValue(mockCDPSession)
+      })
     };
     mockBrowser = {
       newPage: jest.fn().mockResolvedValue(mockPage),
@@ -198,4 +204,3 @@ describe('BrowserManager', () => {
     });
   });
 });
-

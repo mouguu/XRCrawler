@@ -61,6 +61,12 @@ A custom-built Rust library (`wasm/tweet-cleaner`) handles the heavy lifting:
 - **JSON**: Raw, structured data for analysis.
 - **Persona Analysis**: (Optional) AI-generated psychological profiles based on tweet history.
 
+### 🎛️ Mission Control (Web UI)
+- Queue-based scraping with live **SSE logs & progress** (BullMQ + Redis).
+- Session Manager with friendly names for `account1.json`–`account4.json` (e.g., Sistine Fibel, pretextyourmama, Shirone, Jeanne Howard).
+- One-click **Download .md** button per completed job.
+- Abort/dismiss controls per job card.
+
 ---
 
 ## ⚡ Quick Start
@@ -69,6 +75,7 @@ A custom-built Rust library (`wasm/tweet-cleaner`) handles the heavy lifting:
 
 - **Node.js** 18+
 - **pnpm** (recommended)
+- **Redis** running locally on default port (6379) for queue + SSE
 
 ### Installation
 
@@ -76,19 +83,22 @@ A custom-built Rust library (`wasm/tweet-cleaner`) handles the heavy lifting:
 git clone https://github.com/yourusername/XRCrawler.git
 cd XRCrawler
 pnpm install
+pnpm run install:frontend   # install frontend deps
 ```
 
-### 1. Configure Cookies
+### 1) Configure Cookies
 
-Export your Twitter cookies (using "EditThisCookie" extension) and save them as `cookies/account1.json`. You can add multiple files (`account2.json`, etc.) for auto-rotation.
+Export your Twitter cookies (using "EditThisCookie" extension) and save them as `cookies/account1.json`. Add multiple files (`account2.json`, etc.) for auto-rotation. In the UI these map to friendly names.
 
-### 2. Run It
+### 2) Run It
 
 **The Easy Way (Web UI):**
 
 ```bash
 pnpm run dev
 # Open http://localhost:5173
+# Starts server, worker, frontend, and Reddit helper API in watch mode
+# Requirements: Redis running on 6379; Python3 available for Reddit helper (auto-venv under platforms/reddit)
 ```
 
 **The Hacker Way (CLI):**
@@ -109,6 +119,8 @@ node dist/cli.js twitter -u elonmusk --mode search --deep-search --start-date 20
 - **[Architecture](./docs/ARCHITECTURE.md)** - How the Date Chunking & WASM works
 - **[CLI Reference](./docs/CLI_USAGE.md)** - Command line options
 - **[Web Interface](./docs/WEB_INTERFACE.md)** - UI Guide
+- **[API Reference](./docs/API_REFERENCE.md)** - Queue/REST endpoints and `/api/job/:id/stream` SSE
+- **WASM Build**: `pnpm run build:wasm:all` (rebuild Rust/WASM micro-kernels if needed)
 
 ## 📂 Output Structure
 
@@ -122,6 +134,18 @@ output/
 │   ├── metadata.json      # 📊 Run statistics
 │   └── 001-xxxx.md        # 📄 Individual tweet files (Optional)
 ```
+
+---
+
+## 🛰️ Live Telemetry (Queue + SSE)
+
+- **Pipeline**: BullMQ enqueues jobs → Worker processes and publishes progress/logs to Redis Pub/Sub (`job:{id}:progress` / `job:{id}:log`) → `/api/job/:id/stream` SSE relays events → Mission Control shows live progress/logging.
+- **Requirements**: Redis running locally (default 6379). EventSource reachable from frontend.
+- **Fallbacks**: If the SSE payload lacks `downloadUrl`, the UI fetches `/api/job/{id}` to hydrate the download button.
+- **Troubleshooting**:
+  - Check Redis is up; see `/api/job/{id}/stream` in DevTools Network and verify incoming events.
+  - Worker publishes via `ctx.emitProgress` and `ctx.emitLog`; server subscribes and streams to the client.
+- **API Key (optional)**: If you set `x-api-key` in requests, the UI appends `api_key` to download links for secured downloads.
 
 ---
 
