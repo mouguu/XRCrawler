@@ -2,15 +2,7 @@ import express, { Request, Response } from "express";
 import * as path from "path";
 import * as fs from "fs";
 // 注意: scrapeProfileGraphql 已废弃，统一使用 ScraperEngine
-import {
-  eventBusInstance,
-  ScrapeProgressData,
-  LogMessageData,
-  getShouldStopScraping,
-  setShouldStopScraping,
-  createCookieManager,
-  scrapeQueue,
-} from "./core";
+import { createCookieManager, scrapeQueue } from "./core";
 import {
   createEnhancedLogger,
   getOutputPathManager,
@@ -84,8 +76,7 @@ const OUTPUT_ROOT = outputPathManager.getBaseDir();
 const STATIC_DIR = path.resolve(process.cwd(), "public");
 
 // Global state for manual stop
-let isScrapingActive = false;
-let lastDownloadUrl: string | null = null;
+// Legacy state removed; BullMQ handles job lifecycle
 let isShuttingDown = false;
 function rejectIfShuttingDown(res: Response): boolean {
   if (isShuttingDown) {
@@ -240,89 +231,7 @@ app.post(
   }
 );
 
-// API: Manual Stop
-app.post("/api/stop", (req: Request, res: Response) => {
-  serverLogger.info("收到手动停止请求");
-
-  if (!isScrapingActive) {
-    return res.json({
-      success: false,
-      message: "No active scraping session",
-    });
-  }
-
-  setShouldStopScraping(true);
-  serverLogger.info("停止信号已设置，等待爬虫优雅终止");
-
-  res.json({
-    success: true,
-    message: "Stop signal sent. Scraper will terminate after current batch.",
-  });
-});
-
-// API: Progress Stream (SSE)
-app.get("/api/progress", (req: Request, res: Response) => {
-  // Set SSE headers
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-
-  const sendEvent = (event: string, payload: Record<string, any>) => {
-    res.write(`event: ${event}\n`);
-    res.write(`data: ${JSON.stringify(payload)}\n\n`);
-  };
-
-  // Send initial message
-  sendEvent("connected", {
-    type: "connected",
-    message: "Progress stream connected",
-  });
-
-  // Listener for progress events
-  const onProgress = (data: ScrapeProgressData) => {
-    sendEvent("progress", { type: "progress", ...data });
-  };
-
-  const onLog = (data: LogMessageData) => {
-    sendEvent("log", { type: "log", ...data });
-  };
-
-  const onPerformance = (data: any) => {
-    sendEvent("performance", { type: "performance", ...data });
-  };
-
-  const onError = (error: Error) => {
-    serverLogger.error("爬虫错误", error);
-    sendEvent("log", { type: "log", level: "error", message: error.message });
-  };
-
-  eventBusInstance.on("scrape:progress", onProgress);
-  eventBusInstance.on("log:message", onLog);
-  eventBusInstance.on("performance:update", onPerformance);
-  eventBusInstance.on("scrape:error", onError);
-
-  // Remove listeners on disconnect
-  req.on("close", () => {
-    eventBusInstance.off("scrape:progress", onProgress);
-    eventBusInstance.off("log:message", onLog);
-    eventBusInstance.off("performance:update", onPerformance);
-    eventBusInstance.off("scrape:error", onError);
-    serverLogger.debug("SSE 客户端断开连接");
-  });
-});
-
-// Helper function to broadcast progress
-export function broadcastProgress(data: ScrapeProgressData): void {
-  eventBusInstance.emitProgress(data);
-}
-
-// API: Get scraping status
-app.get("/api/status", (req: Request, res: Response) => {
-  res.json({
-    isActive: isScrapingActive,
-    shouldStop: getShouldStopScraping(),
-  });
-});
+// Legacy manual stop/status/progress endpoints removed in favor of BullMQ job APIs
 
 // API: Get metrics (简单 JSON 格式)
 app.get("/api/metrics", (req: Request, res: Response) => {
@@ -360,7 +269,6 @@ app.get("/api/health", (req: Request, res: Response) => {
       total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
       rss: Math.round(process.memoryUsage().rss / 1024 / 1024),
     },
-    isScraping: isScrapingActive,
   };
 
   res.json(health);
@@ -369,14 +277,6 @@ app.get("/api/health", (req: Request, res: Response) => {
 // API: Public config for frontend
 app.get("/api/config", (req: Request, res: Response) => {
   res.json(configManager.getPublicConfig());
-});
-
-// API: Get result (download URL after scraping completes)
-app.get("/api/result", (req: Request, res: Response) => {
-  res.json({
-    isActive: isScrapingActive,
-    downloadUrl: lastDownloadUrl,
-  });
 });
 
 // API: Download
@@ -493,21 +393,12 @@ async function gracefulShutdown(signal: string) {
   if (isShuttingDown) return;
   isShuttingDown = true;
 
-  serverLogger.info(`收到关闭信号: ${signal}，等待活动任务完成`);
-  setShouldStopScraping(true);
-
-  try {
-    await Promise.race([
-      Promise.allSettled(Array.from(activeTasks)),
-      new Promise((resolve) => setTimeout(resolve, SHUTDOWN_TIMEOUT_MS)),
-    ]);
-  } finally {
-    serverInstance.close(() => {
-      serverLogger.info("HTTP 服务器已关闭");
-      process.exit(0);
-    });
-    setTimeout(() => process.exit(0), SHUTDOWN_TIMEOUT_MS + 2000).unref();
-  }
+  serverLogger.info(`收到关闭信号: ${signal}，正在关闭 HTTP 服务器`);
+  serverInstance.close(() => {
+    serverLogger.info("HTTP 服务器已关闭");
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(0), SHUTDOWN_TIMEOUT_MS + 2000).unref();
 }
 
 ["SIGINT", "SIGTERM"].forEach((signal) => {

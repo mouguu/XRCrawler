@@ -53,8 +53,7 @@ Returns `{ id, state, progress, result }`
 
 **GET /api/jobs?state=completed|failed|active|waiting&type=twitter|reddit** — List jobs (paged)
 
-Legacy status endpoints remain for compatibility:
-- **GET /api/status** — Basic scraper activity flag
+- Legacy status endpoints were removed; use job status/streams instead.
 - **GET /api/result** — Last download URL (non-queued fallback)
 
 ### Metrics & Health

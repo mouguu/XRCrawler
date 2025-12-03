@@ -5,7 +5,7 @@ import { HeaderBar } from "./components/HeaderBar";
 import { TaskForm } from "./components/TaskForm";
 import { DashboardPanel } from "./components/DashboardPanel";
 import { ResultsPanel } from "./components/ResultsPanel";
-import { submitJob } from "./utils/queueClient";
+import { submitJob, cancelJob } from "./utils/queueClient";
 import type { TabType, Progress, PerformanceStats } from "./types/ui";
 
 // Error types
@@ -117,6 +117,7 @@ function App() {
   const [scrapeMode, setScrapeMode] = useState<
     "graphql" | "puppeteer" | "mixed"
   >("puppeteer");
+  const [latestJobId, setLatestJobId] = useState<string | null>(null);
 
   // Monitor Options
   const [lookbackHours, setLookbackHours] = useState(24);
@@ -206,11 +207,8 @@ function App() {
   }, [apiKey]);
 
   useEffect(() => {
-    const url = apiKey
-      ? `/api/progress?api_key=${encodeURIComponent(apiKey)}`
-      : "/api/progress";
-
-    const eventSource = new EventSource(withBase(url));
+    // Legacy progress endpoint removed; no-op listener
+    const eventSource = new EventSource(withBase("/api/job/dummy/stream"));
 
     const handleLog = (event: MessageEvent) => {
       const data = JSON.parse(event.data);
@@ -280,21 +278,6 @@ function App() {
   };
 
   // On mount, if server 还有在跑的任务，让 UI 显示停止按钮
-  useEffect(() => {
-    const checkStatus = async () => {
-      try {
-        const res = await fetch(withBase("/api/status"), { headers: buildHeaders() });
-        const data = await res.json();
-        if (data.isActive) {
-          setIsScraping(true);
-        }
-      } catch (e) {
-        console.warn("Failed to fetch status on mount", e);
-      }
-    };
-    checkStatus();
-  }, [apiKey, withBase]);
-
   const applyApiKey = () => {
     setApiKey(apiKeyInput.trim());
   };
@@ -323,6 +306,8 @@ function App() {
         strategy: activeTab === "reddit" ? redditStrategy : undefined,
       });
 
+      setLatestJobId(jobInfo.jobId);
+      setIsScraping(true);
       // Add job to Dashboard Panel
       const addJobFn = (window as any).__addJobToPanel;
       if (addJobFn) {
@@ -339,45 +324,20 @@ function App() {
   };
 
   const handleStop = async () => {
-    await fetch(withBase("/api/stop"), { method: "POST", headers: buildHeaders() });
-    setLogs((prev) => [...prev, `🛑 Stop signal sent...`]);
-
-    // Poll for result after stopping
-    const pollInterval = setInterval(async () => {
-      try {
-        const response = await fetch(withBase("/api/result"), {
-          headers: buildHeaders(),
-        });
-        const data = await response.json();
-
-        if (!data.isActive && data.downloadUrl) {
-          // Scraping has stopped and we have a download URL
-          setDownloadUrl(data.downloadUrl);
-          setLogs((prev) => [
-            ...prev,
-            `✅ Scraping stopped! Download available.`,
-          ]);
-          setIsScraping(false);
-          clearInterval(pollInterval);
-        } else if (!data.isActive) {
-          // Scraping stopped but no result
-          setLogs((prev) => [
-            ...prev,
-            `⚠️ Scraping stopped without generating output.`,
-          ]);
-          setIsScraping(false);
-          clearInterval(pollInterval);
-        }
-      } catch (error) {
-        console.error("Error polling result:", error);
-      }
-    }, 500); // Poll every 500ms
-
-    // Timeout after 10 seconds
-    setTimeout(() => {
-      clearInterval(pollInterval);
+    if (!latestJobId) {
+      setLogs((prev) => [...prev, "⚠️ No active job to stop."]);
       setIsScraping(false);
-    }, 10000);
+      return;
+    }
+
+    try {
+      await cancelJob(latestJobId);
+      setLogs((prev) => [...prev, `🛑 Abort signal sent for job ${latestJobId}`]);
+    } catch (err: any) {
+      setLogs((prev) => [...prev, `❌ Failed to abort job ${latestJobId}: ${err?.message || err}`]);
+    } finally {
+      setIsScraping(false);
+    }
   };
 
   return (
@@ -445,6 +405,8 @@ function App() {
             <DashboardPanel
               onJobComplete={(jobId, downloadUrl) => {
                 console.log(`Job ${jobId} completed`, downloadUrl);
+                setLatestJobId((prev) => (prev === jobId ? null : prev));
+                setIsScraping(false);
               }}
               appendApiKey={appendApiKey}
             />
