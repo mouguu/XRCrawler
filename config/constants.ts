@@ -1,6 +1,13 @@
 /**
- * 配置常量
- * 集中管理所有魔法数字和配置值
+ * Application Constants
+ * 
+ * This file contains ONLY truly immutable constants:
+ * - API endpoints and GraphQL query IDs
+ * - Platform identifiers
+ * - Browser configuration (args, user agent)
+ * 
+ * For configurable values (timeouts, delays, limits), see:
+ * - utils/config-manager.ts (ConfigManager)
  */
 
 // ==================== 浏览器配置 ====================
@@ -38,24 +45,26 @@ export const BROWSER_USER_AGENT =
 export const BLOCKED_RESOURCE_TYPES = ["image", "media", "font"];
 
 // ==================== 超时配置 ====================
+// NOTE: Timeout values have been moved to ConfigManager.
+// These are kept for legacy compatibility but should be migrated.
 
 /**
- * 页面导航超时时间（毫秒）
+ * @deprecated Use ConfigManager.twitter.browserTimeout instead
  */
 export const NAVIGATION_TIMEOUT = 60000;
 
 /**
- * 等待推文选择器超时时间（毫秒）
+ * @deprecated Use ConfigManager.twitter.apiTimeout instead  
  */
 export const WAIT_FOR_TWEETS_TIMEOUT = 45000;
 
 /**
- * 页面刷新后等待推文超时时间（毫秒）
+ * @deprecated Legacy constant
  */
 export const WAIT_FOR_TWEETS_AFTER_REFRESH_TIMEOUT = 75000;
 
 /**
- * 等待新推文加载的超时时间（毫秒）
+ * @deprecated Legacy constant
  */
 export const WAIT_FOR_NEW_TWEETS_TIMEOUT = 6000;
 
@@ -293,14 +302,16 @@ export const BATCH_USER_DELAY = 5000;
 export const SCHEDULER_DEFAULT_INTERVAL = 30 * 1000; // 30秒
 
 // ==================== 默认值配置 ====================
+// NOTE: Default values should be accessed via ConfigManager instead.
+// These are kept for backward compatibility only.
 
 /**
- * 默认推文抓取数量
+ * @deprecated Use ConfigManager.getTwitterConfig().defaultLimit
  */
 export const DEFAULT_TWEET_LIMIT = 50;
 
 /**
- * 默认选项
+ * @deprecated Use ConfigManager instead
  */
 export const DEFAULT_SCRAPER_OPTIONS = {
   limit: DEFAULT_TWEET_LIMIT,
@@ -311,7 +322,7 @@ export const DEFAULT_SCRAPER_OPTIONS = {
 };
 
 /**
- * 默认调度器选项
+ * @deprecated Legacy scheduler options - not used in queue-based system
  */
 export const DEFAULT_SCHEDULER_OPTIONS = {
   interval: SCHEDULER_DEFAULT_INTERVAL,
