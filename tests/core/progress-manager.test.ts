@@ -54,7 +54,7 @@ describe('ProgressManager', () => {
       expect(fs.existsSync(filePath)).toBe(true);
     });
 
-    it('should update existing progress', () => {
+    it('should update existing progress', async () => {
       const progress1 = {
         targetType: 'profile',
         targetValue: 'testuser',
@@ -75,13 +75,13 @@ describe('ProgressManager', () => {
       
       manager.saveProgress(progress2);
       
-      const loaded = manager.loadProgress('profile', 'testuser');
+      const loaded = await manager.loadProgress('profile', 'testuser');
       expect(loaded?.totalScraped).toBe(75);
     });
   });
 
   describe('loadProgress', () => {
-    it('should load progress from file', () => {
+    it('should load progress from file', async () => {
       const progress = {
         targetType: 'profile',
         targetValue: 'testuser',
@@ -95,7 +95,7 @@ describe('ProgressManager', () => {
       
       manager.saveProgress(progress);
       
-      const loaded = manager.loadProgress('profile', 'testuser');
+      const loaded = await manager.loadProgress('profile', 'testuser');
       expect(loaded).toBeDefined();
       expect(loaded?.totalScraped).toBe(50);
     });
@@ -116,8 +116,8 @@ describe('ProgressManager', () => {
   });
 
   describe('startScraping', () => {
-    it('should start new scraping session', () => {
-      const progress = manager.startScraping('profile', 'testuser', 100);
+    it('should start new scraping session', async () => {
+      const progress = await manager.startScraping('profile', 'testuser', 100);
       
       expect(progress.totalRequested).toBe(100);
       expect(progress.totalScraped).toBe(0);
