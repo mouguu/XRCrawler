@@ -18,12 +18,7 @@ const navLinks = [
   { label: "Sessions", href: "#sessions" },
 ];
 
-export function HeaderBar({
-  apiKey,
-  apiKeyInput,
-  onApiKeyInputChange,
-  onApply,
-}: HeaderBarProps) {
+export function HeaderBar({ apiKey, apiKeyInput, onApiKeyInputChange, onApply }: HeaderBarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [apiDropdownOpen, setApiDropdownOpen] = useState(false);
 
@@ -35,14 +30,9 @@ export function HeaderBar({
           <div className="flex items-center gap-8">
             <a href="/" className="flex items-center gap-3 group">
               {/* Geometric Logo Mark */}
-              <div className="relative w-8 h-8">
-                <div className="absolute inset-0 bg-foreground rounded-lg rotate-45 group-hover:rotate-[55deg] transition-transform duration-500" />
-                <div className="absolute inset-1 bg-background rounded-md rotate-45 group-hover:rotate-[55deg] transition-transform duration-500" />
-                <div className="absolute inset-2 bg-foreground rounded-sm rotate-45 group-hover:rotate-[55deg] transition-transform duration-500" />
-              </div>
-              <span className="text-xl font-semibold tracking-tight">
-                XRCrawler
-              </span>
+              {/* Image Logo */}
+              <img src="/icon.png" alt="XRCrawler Logo" className="w-8 h-8 object-contain" />
+              <span className="text-xl font-semibold tracking-tight">XRCrawler</span>
             </a>
 
             {/* Desktop Navigation */}
@@ -71,10 +61,10 @@ export function HeaderBar({
                 <span className="text-muted-foreground">
                   {apiKey ? "API Connected" : "Connect API"}
                 </span>
-                {apiKey && (
-                  <span className="w-2 h-2 rounded-full bg-green-500" />
-                )}
-                <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${apiDropdownOpen ? 'rotate-180' : ''}`} />
+                {apiKey && <span className="w-2 h-2 rounded-full bg-green-500" />}
+                <ChevronDown
+                  className={`w-4 h-4 text-muted-foreground transition-transform ${apiDropdownOpen ? "rotate-180" : ""}`}
+                />
               </button>
 
               <AnimatePresence>
@@ -136,11 +126,7 @@ export function HeaderBar({
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="md:hidden p-2 rounded-lg hover:bg-muted transition-colors"
             >
-              {mobileMenuOpen ? (
-                <X className="w-5 h-5" />
-              ) : (
-                <Menu className="w-5 h-5" />
-              )}
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
         </div>
