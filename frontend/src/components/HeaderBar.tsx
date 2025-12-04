@@ -16,7 +16,6 @@ const navLinks = [
   { label: "Scrape", href: "#scrape" },
   { label: "Dashboard", href: "#dashboard" },
   { label: "Sessions", href: "#sessions" },
-  { label: "Docs", href: "/docs", external: true },
 ];
 
 export function HeaderBar({
@@ -52,7 +51,6 @@ export function HeaderBar({
                 <a
                   key={link.label}
                   href={link.href}
-                  target={link.external ? "_blank" : undefined}
                   className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted"
                 >
                   {link.label}
@@ -161,7 +159,6 @@ export function HeaderBar({
                   <a
                     key={link.label}
                     href={link.href}
-                    target={link.external ? "_blank" : undefined}
                     onClick={() => setMobileMenuOpen(false)}
                     className="block px-4 py-3 text-lg rounded-lg hover:bg-muted transition-colors"
                   >

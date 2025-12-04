@@ -10,6 +10,22 @@
 
 ---
 
+## 🖥️ Web UI
+
+<p align="center">
+  <img src="docs/images/web-ui-screenshot.png" alt="XRCrawler Web UI" width="100%" />
+</p>
+
+**Modern, minimalist interface** inspired by [Paradigm.xyz](https://paradigm.xyz) design principles:
+
+- **📊 Platform Selector** — Choose between Profile, Thread, Search, or Reddit modes with intuitive cards
+- **⚡ Real-time Dashboard** — Monitor active jobs with live progress, logs, and SSE streaming
+- **🔐 Session Manager** — Upload and manage multiple cookie files with custom naming
+- **🎯 Smart Configuration** — GraphQL/Puppeteer/Mixed modes, date chunking, parallel scrapers
+- **🌓 Dark/Light Mode** — Professional aesthetics with smooth transitions
+
+---
+
 ## 🏎️ Architecture & Status
 
 > **TL;DR:** XRCrawler is now a **production-grade industrial crawler** with database persistence and intelligent error handling.
@@ -381,49 +397,49 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
 
 ### Backend
 
-| Technology | Purpose |
-|------------|---------|
-| **[Node.js](https://nodejs.org/) 22** | Runtime environment |
-| **[TypeScript](https://www.typescriptlang.org/) 5.x** | Type-safe JavaScript |
-| **[Express](https://expressjs.com/)** | HTTP server framework |
-| **[BullMQ](https://docs.bullmq.io/)** | Redis-backed job queue with retries, backoff, and concurrency control |
-| **[Prisma](https://www.prisma.io/)** | Type-safe ORM for PostgreSQL |
-| **[Puppeteer](https://pptr.dev/)** | Headless Chrome for dynamic content scraping |
+| Technology                                            | Purpose                                                               |
+| ----------------------------------------------------- | --------------------------------------------------------------------- |
+| **[Node.js](https://nodejs.org/) 22**                 | Runtime environment                                                   |
+| **[TypeScript](https://www.typescriptlang.org/) 5.x** | Type-safe JavaScript                                                  |
+| **[Express](https://expressjs.com/)**                 | HTTP server framework                                                 |
+| **[BullMQ](https://docs.bullmq.io/)**                 | Redis-backed job queue with retries, backoff, and concurrency control |
+| **[Prisma](https://www.prisma.io/)**                  | Type-safe ORM for PostgreSQL                                          |
+| **[Puppeteer](https://pptr.dev/)**                    | Headless Chrome for dynamic content scraping                          |
 
 ### Database & Cache
 
-| Technology | Purpose |
-|------------|---------|
+| Technology                                       | Purpose                                                      |
+| ------------------------------------------------ | ------------------------------------------------------------ |
 | **[PostgreSQL](https://www.postgresql.org/) 15** | Persistent storage for jobs, tweets, checkpoints, error logs |
-| **[Redis](https://redis.io/) 7** | Job queue, Pub/Sub for real-time SSE, caching |
+| **[Redis](https://redis.io/) 7**                 | Job queue, Pub/Sub for real-time SSE, caching                |
 
 ### Frontend
 
-| Technology | Purpose |
-|------------|---------|
-| **[React](https://react.dev/) 18** | UI components |
-| **[Vite](https://vitejs.dev/)** | Fast dev server and build tool |
-| **[TypeScript](https://www.typescriptlang.org/)** | Type-safe frontend code |
-| **Vanilla CSS** | Custom styling with CSS variables |
+| Technology                                        | Purpose                           |
+| ------------------------------------------------- | --------------------------------- |
+| **[React](https://react.dev/) 18**                | UI components                     |
+| **[Vite](https://vitejs.dev/)**                   | Fast dev server and build tool    |
+| **[TypeScript](https://www.typescriptlang.org/)** | Type-safe frontend code           |
+| **Vanilla CSS**                                   | Custom styling with CSS variables |
 
 ### Performance (Rust/WASM)
 
-| Module | Purpose |
-|--------|---------|
-| **`tweet-cleaner`** | Fast tweet deduplication and normalization |
-| **`reddit-cleaner`** | Reddit post/comment cleaning |
-| **`url-normalizer`** | URL canonicalization for dedup |
+| Module               | Purpose                                    |
+| -------------------- | ------------------------------------------ |
+| **`tweet-cleaner`**  | Fast tweet deduplication and normalization |
+| **`reddit-cleaner`** | Reddit post/comment cleaning               |
+| **`url-normalizer`** | URL canonicalization for dedup             |
 
 > Built with Rust + `wasm-pack`, compiled to WebAssembly for near-native performance in Node.js.
 
 ### DevOps
 
-| Technology | Purpose |
-|------------|---------|
-| **[Docker](https://www.docker.com/)** | Containerization |
-| **[Docker Compose](https://docs.docker.com/compose/)** | Multi-container orchestration |
-| **[Bull Board](https://github.com/felixmosh/bull-board)** | Queue monitoring dashboard |
-| **[Prisma Studio](https://www.prisma.io/studio)** | Database GUI |
+| Technology                                                | Purpose                       |
+| --------------------------------------------------------- | ----------------------------- |
+| **[Docker](https://www.docker.com/)**                     | Containerization              |
+| **[Docker Compose](https://docs.docker.com/compose/)**    | Multi-container orchestration |
+| **[Bull Board](https://github.com/felixmosh/bull-board)** | Queue monitoring dashboard    |
+| **[Prisma Studio](https://www.prisma.io/studio)**         | Database GUI                  |
 
 ### Architecture Patterns
 
@@ -451,4 +467,3 @@ Built with:
 - [Prisma](https://www.prisma.io/) - Next-generation ORM
 - [Rust/WASM](https://www.rust-lang.org/what/wasm) - High-performance data processing
 - [React](https://react.dev/) + [Vite](https://vitejs.dev/) - Frontend
-

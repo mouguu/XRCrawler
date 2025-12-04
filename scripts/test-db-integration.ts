@@ -1,7 +1,7 @@
-import { prisma } from './core/db/prisma';
-import { JobRepository } from './core/db/job-repo';
-import { TweetRepository } from './core/db/tweet-repo';
-import { CheckpointRepository } from './core/db/checkpoint-repo';
+import { prisma } from '../core/db/prisma';
+import { JobRepository } from '../core/db/job-repo';
+import { TweetRepository } from '../core/db/tweet-repo';
+import { CheckpointRepository } from '../core/db/checkpoint-repo';
 
 async function testDatabaseIntegration() {
   console.log('🧪 Testing Database Integration...\n');

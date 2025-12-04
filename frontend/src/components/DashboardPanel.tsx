@@ -188,7 +188,7 @@ export function DashboardPanel({ onJobComplete, appendApiKey, fetchJobStatus: fe
             </div>
             <div className="w-px h-8 bg-border" />
             <div className="text-right">
-              <div className="text-2xl font-semibold text-green-600">{completedCount}</div>
+              <div className="text-2xl font-semibold">{completedCount}</div>
               <div className="text-xs text-muted-foreground uppercase tracking-wider">Completed</div>
             </div>
           </div>
@@ -275,7 +275,7 @@ function JobCard({
   };
 
   const StatusIcon = () => {
-    if (isCompleted) return <CheckCircle2 className="w-5 h-5 text-green-600" />;
+    if (isCompleted) return <CheckCircle2 className="w-5 h-5 text-foreground" />;
     if (isFailed) return <XCircle className="w-5 h-5 text-red-600" />;
     if (isActive) return <Loader2 className="w-5 h-5 text-foreground animate-spin" />;
     return <Clock className="w-5 h-5 text-muted-foreground" />;

@@ -1,9 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, CheckCircle, XCircle, RefreshCw, FileJson, User, Cookie } from 'lucide-react';
+import { Upload, CheckCircle, XCircle, RefreshCw, FileJson, User, Cookie, FileUp } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 
 interface SessionInfo {
     filename: string;
@@ -31,6 +41,11 @@ export function SessionManager() {
     const [error, setError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // Modal state
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [cookieName, setCookieName] = useState('');
+
     const fetchSessions = async () => {
         setLoading(true);
         try {
@@ -53,13 +68,40 @@ export function SessionManager() {
         fetchSessions();
     }, []);
 
-    const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    // When file is selected, open the modal
+    const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
 
+        setSelectedFile(file);
+        // Default name: remove .json extension
+        const defaultName = file.name.replace(/\.json$/i, '');
+        setCookieName(defaultName);
+        setIsModalOpen(true);
+
+        // Reset file input
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+
+    // Upload the file with custom name
+    const handleUpload = async () => {
+        if (!selectedFile) return;
+
         setUploading(true);
         const formData = new FormData();
-        formData.append('file', file);
+        
+        // Sanitize the name and ensure .json extension
+        let finalName = cookieName.trim() || selectedFile.name.replace(/\.json$/i, '');
+        finalName = finalName.replace(/[^a-zA-Z0-9_-]/g, '_'); // Sanitize special chars
+        if (!finalName.endsWith('.json')) {
+            finalName += '.json';
+        }
+
+        // Create a new file with the custom name
+        const renamedFile = new File([selectedFile], finalName, { type: selectedFile.type });
+        formData.append('file', renamedFile);
 
         try {
             const response = await fetch('/api/cookies', {
@@ -71,6 +113,9 @@ export function SessionManager() {
             if (data.success) {
                 await fetchSessions();
                 setError(null);
+                setIsModalOpen(false);
+                setSelectedFile(null);
+                setCookieName('');
             } else {
                 setError(data.error || 'Upload failed');
             }
@@ -78,10 +123,13 @@ export function SessionManager() {
             setError('Network error during upload');
         } finally {
             setUploading(false);
-            if (fileInputRef.current) {
-                fileInputRef.current.value = '';
-            }
         }
+    };
+
+    const handleCloseModal = () => {
+        setIsModalOpen(false);
+        setSelectedFile(null);
+        setCookieName('');
     };
 
     return (
@@ -113,7 +161,7 @@ export function SessionManager() {
                     <input
                         type="file"
                         ref={fileInputRef}
-                        onChange={handleFileUpload}
+                        onChange={handleFileSelect}
                         accept=".json"
                         className="hidden"
                     />
@@ -131,6 +179,70 @@ export function SessionManager() {
                     </Button>
                 </div>
             </div>
+
+            {/* Upload Modal */}
+            <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <FileUp className="w-5 h-5" />
+                            Name Your Session
+                        </DialogTitle>
+                        <DialogDescription>
+                            Give this cookie file a memorable name. This will be used as the filename.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-4">
+                        {/* File Info */}
+                        {selectedFile && (
+                            <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg border border-border/50">
+                                <FileJson className="w-8 h-8 text-muted-foreground" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate">{selectedFile.name}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {(selectedFile.size / 1024).toFixed(1)} KB
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Name Input */}
+                        <div className="space-y-2">
+                            <Label htmlFor="cookie-name">Session Name</Label>
+                            <Input
+                                id="cookie-name"
+                                value={cookieName}
+                                onChange={(e) => setCookieName(e.target.value)}
+                                placeholder="e.g. my_twitter_account"
+                                className="font-mono"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Will be saved as: <code className="bg-muted px-1 rounded">{cookieName.trim() ? `${cookieName.replace(/[^a-zA-Z0-9_-]/g, '_')}.json` : '...'}</code>
+                            </p>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={handleCloseModal}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleUpload} disabled={uploading || !cookieName.trim()}>
+                            {uploading ? (
+                                <>
+                                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                                    Uploading...
+                                </>
+                            ) : (
+                                <>
+                                    <Upload className="w-4 h-4 mr-2" />
+                                    Upload
+                                </>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Error */}
             <AnimatePresence>
@@ -182,7 +294,7 @@ export function SessionManager() {
                                 <div className="flex items-start gap-4">
                                     <div className={`
                                         w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors
-                                        ${session.isValid ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}
+                                        ${session.isValid ? 'bg-muted text-foreground' : 'bg-red-100 text-red-600'}
                                     `}>
                                         {session.isValid ? <CheckCircle className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
                                     </div>
