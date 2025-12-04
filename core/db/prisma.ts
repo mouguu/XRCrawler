@@ -5,6 +5,9 @@ import { createEnhancedLogger } from '../../utils/logger';
 
 const logger = createEnhancedLogger('Prisma');
 
+// 调试日志：检查环境变量是否存在
+console.log('[Prisma Init] Checking DATABASE_URL:', process.env.DATABASE_URL ? 'Present' : 'MISSING');
+
 // Prevent multiple instances in development due to hot reloading
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
@@ -24,25 +27,36 @@ const createMockPrismaClient = (): PrismaClient => {
 
 // Create real PrismaClient with pg adapter (Prisma v7 pattern)
 const createRealPrismaClient = (): PrismaClient => {
-  // 1. 创建原生的 pg 连接池
-  const connectionString = `${process.env.DATABASE_URL}`;
+  const connectionString = process.env.DATABASE_URL;
+  
+  if (!connectionString) {
+    throw new Error('DATABASE_URL environment variable is missing');
+  }
+
+  // 1. 初始化 PG 连接池
+  console.log('[Prisma Init] Initializing pg Pool...');
   const pool = new Pool({ connectionString });
 
-  // 2. 创建 Prisma 的驱动适配器
-  // 这就是 Prisma 7 报错里要的那个 "adapter"
+  // 2. 初始化适配器
+  console.log('[Prisma Init] Initializing PrismaPg adapter...');
   const adapter = new PrismaPg(pool);
 
-  // 3. 初始化 Client，注入适配器
+  // 3. 初始化 Client
+  console.log('[Prisma Init] Initializing PrismaClient...');
   return new PrismaClient({ adapter });
 };
 
 let prismaInstance: PrismaClient;
+
 try {
-  console.log('DEBUG: Initializing Prisma Client with pg adapter...');
+  console.log('[Prisma Init] Starting initialization...');
   prismaInstance = globalForPrisma.prisma || (isTestWithoutDb ? createMockPrismaClient() : createRealPrismaClient());
-  console.log('DEBUG: Prisma Client initialized successfully');
-} catch (e: any) {
-  console.error('CRITICAL ERROR: Prisma Client initialization failed:', e);
+  console.log('[Prisma Init] Successfully initialized.');
+} catch (error) {
+  console.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
+  console.error('[Prisma Init] FATAL ERROR initializing database connection:');
+  console.error(error);
+  console.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
   process.exit(1);
 }
 

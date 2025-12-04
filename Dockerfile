@@ -60,8 +60,9 @@ COPY --from=deps /app/node_modules ./node_modules
 # 复制 package.json
 COPY package.json ./
 
-# 生成 Prisma Client（需要 schema）
+# 生成 Prisma Client（需要 schema 和 config）
 COPY prisma ./prisma
+COPY prisma.config.ts ./
 RUN npx prisma generate
 
 # 复制预编译的 WASM 模块（在本地编译好）
