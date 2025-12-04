@@ -377,6 +377,64 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
 
 ---
 
+## 🛠️ Tech Stack
+
+### Backend
+
+| Technology | Purpose |
+|------------|---------|
+| **[Node.js](https://nodejs.org/) 22** | Runtime environment |
+| **[TypeScript](https://www.typescriptlang.org/) 5.x** | Type-safe JavaScript |
+| **[Express](https://expressjs.com/)** | HTTP server framework |
+| **[BullMQ](https://docs.bullmq.io/)** | Redis-backed job queue with retries, backoff, and concurrency control |
+| **[Prisma](https://www.prisma.io/)** | Type-safe ORM for PostgreSQL |
+| **[Puppeteer](https://pptr.dev/)** | Headless Chrome for dynamic content scraping |
+
+### Database & Cache
+
+| Technology | Purpose |
+|------------|---------|
+| **[PostgreSQL](https://www.postgresql.org/) 15** | Persistent storage for jobs, tweets, checkpoints, error logs |
+| **[Redis](https://redis.io/) 7** | Job queue, Pub/Sub for real-time SSE, caching |
+
+### Frontend
+
+| Technology | Purpose |
+|------------|---------|
+| **[React](https://react.dev/) 18** | UI components |
+| **[Vite](https://vitejs.dev/)** | Fast dev server and build tool |
+| **[TypeScript](https://www.typescriptlang.org/)** | Type-safe frontend code |
+| **Vanilla CSS** | Custom styling with CSS variables |
+
+### Performance (Rust/WASM)
+
+| Module | Purpose |
+|--------|---------|
+| **`tweet-cleaner`** | Fast tweet deduplication and normalization |
+| **`reddit-cleaner`** | Reddit post/comment cleaning |
+| **`url-normalizer`** | URL canonicalization for dedup |
+
+> Built with Rust + `wasm-pack`, compiled to WebAssembly for near-native performance in Node.js.
+
+### DevOps
+
+| Technology | Purpose |
+|------------|---------|
+| **[Docker](https://www.docker.com/)** | Containerization |
+| **[Docker Compose](https://docs.docker.com/compose/)** | Multi-container orchestration |
+| **[Bull Board](https://github.com/felixmosh/bull-board)** | Queue monitoring dashboard |
+| **[Prisma Studio](https://www.prisma.io/studio)** | Database GUI |
+
+### Architecture Patterns
+
+- **Queue-first design**: All scraping jobs go through BullMQ for reliability
+- **Event-driven**: Redis Pub/Sub for real-time progress streaming via SSE
+- **Platform adapters**: Plugin architecture for multi-platform support
+- **Resume-capable**: Checkpoints saved to PostgreSQL for crash recovery
+- **Error classification**: Smart retry strategies based on error types
+
+---
+
 ## 📜 License
 
 ISC - See [LICENSE](LICENSE) for details.
@@ -390,5 +448,7 @@ Built with:
 - [BullMQ](https://github.com/taskforcesh/bullmq) - Robust queue system
 - [Puppeteer](https://pptr.dev/) - Browser automation
 - [Redis](https://redis.io/) - Fast data store
+- [Prisma](https://www.prisma.io/) - Next-generation ORM
 - [Rust/WASM](https://www.rust-lang.org/what/wasm) - High-performance data processing
 - [React](https://react.dev/) + [Vite](https://vitejs.dev/) - Frontend
+
