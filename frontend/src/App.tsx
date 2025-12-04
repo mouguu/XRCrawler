@@ -286,10 +286,13 @@ function App() {
   };
 
   return (
-    <div className="antialiased selection:bg-stone selection:text-washi min-h-screen relative">
+    <div className="min-h-screen bg-background text-foreground antialiased">
+      {/* Geometric Background Pattern */}
+      <div className="fixed inset-0 pattern-dots opacity-30 pointer-events-none" />
+      
       {/* Error Notification */}
       {currentError && (
-        <div className="fixed top-6 right-6 left-6 md:left-auto md:w-96 z-50 animate-fade-in-organic">
+        <div className="fixed top-20 right-6 left-6 md:left-auto md:w-96 z-50 animate-fade-up">
           <ErrorNotification
             error={currentError}
             onDismiss={() => setCurrentError(null)}
@@ -298,73 +301,73 @@ function App() {
         </div>
       )}
 
-      <div>
-        {/* Noise Texture Overlay */}
-        <div className="noise-overlay"></div>
+      <HeaderBar
+        apiKey={apiKey}
+        apiKeyInput={apiKeyInput}
+        onApiKeyInputChange={setApiKeyInput}
+        onApply={applyApiKey}
+      />
 
-        <HeaderBar
-          apiKey={apiKey}
-          apiKeyInput={apiKeyInput}
-          onApiKeyInputChange={setApiKeyInput}
-          onApply={applyApiKey}
+      <main className="relative">
+        <TaskForm
+          activeTab={activeTab}
+          input={input}
+          limit={limit}
+          scrapeLikes={scrapeLikes}
+          scrapeMode={scrapeMode}
+          autoRotateSessions={autoRotateSessions}
+          enableDeepSearch={enableDeepSearch}
+          parallelChunks={parallelChunks}
+          enableProxy={enableProxy}
+          startDate={startDate}
+          endDate={endDate}
+          lookbackHours={lookbackHours}
+          keywords={keywords}
+          redditStrategy={redditStrategy}
+          isScraping={isScraping}
+          canSubmit={canSubmit}
+          onTabChange={handleTabChange}
+          onInputChange={setInput}
+          onLimitChange={setLimit}
+          onScrapeModeChange={handleScrapeModeChange}
+          onToggleLikes={setScrapeLikes}
+          onToggleAutoRotate={setAutoRotateSessions}
+          onToggleDeepSearch={setEnableDeepSearch}
+          onParallelChunksChange={setParallelChunks}
+          onToggleProxy={setEnableProxy}
+          onStartDateChange={setStartDate}
+          onEndDateChange={setEndDate}
+          onLookbackHoursChange={setLookbackHours}
+          onKeywordsChange={setKeywords}
+          onRedditStrategyChange={setRedditStrategy}
+          onSubmit={handleScrape}
+          onStop={handleStop}
         />
 
-        <main className="space-y-24 pb-32">
-          <TaskForm
-            activeTab={activeTab}
-            input={input}
-            limit={limit}
-            scrapeLikes={scrapeLikes}
-            scrapeMode={scrapeMode}
-            autoRotateSessions={autoRotateSessions}
-            enableDeepSearch={enableDeepSearch}
-            parallelChunks={parallelChunks}
-            enableProxy={enableProxy}
-            startDate={startDate}
-            endDate={endDate}
-            lookbackHours={lookbackHours}
-            keywords={keywords}
-            redditStrategy={redditStrategy}
-            isScraping={isScraping}
-            canSubmit={canSubmit}
-            onTabChange={handleTabChange}
-            onInputChange={setInput}
-            onLimitChange={setLimit}
-            onScrapeModeChange={handleScrapeModeChange}
-            onToggleLikes={setScrapeLikes}
-            onToggleAutoRotate={setAutoRotateSessions}
-            onToggleDeepSearch={setEnableDeepSearch}
-            onParallelChunksChange={setParallelChunks}
-            onToggleProxy={setEnableProxy}
-            onStartDateChange={setStartDate}
-            onEndDateChange={setEndDate}
-            onLookbackHoursChange={setLookbackHours}
-            onKeywordsChange={setKeywords}
-            onRedditStrategyChange={setRedditStrategy}
-            onSubmit={handleScrape}
-            onStop={handleStop}
+        {/* Dashboard & Sessions */}
+        <div className="max-w-6xl mx-auto px-6 pb-24 space-y-16">
+          <DashboardPanel
+            onJobComplete={(jobId, downloadUrl) => {
+              console.log(`Job ${jobId} completed`, downloadUrl);
+              setLatestJobId((prev) => (prev === jobId ? null : prev));
+            }}
+            appendApiKey={appendApiKey}
           />
 
-          {/* Active Jobs Panel - Queue Mode */}
-          <div className="max-w-6xl mx-auto px-6">
-            <DashboardPanel
-              onJobComplete={(jobId, downloadUrl) => {
-                console.log(`Job ${jobId} completed`, downloadUrl);
-                setLatestJobId((prev) => (prev === jobId ? null : prev));
-                        }}
-              appendApiKey={appendApiKey}
-            />
-          </div>
-
-          {/* Session Management - Only for Twitter, not Reddit */}
+          {/* Session Management - Twitter only */}
           {activeTab !== "reddit" && (
-            <div className="max-w-4xl mx-auto px-6">
-               <div className="h-px w-full bg-stone/10 mb-16"></div>
-               <SessionManager />
-            </div>
+            <>
+              <div className="h-px w-full bg-border" />
+              <SessionManager />
+            </>
           )}
-        </main>
-      </div>
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t border-border/50 py-8 text-center text-sm text-muted-foreground">
+        <p>XRCrawler • Twitter/X & Reddit Data Extraction</p>
+      </footer>
     </div>
   );
 }

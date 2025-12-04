@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, CheckCircle, XCircle, RefreshCw, FileJson, User, Cookie } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface SessionInfo {
     filename: string;
@@ -38,7 +42,7 @@ export function SessionManager() {
             } else {
                 setError(data.error || 'Failed to fetch sessions');
             }
-        } catch (err) {
+        } catch {
             setError('Network error while fetching sessions');
         } finally {
             setLoading(false);
@@ -65,12 +69,12 @@ export function SessionManager() {
             const data = await response.json();
 
             if (data.success) {
-                await fetchSessions(); // Refresh list
+                await fetchSessions();
                 setError(null);
             } else {
                 setError(data.error || 'Upload failed');
             }
-        } catch (err) {
+        } catch {
             setError('Network error during upload');
         } finally {
             setUploading(false);
@@ -81,127 +85,137 @@ export function SessionManager() {
     };
 
     return (
-        <div className="max-w-4xl mx-auto px-6 pb-20">
-            <div className="card-paper rounded-organic-lg p-8 relative overflow-hidden">
-                {/* Decorative background element */}
-                <div className="absolute top-0 right-0 w-32 h-32 bg-rust/5 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
-                    <div className="space-organic-sm">
-                        <h3 className="text-2xl font-display text-charcoal tracking-tight flex items-center gap-3">
-                            <span className="w-8 h-8 rounded-full bg-stone/10 flex items-center justify-center text-stone">
-                                <User size={16} />
-                            </span>
-                            Session Management
-                        </h3>
-                        <p className="text-sm text-stone/60 font-serif italic pl-11">
-                            Manage your Twitter accounts and cookies
-                        </p>
-                    </div>
-                    <div className="flex gap-4 items-center self-end md:self-auto">
-                        <button 
-                            onClick={fetchSessions} 
-                            className="p-3 text-stone/60 hover:text-rust transition-colors rounded-full hover:bg-stone/5"
-                            title="Refresh sessions"
-                        >
-                            <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
-                        </button>
-                        <div className="relative">
-                            <input
-                                type="file"
-                                ref={fileInputRef}
-                                onChange={handleFileUpload}
-                                accept=".json"
-                                className="hidden"
-                            />
-                            <button
-                                onClick={() => fileInputRef.current?.click()}
-                                disabled={uploading}
-                                className="
-                                    flex items-center gap-3 px-6 py-3 
-                                    border border-charcoal/80 rounded-full 
-                                    hover:bg-charcoal hover:text-washi 
-                                    transition-all duration-300 
-                                    text-xs uppercase tracking-[0.15em] font-bold 
-                                    disabled:opacity-50 btn-organic shadow-sm
-                                "
-                            >
-                                {uploading ? (
-                                    <RefreshCw className="w-4 h-4 animate-spin" />
-                                ) : (
-                                    <Upload className="w-4 h-4" />
-                                )}
-                                Upload Cookies
-                            </button>
+        <section id="sessions" className="py-12">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-8">
+                <div>
+                    <h2 className="text-2xl font-semibold tracking-tight flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center">
+                            <User className="w-5 h-5 text-muted-foreground" />
                         </div>
-                    </div>
+                        Sessions
+                    </h2>
+                    <p className="text-sm text-muted-foreground mt-1 ml-13">
+                        Manage your Twitter accounts and cookies
+                    </p>
                 </div>
-
-                {error && (
-                    <div className="mb-8 p-4 bg-red-50/50 border border-red-100 rounded-organic text-red-800 text-sm flex items-center gap-3 animate-fade-in-organic">
-                        <XCircle className="w-5 h-5 flex-shrink-0" />
-                        <span className="font-serif italic">{error}</span>
-                    </div>
-                )}
-
-                <div className="grid gap-4">
-                    {sessions.length === 0 && !loading ? (
-                        <div className="flex flex-col items-center justify-center py-16 border border-dashed border-stone/20 rounded-organic bg-stone/5 opacity-60">
-                            <FileJson className="w-12 h-12 mb-4 text-stone/30" strokeWidth={1.5} />
-                            <p className="font-serif italic text-stone/60 text-sm">No sessions found. Upload a cookie JSON file to get started.</p>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {sessions.map((session) => (
-                                <div 
-                                    key={session.filename}
-                                    className={`
-                                        relative group p-5 rounded-organic border transition-all duration-500
-                                        ${session.isValid 
-                                            ? 'bg-white/60 border-stone/10 hover:border-moss/30 hover:shadow-paper' 
-                                            : 'bg-red-50/30 border-red-100 hover:border-red-200'}
-                                    `}
-                                >
-                                    <div className="flex items-start justify-between gap-4">
-                                        <div className="flex items-start gap-4">
-                                            <div className={`
-                                                mt-1 w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors
-                                                ${session.isValid ? 'bg-moss/10 text-moss' : 'bg-red-100 text-red-600'}
-                                            `}>
-                                                {session.isValid ? <CheckCircle size={16} /> : <XCircle size={16} />}
-                                            </div>
-                                            <div>
-                                                <h4 className="font-display text-lg text-charcoal group-hover:text-rust transition-colors">
-                                                    {FRIENDLY_ACCOUNT_NAMES[session.filename] 
-                                                        || FRIENDLY_ACCOUNT_NAMES[session.filename.replace(/\.json$/i, '')] 
-                                                        || (session.username ? `@${session.username}` : 'Unknown User')}
-                                                </h4>
-                                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-stone/60 mt-2 font-sans uppercase tracking-wider">
-                                                    <span className="font-mono bg-stone/5 px-1.5 py-0.5 rounded text-stone/80">{session.filename}</span>
-                                                    <span className="flex items-center gap-1">
-                                                        <Cookie size={10} />
-                                                        {session.cookieCount}
-                                                    </span>
-                                                </div>
-                                                {!session.isValid && (
-                                                    <p className="text-xs text-red-600/80 mt-2 font-serif italic border-l-2 border-red-200 pl-2">
-                                                        {session.error}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Corner accent */}
-                                    <div className={`absolute top-0 right-0 w-8 h-8 overflow-hidden pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500`}>
-                                        <div className={`absolute top-0 right-0 w-12 h-12 -translate-y-1/2 translate-x-1/2 rotate-45 ${session.isValid ? 'bg-moss/20' : 'bg-red-500/20'}`}></div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                
+                <div className="flex items-center gap-3">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={fetchSessions}
+                        disabled={loading}
+                    >
+                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                    </Button>
+                    
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileUpload}
+                        accept=".json"
+                        className="hidden"
+                    />
+                    <Button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                        className="gap-2"
+                    >
+                        {uploading ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <Upload className="w-4 h-4" />
+                        )}
+                        Upload Cookies
+                    </Button>
                 </div>
             </div>
-        </div>
+
+            {/* Error */}
+            <AnimatePresence>
+                {error && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl text-red-800 text-sm flex items-center gap-3"
+                    >
+                        <XCircle className="w-5 h-5 flex-shrink-0" />
+                        <span>{error}</span>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Sessions Grid */}
+            {sessions.length === 0 && !loading ? (
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="border border-dashed border-border rounded-2xl p-12 text-center"
+                >
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-muted flex items-center justify-center">
+                        <FileJson className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                    <h3 className="text-lg font-medium mb-2">No sessions found</h3>
+                    <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+                        Upload a cookie JSON file to add Twitter accounts for scraping.
+                    </p>
+                </motion.div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <AnimatePresence mode="popLayout">
+                        {sessions.map((session, index) => (
+                            <motion.div
+                                key={session.filename}
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                transition={{ delay: index * 0.05 }}
+                                className={`
+                                    relative p-5 rounded-2xl border transition-all duration-300 group
+                                    ${session.isValid 
+                                        ? 'bg-card border-border/50 hover:border-border hover:shadow-md' 
+                                        : 'bg-red-50/50 border-red-100 hover:border-red-200'}
+                                `}
+                            >
+                                <div className="flex items-start gap-4">
+                                    <div className={`
+                                        w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors
+                                        ${session.isValid ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}
+                                    `}>
+                                        {session.isValid ? <CheckCircle className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
+                                    </div>
+                                    
+                                    <div className="flex-1 min-w-0">
+                                        <h4 className="font-medium truncate group-hover:text-foreground transition-colors">
+                                            {FRIENDLY_ACCOUNT_NAMES[session.filename] 
+                                                || FRIENDLY_ACCOUNT_NAMES[session.filename.replace(/\.json$/i, '')] 
+                                                || (session.username ? `@${session.username}` : 'Unknown User')}
+                                        </h4>
+                                        
+                                        <div className="flex items-center gap-2 mt-2">
+                                            <Badge variant="secondary" className="font-mono text-2xs">
+                                                {session.filename}
+                                            </Badge>
+                                            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                                <Cookie className="w-3 h-3" />
+                                                {session.cookieCount}
+                                            </span>
+                                        </div>
+                                        
+                                        {!session.isValid && session.error && (
+                                            <p className="text-xs text-red-600 mt-3 line-clamp-2">
+                                                {session.error}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </AnimatePresence>
+                </div>
+            )}
+        </section>
     );
 }

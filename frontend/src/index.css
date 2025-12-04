@@ -3,202 +3,189 @@
 @tailwind utilities;
 
 /* ==========================================================================
-   Wabi Sabi Global Styles - 侘寂 Aesthetic System
+   Modern SaaS Design System - Paradigm Inspired
    ==========================================================================
-   Embracing imperfection, transience, and natural beauty
+   Minimalist • Geometric • Premium Silicon Valley Aesthetic
    ========================================================================== */
 
-/* --------------------------------------------------------------------------
-   Base & Reset
-   -------------------------------------------------------------------------- */
+@layer base {
+  :root {
+    /* Pure Light Theme */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 8%;
 
-body {
-  background-color: #f5f5ef;
-  color: #1f1f1f;
-  font-family: "Source Sans 3", system-ui, -apple-system, sans-serif;
-  overflow-x: hidden;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 8%;
 
-  /* Layered organic textures for paper-like feel */
-  background-image: 
-    /* Paper grain texture */ url("data:image/svg+xml,%3Csvg width='200' height='200' viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.04'/%3E%3C/svg%3E"),
-    /* Subtle fiber texture */
-      url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='fiberNoise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='2.5' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23fiberNoise)' opacity='0.015'/%3E%3C/svg%3E");
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 8%;
+
+    /* Primary - Deep Black for contrast */
+    --primary: 0 0% 8%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary - Soft Gray */
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 8%;
+
+    /* Muted - Very Light */
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+
+    /* Accent - Subtle highlight */
+    --accent: 0 0% 96%;
+    --accent-foreground: 0 0% 8%;
+
+    /* Destructive */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Borders - Super subtle */
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 0 0% 8%;
+
+    --radius: 0.75rem;
+
+    /* Brand accent */
+    --brand: 262 83% 58%;
+    --brand-foreground: 0 0% 100%;
+  }
+
+  .dark {
+    --background: 0 0% 4%;
+    --foreground: 0 0% 95%;
+
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 95%;
+
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 95%;
+
+    --primary: 0 0% 100%;
+    --primary-foreground: 0 0% 8%;
+
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 95%;
+
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 55%;
+
+    --accent: 0 0% 12%;
+    --accent-foreground: 0 0% 95%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 15%;
+    --input: 0 0% 15%;
+    --ring: 0 0% 95%;
+
+    --brand: 262 83% 68%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    letter-spacing: -0.011em;
+  }
+
+  /* Premium Typography */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
+    letter-spacing: -0.02em;
+  }
+
+  h1 {
+    @apply text-4xl md:text-5xl lg:text-6xl;
+    line-height: 1.1;
+  }
+
+  h2 {
+    @apply text-3xl md:text-4xl;
+    line-height: 1.15;
+  }
+
+  h3 {
+    @apply text-xl md:text-2xl;
+    line-height: 1.2;
+  }
+
+  /* Monospace for code/data */
+  code, .font-mono {
+    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+    font-feature-settings: normal;
+  }
 }
 
 /* --------------------------------------------------------------------------
-   Typography - Organic Rhythm
-   -------------------------------------------------------------------------- */
-
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  font-family: "Sora", "Source Sans 3", sans-serif;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.3;
-}
-
-p,
-input,
-label,
-button {
-  font-family: "Source Sans 3", system-ui, -apple-system, sans-serif;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  line-height: 1.6;
-}
-
-/* --------------------------------------------------------------------------
-   Wabi Sabi Utilities
-   -------------------------------------------------------------------------- */
-
-/* Vertical text (for labels and side text) */
-.vertical-text {
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-}
-
-/* Noise overlay - gentle atmospheric layer */
-.noise-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 50;
-  background: transparent;
-  opacity: 0.6;
-  mix-blend-mode: overlay;
-}
-
-/* Irregular hand-drawn borders */
-.border-ink {
-  border-image: paint(squiggly);
-  border-width: 1px;
-  border-style: solid;
-}
-
-/* Organic paper-lift shadow */
-.shadow-paper {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 2px 6px rgba(0, 0, 0, 0.03),
-    0 4px 12px rgba(0, 0, 0, 0.02);
-}
-
-.shadow-paper-lg {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.04),
-    0 8px 24px rgba(0, 0, 0, 0.03);
-}
-
-/* Weathered edges effect */
-.edge-worn {
-  position: relative;
-}
-
-.edge-worn::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  background: inherit;
-  filter: blur(0.5px) opacity(0.3);
-  z-index: -1;
-}
-
-/* --------------------------------------------------------------------------
-   Custom Scrollbar - Natural Feel
+   Scrollbar - Minimal
    -------------------------------------------------------------------------- */
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f0f0ea;
-  border-radius: 2px;
+  @apply bg-transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #8b7e74 0%, #a89484 100%);
-  border-radius: 2px;
-  border: 1px solid #f5f5ef;
+  @apply bg-border rounded-full hover:bg-muted-foreground/30;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #7a6e64;
-}
-
-/* For Firefox */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #8b7e74 #f0f0ea;
+  scrollbar-color: hsl(var(--border)) transparent;
 }
 
 /* --------------------------------------------------------------------------
-   Animations - Organic & Gentle
+   Geometric Patterns - Paradigm Style
    -------------------------------------------------------------------------- */
 
-/* Breathing animation (subtle pulsing) */
-@keyframes breathe {
-  0%,
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.005);
-    opacity: 0.95;
-  }
+/* Concentric circles pattern */
+.pattern-circles {
+  background-image: url("data:image/svg+xml,%3Csvg width='400' height='400' viewBox='0 0 400 400' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='200' cy='200' r='180' stroke='%23e5e5e5' stroke-width='1'/%3E%3Ccircle cx='200' cy='200' r='140' stroke='%23e5e5e5' stroke-width='1'/%3E%3Ccircle cx='200' cy='200' r='100' stroke='%23e5e5e5' stroke-width='1'/%3E%3Ccircle cx='200' cy='200' r='60' stroke='%23e5e5e5' stroke-width='1'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
 }
 
-.animate-breathe {
-  animation: breathe 4s ease-in-out infinite;
+/* Grid dots pattern */
+.pattern-dots {
+  background-image: radial-gradient(circle at 1px 1px, hsl(var(--border)) 1px, transparent 0);
+  background-size: 24px 24px;
 }
 
-/* Gentle drift (like paper in breeze) */
-@keyframes drift {
-  0% {
-    transform: translate(0, 0) rotate(0deg);
-  }
-  33% {
-    transform: translate(4px, -6px) rotate(0.3deg);
-  }
-  66% {
-    transform: translate(-3px, 4px) rotate(-0.2deg);
-  }
-  100% {
-    transform: translate(0, 0) rotate(0deg);
-  }
+/* Subtle grain texture */
+.texture-grain {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
 }
 
-.animate-drift {
-  animation: drift 20s ease-in-out infinite;
+/* --------------------------------------------------------------------------
+   Animations - Smooth & Subtle
+   -------------------------------------------------------------------------- */
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-/* Ink spread effect */
-@keyframes ink-spread {
-  from {
-    transform: scale(0.95);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-.animate-ink-spread {
-  animation: ink-spread 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-/* Fade in with organic easing */
-@keyframes fade-in-organic {
+@keyframes fade-up {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(20px);
   }
   to {
     opacity: 1;
@@ -206,134 +193,122 @@ button {
   }
 }
 
-.reveal-on-scroll {
-  opacity: 0;
-  transform: translateY(30px);
-  transition: all 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
-.reveal-on-scroll.is-visible {
-  opacity: 1;
-  transform: translateY(0);
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 hsl(var(--brand) / 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px hsl(var(--brand) / 0);
+  }
+}
+
+.animate-fade-in { animation: fade-in 0.5s ease-out; }
+.animate-fade-up { animation: fade-up 0.6s ease-out; }
+.animate-scale-in { animation: scale-in 0.4s ease-out; }
+.animate-slide-in-right { animation: slide-in-right 0.4s ease-out; }
+.animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+
+/* Stagger delays */
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+.delay-500 { animation-delay: 500ms; }
+
+/* --------------------------------------------------------------------------
+   Interactive States
+   -------------------------------------------------------------------------- */
+
+/* Premium hover effect */
+.hover-lift {
+  @apply transition-all duration-300;
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 40px -10px hsl(var(--foreground) / 0.1);
+}
+
+/* Glow on hover */
+.hover-glow {
+  @apply transition-all duration-300;
+}
+
+.hover-glow:hover {
+  box-shadow: 0 0 30px hsl(var(--brand) / 0.2);
+}
+
+/* Border highlight */
+.hover-border {
+  @apply transition-colors duration-200;
+}
+
+.hover-border:hover {
+  @apply border-foreground/20;
 }
 
 /* --------------------------------------------------------------------------
-   Interactive States - Ink-like Transitions
+   Component Utilities
    -------------------------------------------------------------------------- */
 
-/* Ink focus state for inputs */
-.focus-ink {
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+/* Section label - uppercase tracking */
+.section-label {
+  @apply text-[11px] font-medium uppercase tracking-[0.15em] text-muted-foreground;
 }
 
-.focus-ink:focus {
-  outline: none;
-  box-shadow: 0 0 0 1px rgba(166, 94, 78, 0.1),
-    0 2px 8px rgba(166, 94, 78, 0.05);
+/* Pill badge */
+.pill {
+  @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-secondary text-secondary-foreground;
 }
 
-/* Hover state - gentle warmth */
-.hover-warm {
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+/* Link with arrow */
+.link-arrow {
+  @apply inline-flex items-center gap-1 text-sm font-medium hover:gap-2 transition-all duration-200;
 }
 
-.hover-warm:hover {
-  transform: translateY(-1px);
-  color: #a65e4e;
+.link-arrow::after {
+  content: "→";
+  @apply transition-transform duration-200;
 }
 
-/* --------------------------------------------------------------------------
-   Tab & Navigation Styles
-   -------------------------------------------------------------------------- */
-
-.tab-active {
-  position: relative;
-  color: #2c2c2c;
+.link-arrow:hover::after {
+  transform: translateX(2px);
 }
 
-.tab-active::after {
-  content: "";
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    #a65e4e 10%,
-    #a65e4e 90%,
-    transparent 100%
-  );
-  /* Irregular brush stroke effect */
-  mask-image: url("data:image/svg+xml,%3Csvg width='100' height='4' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0,2 Q25,1 50,2 T100,2' stroke='black' stroke-width='3' fill='none'/%3E%3C/svg%3E");
-  mask-size: 100% 100%;
-  mask-repeat: no-repeat;
+/* Card with hover effect */
+.card-hover {
+  @apply border border-border/50 rounded-2xl p-6 transition-all duration-300;
 }
 
-.tab-inactive {
-  color: #7a7a7a;
-  transition: color 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+.card-hover:hover {
+  @apply border-border shadow-lg;
 }
 
-.tab-inactive:hover {
-  color: #a65e4e;
-}
-
-/* --------------------------------------------------------------------------
-   Form Elements - Organic Shapes
-   -------------------------------------------------------------------------- */
-
-/* Custom checkbox - stone/pebble style */
-.checkbox-indicator {
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
-}
-
-input[type="checkbox"]:checked + .checkbox-indicator::before {
-  animation: ink-spread 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-/* Organic button shape */
-.btn-organic {
-  position: relative;
-  border-radius: 24px;
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.btn-organic::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: currentColor;
-  opacity: 0;
-  transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.btn-organic:hover::before {
-  opacity: 0.05;
-}
-
-/* --------------------------------------------------------------------------
-   Card & Panel Styles
-   -------------------------------------------------------------------------- */
-
-/* Paper card effect */
-.card-paper {
-  background: linear-gradient(135deg, #fafaf8 0%, #f5f5ef 50%, #f0f0ea 100%);
-  border: 1px solid rgba(122, 122, 122, 0.1);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 2px 6px rgba(0, 0, 0, 0.02);
-  position: relative;
-}
-
-.card-paper::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='paperNoise'%3E%3CfeTurbulence baseFrequency='1.2' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23paperNoise)' opacity='0.015'/%3E%3C/svg%3E");
-  pointer-events: none;
-  border-radius: inherit;
+/* Input focus glow */
+.input-glow:focus {
+  box-shadow: 0 0 0 3px hsl(var(--brand) / 0.1);
 }
 
 /* --------------------------------------------------------------------------
@@ -341,53 +316,14 @@ input[type="checkbox"]:checked + .checkbox-indicator::before {
    -------------------------------------------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
+  *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
 }
 
-/* High contrast mode support */
-@media (prefers-contrast: high) {
-  body {
-    background-image: none;
-  }
-
-  .noise-overlay {
-    display: none;
-  }
-}
-
-/* --------------------------------------------------------------------------
-   Utility Classes
-   -------------------------------------------------------------------------- */
-
-/* Asymmetric spacing helpers */
-.space-organic-sm {
-  margin: 0.75rem 1rem 1.25rem 0.875rem;
-}
-
-.space-organic-md {
-  margin: 1.5rem 2rem 2.25rem 1.75rem;
-}
-
-.space-organic-lg {
-  margin: 3rem 3.5rem 4rem 3.25rem;
-}
-
-/* Natural padding rhythm */
-.padding-natural {
-  padding: 1.25rem 1.5rem 1.75rem 1.5rem;
-}
-
-/* Irregular border radius */
-.rounded-organic {
-  border-radius: 2px 3px 2px 3px / 3px 2px 3px 2px;
-}
-
-.rounded-organic-lg {
-  border-radius: 4px 6px 5px 4px / 6px 4px 6px 5px;
+/* Focus visible */
+:focus-visible {
+  @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
 }
