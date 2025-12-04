@@ -1,3 +1,10 @@
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Check, ChevronDown, Key, Menu, X } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+
 interface HeaderBarProps {
   apiKey: string;
   apiKeyInput: string;
@@ -5,109 +12,178 @@ interface HeaderBarProps {
   onApply: () => void;
 }
 
+const navLinks = [
+  { label: "Scrape", href: "#scrape" },
+  { label: "Dashboard", href: "#dashboard" },
+  { label: "Sessions", href: "#sessions" },
+  { label: "Docs", href: "/docs", external: true },
+];
+
 export function HeaderBar({
   apiKey,
   apiKeyInput,
   onApiKeyInputChange,
   onApply,
 }: HeaderBarProps) {
-  return (
-    <header className="py-8 px-6 md:px-20 border-b border-stone/15 relative">
-      {/* Subtle organic divider */}
-      <div 
-        className="absolute bottom-0 left-0 right-0 h-[1px] opacity-40"
-        style={{
-          background: 'linear-gradient(90deg, transparent 0%, #7a7a7a 10%, #7a7a7a 90%, transparent 100%)',
-          maskImage: `url("data:image/svg+xml,%3Csvg width='400' height='2' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0,1 Q100,0.5 200,1 T400,1' stroke='black' stroke-width='2' fill='none'/%3E%3C/svg%3E")`,
-          maskSize: '100% 100%',
-          maskRepeat: 'no-repeat'
-        }}
-      ></div>
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [apiDropdownOpen, setApiDropdownOpen] = useState(false);
 
-      <div className="max-w-5xl mx-auto flex justify-between items-center">
-        <div className="space-organic-sm">
-          <h1 className="text-3xl md:text-4xl mb-3 font-display text-charcoal tracking-tight">
-            XRCrawler
-          </h1>
-          <div className="flex items-center gap-3">
-            <div className="h-[1px] w-8 bg-rust/60"></div>
-            <p className="text-stone text-xs uppercase tracking-[0.2em] font-sans font-medium">
-              Twitter/X & Reddit Scraper
-            </p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-6">
-          <div className="relative flex items-center gap-3">
-            {/* API Key Input - Organic styling */}
-            <div className="relative group">
-              <label className="absolute left-0 -top-5 text-[9px] uppercase tracking-[0.25em] text-stone/50 font-sans pointer-events-none">
-                API Key
-              </label>
-              <input
-                type="password"
-                value={apiKeyInput}
-                onChange={(e) => onApiKeyInputChange(e.target.value)}
-                placeholder="Enter key..."
-                className="
-                  bg-transparent border-b border-stone/40 py-2 px-1
-                  focus:outline-none focus-ink
-                  transition-all duration-300
-                  text-sm font-mono text-charcoal placeholder-stone/30 
-                  w-48
-                  focus:border-rust/60
-                "
-                style={{
-                  borderBottomStyle: 'solid',
-                  borderImageSlice: 1,
-                }}
-              />
-              {/* Organic underline on focus */}
-              <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-rust/60 origin-center scale-x-0 transition-transform duration-300 group-focus-within:scale-x-100 rounded-full"></div>
-            </div>
-            
-            {/* Apply Button - Organic rounded */}
-            <button
-              onClick={onApply}
-              className="
-                px-4 py-2 border border-charcoal/60 rounded-full
-                text-[10px] uppercase tracking-[0.2em] font-sans font-semibold
-                hover:bg-charcoal hover:text-washi 
-                transition-all duration-400
-                btn-organic shadow-paper
-                hover:shadow-paper-lg
-              "
-            >
-              Apply
-            </button>
-            
-            {/* Applied Indicator */}
-            {apiKey && (
-              <div className="flex items-center gap-2 animate-ink-spread">
-                <div className="w-2 h-2 rounded-full bg-moss shadow-paper"></div>
-                <span className="text-[9px] uppercase tracking-[0.25em] text-moss/80 font-sans font-medium">
-                  Applied
-                </span>
+  return (
+    <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/40">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex items-center justify-between h-16 px-6">
+          {/* Logo */}
+          <div className="flex items-center gap-8">
+            <a href="/" className="flex items-center gap-3 group">
+              {/* Geometric Logo Mark */}
+              <div className="relative w-8 h-8">
+                <div className="absolute inset-0 bg-foreground rounded-lg rotate-45 group-hover:rotate-[55deg] transition-transform duration-500" />
+                <div className="absolute inset-1 bg-background rounded-md rotate-45 group-hover:rotate-[55deg] transition-transform duration-500" />
+                <div className="absolute inset-2 bg-foreground rounded-sm rotate-45 group-hover:rotate-[55deg] transition-transform duration-500" />
               </div>
-            )}
+              <span className="text-xl font-semibold tracking-tight">
+                XRCrawler
+              </span>
+            </a>
+
+            {/* Desktop Navigation */}
+            <nav className="hidden md:flex items-center gap-1">
+              {navLinks.map((link) => (
+                <a
+                  key={link.label}
+                  href={link.href}
+                  target={link.external ? "_blank" : undefined}
+                  className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-muted"
+                >
+                  {link.label}
+                </a>
+              ))}
+            </nav>
           </div>
-          
-          {/* Logs Link - Natural hover */}
-          <a
-            href="#results"
-            className="
-              text-xs uppercase tracking-[0.15em] 
-              text-charcoal/70 hover:text-rust 
-              transition-all duration-300 
-              font-sans font-semibold
-              hover-warm
-              border-b border-transparent hover:border-rust/30
-              pb-1
-            "
-          >
-            View Logs
-          </a>
+
+          {/* Right Side */}
+          <div className="flex items-center gap-3">
+            {/* API Key Dropdown */}
+            <div className="relative hidden sm:block">
+              <button
+                onClick={() => setApiDropdownOpen(!apiDropdownOpen)}
+                className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-border/50 hover:border-border transition-colors"
+              >
+                <Key className="w-4 h-4 text-muted-foreground" />
+                <span className="text-muted-foreground">
+                  {apiKey ? "API Connected" : "Connect API"}
+                </span>
+                {apiKey && (
+                  <span className="w-2 h-2 rounded-full bg-green-500" />
+                )}
+                <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${apiDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              <AnimatePresence>
+                {apiDropdownOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute right-0 top-full mt-2 w-72 p-4 bg-card border border-border rounded-xl shadow-xl"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          API Key
+                        </span>
+                        {apiKey && (
+                          <span className="flex items-center gap-1 text-xs text-green-600">
+                            <Check className="w-3 h-3" />
+                            Connected
+                          </span>
+                        )}
+                      </div>
+                      <Input
+                        type="password"
+                        value={apiKeyInput}
+                        onChange={(e) => onApiKeyInputChange(e.target.value)}
+                        placeholder="Enter your API key..."
+                        className="font-mono text-sm"
+                      />
+                      <Button
+                        onClick={() => {
+                          onApply();
+                          setApiDropdownOpen(false);
+                        }}
+                        className="w-full"
+                        size="sm"
+                      >
+                        Apply Key
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Queue Link */}
+            <a
+              href="/admin/queues"
+              target="_blank"
+              className="hidden md:flex items-center gap-2 px-4 py-2 text-sm font-medium bg-foreground text-background rounded-lg hover:bg-foreground/90 transition-colors"
+            >
+              Queue
+              <span className="text-xs opacity-60">↗</span>
+            </a>
+
+            {/* Mobile Menu Button */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden p-2 rounded-lg hover:bg-muted transition-colors"
+            >
+              {mobileMenuOpen ? (
+                <X className="w-5 h-5" />
+              ) : (
+                <Menu className="w-5 h-5" />
+              )}
+            </button>
+          </div>
         </div>
+
+        {/* Mobile Menu */}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="md:hidden border-t border-border/40 overflow-hidden"
+            >
+              <nav className="p-4 space-y-1">
+                {navLinks.map((link) => (
+                  <a
+                    key={link.label}
+                    href={link.href}
+                    target={link.external ? "_blank" : undefined}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block px-4 py-3 text-lg rounded-lg hover:bg-muted transition-colors"
+                  >
+                    {link.label}
+                  </a>
+                ))}
+                <div className="pt-4 px-4 space-y-3">
+                  <Input
+                    type="password"
+                    value={apiKeyInput}
+                    onChange={(e) => onApiKeyInputChange(e.target.value)}
+                    placeholder="API Key..."
+                    className="font-mono"
+                  />
+                  <Button onClick={onApply} className="w-full">
+                    Apply Key
+                  </Button>
+                </div>
+              </nav>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </header>
   );
