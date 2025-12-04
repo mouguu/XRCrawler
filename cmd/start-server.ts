@@ -1,4 +1,6 @@
+console.log('DEBUG: Process starting...');
 import express, { Request, Response } from "express";
+console.log('DEBUG: Express imported');
 import * as path from "path";
 import * as fs from "fs";
 // 注意: scrapeProfileGraphql 已废弃，统一使用 ScraperEngine

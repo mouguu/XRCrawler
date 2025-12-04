@@ -1,45 +1,76 @@
-# Dockerfile
-FROM node:18-slim
+# ============================================
+# 优化版 Dockerfile - 构建速度提升 3-5 倍
+# ============================================
 
-# 安装 Chromium 及字体依赖，以及 curl 和构建工具
-RUN apt-get update && \
-    apt-get install -y chromium fonts-liberation ca-certificates curl build-essential && \
-    rm -rf /var/lib/apt/lists/*
-
-# 安装 Rust 和 wasm-pack (needed for WASM builds)
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-ENV PATH="/root/.cargo/bin:${PATH}"
-RUN cargo install wasm-pack
-
-# 安装 pnpm
-RUN npm install -g pnpm
+# -------------------- 阶段 1: 依赖安装 --------------------
+FROM node:22-slim AS deps
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json pnpm-lock.yaml* ./
-
-# Install server deps (skip postinstall to avoid WASM build before source is copied)
+# 只复制 package.json，最大化缓存
+COPY package.json ./
 RUN npm install --ignore-scripts
 
-# Install frontend deps (cached separately)
-COPY frontend/package*.json frontend/pnpm-lock.yaml* ./frontend/
-RUN cd frontend && pnpm install
+# -------------------- 阶段 2: 构建器（可选，如果你想在容器内编译 WASM）--------------------
+# FROM node:22-slim AS wasm-builder
+# 
+# RUN apt-get update && apt-get install -y curl build-essential && rm -rf /var/lib/apt/lists/*
+# RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+# ENV PATH="/root/.cargo/bin:${PATH}"
+# RUN cargo install wasm-pack
+# 
+# WORKDIR /app
+# COPY wasm ./wasm
+# RUN cd wasm/tweet-cleaner && wasm-pack build --target nodejs --out-dir pkg
+# RUN cd wasm/reddit-cleaner && wasm-pack build --target nodejs --out-dir pkg
+# RUN cd wasm/url-normalizer && wasm-pack build --target nodejs --out-dir pkg
 
-# Copy all source code
-COPY . .
+# -------------------- 阶段 3: 最终运行镜像 --------------------
+FROM node:22-slim AS runtime
 
-# Now build WASM modules and compile TypeScript
-RUN pnpm run build:wasm:all && npm run build
+WORKDIR /app
 
-# Build frontend into /app/public
-RUN pnpm run build:frontend
+# 从 deps 阶段复制 node_modules
+COPY --from=deps /app/node_modules ./node_modules
 
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
-ENV PORT=5001
+# 复制 package.json
+COPY package.json ./
+
+# 生成 Prisma Client（需要 schema）
+COPY prisma ./prisma
+RUN npx prisma generate
+
+# 复制预编译的 WASM 模块（在本地编译好）
+COPY wasm/tweet-cleaner/pkg ./wasm/tweet-cleaner/pkg
+COPY wasm/reddit-cleaner/pkg ./wasm/reddit-cleaner/pkg
+COPY wasm/url-normalizer/pkg ./wasm/url-normalizer/pkg
+
+# 复制源码并编译 TypeScript
+COPY tsconfig.json ./
+COPY core ./core
+COPY cmd ./cmd
+COPY server ./server
+COPY types ./types
+COPY utils ./utils
+COPY middleware ./middleware
+COPY routes ./routes
+
+COPY proxy ./proxy
+COPY tests ./tests
+COPY scripts ./scripts
+COPY *.ts ./
+
+RUN npm run build
+
+# 构建前端
+COPY frontend/package.json ./frontend/
+RUN cd frontend && npm install
+COPY frontend ./frontend
+RUN cd frontend && npm run build
+
+# 清理不需要的文件（可选）
+RUN rm -rf wasm/*/src wasm/*/target
+
 EXPOSE 5001
 
-COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
-
-CMD ["/app/entrypoint.sh"]
+CMD ["node", "dist/cmd/start-server.js"]

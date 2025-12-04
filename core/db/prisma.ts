@@ -6,8 +6,8 @@ const logger = createEnhancedLogger('Prisma');
 // Prevent multiple instances in development due to hot reloading
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
-// In test environment without DATABASE_URL, create a mock PrismaClient
-const shouldInitializePrisma = process.env.DATABASE_URL || process.env.NODE_ENV !== 'test';
+// Only use mock in test environment WITHOUT DATABASE_URL
+const isTestWithoutDb = process.env.NODE_ENV === 'test' && !process.env.DATABASE_URL;
 
 // Create mock PrismaClient for tests without database
 const createMockPrismaClient = (): PrismaClient => {
@@ -22,19 +22,29 @@ const createMockPrismaClient = (): PrismaClient => {
   } as any;
 };
 
-export const prisma = globalForPrisma.prisma || (shouldInitializePrisma ? new PrismaClient({
-  log: [
-    { emit: 'event', level: 'query' },
-    { emit: 'event', level: 'error' },
-    { emit: 'event', level: 'info' },
-    { emit: 'event', level: 'warn' },
-  ],
-}) : createMockPrismaClient());
+let prismaInstance: PrismaClient;
+try {
+  console.log('DEBUG: Initializing Prisma Client...');
+  prismaInstance = globalForPrisma.prisma || (isTestWithoutDb ? createMockPrismaClient() : new PrismaClient({
+    log: [
+      { emit: 'event', level: 'query' },
+      { emit: 'event', level: 'error' },
+      { emit: 'event', level: 'info' },
+      { emit: 'event', level: 'warn' },
+    ],
+  }));
+  console.log('DEBUG: Prisma Client initialized successfully');
+} catch (e: any) {
+  console.error('CRITICAL ERROR: Prisma Client initialization failed:', e);
+  process.exit(1);
+}
+
+export const prisma = prismaInstance!;
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
 
-// Log queries in debug mode (only if real Prisma instance)
-if (shouldInitializePrisma) {
+// Log queries in debug mode (only if real Prisma instance, not mock)
+if (!isTestWithoutDb) {
   // @ts-ignore
   prisma.$on('query', (e: any) => {
     // logger.debug(`Query: ${e.query} Duration: ${e.duration}ms`);

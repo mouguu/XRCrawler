@@ -36,7 +36,6 @@ services:
       - ./data/cookies:/app/cookies
     ports:
       - "5001:5001"
-    command: [ "/app/entrypoint.sh" ]
     restart: unless-stopped
 
   worker:
