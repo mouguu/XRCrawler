@@ -21,6 +21,7 @@ import { ExpressAdapter } from '@bull-board/express';
 import jobRoutes from '../server/routes/jobs';
 import healthRoutes from '../routes/health';
 import statsRoutes from '../routes/stats';
+import { JobRepository } from '../core/db/job-repo';
 
 // 创建服务器日志器
 const serverLogger = createEnhancedLogger("Server");
@@ -179,9 +180,6 @@ app.post(
 
       serverLogger.info('收到队列爬取请求', { type, input, limit });
 
-      // Generate unique job ID
-      const jobId = `${type}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-
       // Prepare job data based on type
       const isTwitter = type === 'profile' || type === 'thread' || type === 'search';
       const isReddit = type === 'reddit';
@@ -193,16 +191,12 @@ app.post(
         });
       }
 
-      const jobData: any = {
-        jobId,
-        type: isTwitter ? 'twitter' : 'reddit',
-        config: {}
-      };
-
-      // Configure based on type
+      // Build config first
+      let config: any = {};
+      
       if (isTwitter) {
         const normalizedUsername = type === 'profile' ? normalizeUsername(input) : undefined;
-        jobData.config = {
+        config = {
           username: normalizedUsername,
           tweetUrl: type === 'thread' ? input : undefined,
           searchQuery: type === 'search' ? input : undefined,
@@ -218,8 +212,7 @@ app.post(
           input.includes('reddit.com/r/') && input.includes('/comments/') ||
           input.includes('redd.it/')
         );
-
-        jobData.config = {
+        config = {
           subreddit: !isPostUrl ? input : undefined,
           postUrl: isPostUrl ? input : undefined,
           limit: limit || 500,
@@ -227,20 +220,40 @@ app.post(
         };
       }
 
-      // Add job to queue
-      const job = await scrapeQueue.add(jobId, jobData, {
-        priority: type === 'thread' ? 10 : 5, // Threads have higher priority
+      // Create PostgreSQL Job record first (gives us a UUID)
+      const dbJob = await JobRepository.createJob({
+        type: isTwitter ? `twitter-${type}` : 'reddit',
+        config,
+        priority: type === 'thread' ? 10 : 5,
       });
 
-      serverLogger.info('任务已加入队列', { jobId: job.id, type });
+      serverLogger.info('PostgreSQL Job created', { dbJobId: dbJob.id, type });
+
+      // Prepare BullMQ job data using the PostgreSQL Job UUID
+      const jobData: any = {
+        jobId: dbJob.id,  // <- PostgreSQL UUID
+        type: isTwitter ? 'twitter' : 'reddit',
+        config
+      };
+
+      // Add job to BullMQ queue
+      const bullJob = await scrapeQueue.add(dbJob.id, jobData, {
+        priority: type === 'thread' ? 10 : 5,
+      });
+
+      // Store BullMQ job ID in PostgreSQL for reference
+      await JobRepository.updateBullJobId(dbJob.id, bullJob.id!);
+
+      serverLogger.info('任务已加入队列', { dbJobId: dbJob.id, bullJobId: bullJob.id, type });
 
       // Return immediately with job info
       res.json({
         success: true,
-        jobId: job.id,
+        jobId: bullJob.id,
+        dbJobId: dbJob.id,  // Also return DB job ID for reference
         message: 'Task queued successfully',
-        statusUrl: `/api/job/${job.id}`,
-        progressUrl: `/api/job/${job.id}/stream`,
+        statusUrl: `/api/job/${bullJob.id}`,
+        progressUrl: `/api/job/${bullJob.id}/stream`,
       });
 
     } catch (error: any) {

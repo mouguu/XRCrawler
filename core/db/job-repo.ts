@@ -59,6 +59,16 @@ export class JobRepository {
   }
 
   /**
+   * Update BullMQ job ID after queue submission
+   */
+  static async updateBullJobId(id: string, bullJobId: string): Promise<Job> {
+    return prisma.job.update({
+      where: { id },
+      data: { bullJobId },
+    });
+  }
+
+  /**
    * Create a task for a job (e.g. a date chunk)
    */
   static async createTask(data: {

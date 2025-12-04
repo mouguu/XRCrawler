@@ -94,18 +94,39 @@ export function createScrapeWorker(concurrency?: number) {
 
       logger.info(`Processing job ${job.id}`, { type, jobId });
 
+      // Mark job as active in PostgreSQL
+      if (jobId) {
+        try {
+          await JobRepository.updateStatus(jobId, 'active');
+        } catch (e) {
+          logger.debug('Could not update job status to active', { jobId });
+        }
+      }
+
       try {
         const adapter = getAdapter(type);
         if (adapter.init) {
           await adapter.init();
         }
-        return await adapter.process(job.data, ctx);
+        const result = await adapter.process(job.data, ctx);
+
+        // Mark job as completed in PostgreSQL
+        if (jobId) {
+          try {
+            await JobRepository.updateStatus(jobId, 'completed');
+          } catch (e) {
+            logger.debug('Could not update job status to completed', { jobId });
+          }
+        }
+
+        return result;
       } catch (error: any) {
         const scraperError = ErrorClassifier.classify(error);
         
-        // Log to DB if we have a DB Job ID
+        // Log error and update status to failed in PostgreSQL
         if (job.data.jobId) {
           try {
+            await JobRepository.updateStatus(job.data.jobId, 'failed', scraperError.message);
             await JobRepository.logError({
               jobId: job.data.jobId,
               severity: 'error',
