@@ -4,7 +4,7 @@
  * Uses platform adapters to execute scraping tasks from the queue
  */
 
-import { Worker, Job } from 'bullmq';
+import { Worker, Job, UnrecoverableError } from 'bullmq';
 import { redisConnection, redisPublisher } from './connection';
 import { JobLog, JobProgress, ScrapeJobData, ScrapeJobResult } from './types';
 import { getConfigManager } from '../../utils/config-manager';
@@ -13,6 +13,8 @@ import { AdapterJobContext } from '../platforms/types';
 import { getAdapter, registerAdapter } from '../platforms/registry';
 import { twitterAdapter } from '../platforms/twitter-adapter';
 import { redditAdapter } from '../platforms/reddit-adapter';
+import { ErrorClassifier } from '../errors';
+import { JobRepository } from '../db/job-repo';
 
 const logger = createEnhancedLogger('Worker');
 const config = getConfigManager();
@@ -99,8 +101,32 @@ export function createScrapeWorker(concurrency?: number) {
         }
         return await adapter.process(job.data, ctx);
       } catch (error: any) {
-        logger.error(`Job ${job.id} failed`, error);
-        throw error; // BullMQ will handle retries
+        const scraperError = ErrorClassifier.classify(error);
+        
+        // Log to DB if we have a DB Job ID
+        if (job.data.jobId) {
+          try {
+            await JobRepository.logError({
+              jobId: job.data.jobId,
+              severity: 'error',
+              category: scraperError.code || 'UNKNOWN',
+              message: scraperError.message,
+              stack: scraperError.stack,
+              context: scraperError.context
+            });
+          } catch (dbError) {
+            logger.error('Failed to log error to DB', dbError as Error);
+          }
+        }
+
+        logger.error(`Job ${job.id} failed: ${scraperError.message}`, scraperError);
+
+        if (!scraperError.retryable) {
+          logger.warn(`Job ${job.id} error is not retryable. Moving to failed.`);
+          throw new UnrecoverableError(scraperError.message);
+        }
+
+        throw error; // BullMQ will handle retries based on backoff config
       }
     },
     {

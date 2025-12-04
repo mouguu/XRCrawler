@@ -7,13 +7,27 @@ services:
     volumes:
       - redis-data:/data
 
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=xrcrawler
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
   app:
     build: .
     depends_on:
       - redis
+      - postgres
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/xrcrawler
       - PORT=5001
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
     volumes:
@@ -22,23 +36,26 @@ services:
       - ./data/cookies:/app/cookies
     ports:
       - "5001:5001"
-    command: ["/app/entrypoint.sh"]
+    command: [ "/app/entrypoint.sh" ]
     restart: unless-stopped
 
   worker:
     build: .
     depends_on:
       - redis
+      - postgres
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/xrcrawler
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
     volumes:
       - ./data:/app/data
       - ./data/output:/app/output
       - ./data/cookies:/app/cookies
-    command: ["node", "dist/cmd/start-worker.js"]
+    command: [ "node", "dist/cmd/start-worker.js" ]
     restart: unless-stopped
 
 volumes:
   redis-data:
+  postgres-data:

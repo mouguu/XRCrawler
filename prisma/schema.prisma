@@ -1,0 +1,124 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// High-level job (e.g., "Scrape @elonmusk")
+model Job {
+  id          String    @id @default(uuid())
+  bullJobId   String?   // ID from BullMQ
+  type        String    // 'twitter-profile', 'twitter-search', etc.
+  config      Json      // Full job configuration
+  status      String    // 'pending', 'active', 'completed', 'failed'
+  priority    Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  startedAt   DateTime?
+  completedAt DateTime?
+  error       String?
+
+  tasks       Task[]
+  checkpoints Checkpoint[]
+  logs        ErrorLog[]
+  tweets      Tweet[]
+
+  @@index([status])
+  @@index([type])
+}
+
+// Granular task unit (e.g., "2023-01-01 to 2023-02-01")
+model Task {
+  id          String    @id @default(uuid())
+  jobId       String
+  job         Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  
+  type        String    // 'date-chunk', 'timeline-scroll'
+  status      String    // 'pending', 'active', 'completed', 'failed'
+  config      Json      // Specific config for this task (e.g., date range)
+  result      Json?     // Summary of results (count, etc.)
+  error       String?
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  @@index([jobId])
+  @@index([status])
+}
+
+// Resume point (cursor, last tweet ID)
+model Checkpoint {
+  id          String   @id @default(uuid())
+  jobId       String
+  job         Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  
+  key         String   // e.g., 'timeline_cursor', 'last_tweet_id'
+  value       String   // The actual cursor/ID
+  metadata    Json?    // Extra context (e.g., current date in chunk)
+  
+  updatedAt   DateTime @updatedAt
+
+  @@unique([jobId, key])
+}
+
+// Structured error history
+model ErrorLog {
+  id          String   @id @default(uuid())
+  jobId       String?
+  job         Job?     @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  
+  severity    String   // 'fatal', 'error', 'warn'
+  category    String   // 'network', 'auth', 'parse', 'logic'
+  message     String
+  stack       String?
+  context     Json?    // Request URL, params, etc.
+  
+  createdAt   DateTime @default(now())
+
+  @@index([jobId])
+  @@index([category])
+}
+
+// Session health tracking
+model CookieSession {
+  id          String   @id @default(uuid())
+  platform    String   // 'twitter', 'reddit'
+  username    String
+  label       String   // 'account1', 'account2'
+  
+  isValid     Boolean  @default(true)
+  lastUsed    DateTime @default(now())
+  errorCount  Int      @default(0)
+  
+  cookies     Json?    // Optional: store cookies in DB (encrypted ideally, but plain for now)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([platform, username])
+}
+
+// Scraped Tweet Data
+model Tweet {
+  id          String   @id // Tweet ID from Twitter
+  jobId       String?
+  job         Job?     @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  
+  text        String?
+  username    String
+  userId      String?
+  createdAt   DateTime // Tweet creation time
+  scrapedAt   DateTime @default(now())
+  
+  metrics     Json?    // Likes, retweets, replies
+  media       Json?    // Media URLs
+  raw         Json?    // Full raw data if needed
+  
+  @@index([jobId])
+  @@index([username])
+  @@index([createdAt])
+}

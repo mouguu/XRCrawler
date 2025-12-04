@@ -29,6 +29,8 @@ export interface ScraperEngineOptions {
    * 如果提供，直接使用此实例；否则根据 browserPoolOptions 创建
    */
   browserPool?: BrowserPool;
+  /** Linked BullMQ Job ID (for DB persistence) */
+  jobId?: string;
 }
 
 export interface ScrapeTimelineConfig {
@@ -67,6 +69,7 @@ export interface ScrapeTimelineConfig {
    * 需要浏览器池支持，会自动启用浏览器池
    */
   parallelChunks?: number;
+  jobId?: string;
 }
 
 export interface ScrapeTimelineResult {
@@ -92,6 +95,7 @@ export interface ScrapeThreadOptions {
   sessionId?: string;
   /** 爬取模式: 'graphql' 使用 API (默认), 'puppeteer' 使用 DOM */
   scrapeMode?: "graphql" | "puppeteer";
+  jobId?: string;
 }
 
 export interface ScrapeThreadResult {

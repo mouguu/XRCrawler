@@ -12,14 +12,15 @@
 
 ## 🏎️ Architecture & Status
 
-> **TL;DR:** XRCrawler is like a **race car with a V8 engine** built in a garage.
+> **TL;DR:** XRCrawler is now a **production-grade industrial crawler** with database persistence and intelligent error handling.
 >
-> - **The Engine (Core):** Redis, BullMQ, Rust/WASM, Microkernel. **It flies.**
-> - **The Interior (Code):** Recently renovated to production-ready standards.
+> - **Phase 1-3 Complete**: PostgreSQL, Advanced Error Handling, Operations Monitoring
+> - **Database-Backed**: Resume-capable with PostgreSQL + Prisma
+> - **Smart Error Handling**: Intelligent retry strategies based on error types
+> - **Operations Ready**: Health checks, rate limiting, dashboard API
 
-We prioritized **performance** over **polish** initially. The codebase has now been fully renovated (Phase 1-3 complete).
-
-👉 **[Read the "V8 Engine" Architecture Doc](docs/ARCHITECTURE_ANALOGY.md)** to understand the design philosophy.
+👉 **[Read DATABASE.md](docs/DATABASE.md)** for schema and SQL analysis tools.
+👉 **[Read OPERATIONS.md](docs/OPERATIONS.md)** for monitoring and health checks.
 
 ---
 
@@ -38,6 +39,9 @@ We prioritized **performance** over **polish** initially. The codebase has now b
 - **Node.js** 18+
 - **pnpm** (enforced - no npm/yarn)
 - **Redis** on `localhost:6379` (for queue + SSE pub/sub)
+- **PostgreSQL** 14+ (for data persistence and resume capabilities)
+
+**Using Docker Compose?** All services (Redis + PostgreSQL) are included.
 
 ---
 
@@ -56,7 +60,33 @@ pnpm run install:frontend   # Install frontend deps
 
 ---
 
-### 2. Configure Cookies
+### 2. Setup Database (PostgreSQL)
+
+**Option A: Docker Compose (Recommended)**
+
+```bash
+docker-compose up -d postgres
+```
+
+**Option B: Use your own PostgreSQL**
+
+```bash
+# Set DATABASE_URL
+export DATABASE_URL="postgresql://user:password@localhost:5432/xrcrawler"
+```
+
+**Push Schema:**
+
+```bash
+npx prisma db push
+npx prisma generate
+```
+
+👉 **See [DATABASE.md](docs/DATABASE.md)** for detailed database setup.
+
+---
+
+### 3. Configure Cookies
 
 Export Twitter cookies (e.g., using [EditThisCookie](https://www.editthiscookie.com/)) to:
 
@@ -72,25 +102,28 @@ The UI shows friendly labels for the first four accounts; rotation happens autom
 
 ---
 
-### 3. Run (Web UI - Recommended)
+### 4. Run (Web UI - Recommended)
 
 ```bash
 pnpm run dev
 # Opens http://localhost:5173
-# Starts server, worker, and frontend concurrently
+# Starts server, worker, frontend, and database concurrently
 ```
 
-> **Important**: Ensure Redis is running; otherwise progress/log streaming will be missing.
+> **Important**: Ensure Redis and PostgreSQL are running; otherwise progress/log streaming will be missing.
 
 **Access**:
 
 - **Frontend**: http://localhost:5173
 - **API**: http://localhost:5001
 - **Queue Dashboard**: http://localhost:5001/admin/queues
+- **Database Studio**: `npx prisma studio` → http://localhost:5555
+- **Health Check**: http://localhost:5001/api/health
+- **Stats Dashboard**: http://localhost:5001/api/stats
 
 ---
 
-### 4. Run (Docker Compose - One Command)
+### 5. Run (Docker Compose - One Command)
 
 **Setup cookies first**:
 
@@ -110,6 +143,7 @@ docker compose up --build -d
 
 **Services**:
 
+- `postgres`: PostgreSQL database
 - `redis`: Queue + Pub/Sub
 - `app`: Server + Static UI
 - `worker`: Job processor
@@ -171,12 +205,15 @@ node dist/cmd/cli.js reddit -r programming -c 500
 
 We have comprehensive documentation for all aspects of the project:
 
-| Document                                                    | Description                                                    |
-| ----------------------------------------------------------- | -------------------------------------------------------------- |
-| [**ARCHITECTURE_ANALOGY.md**](docs/ARCHITECTURE_ANALOGY.md) | "V8 Engine" metaphor - design philosophy and current state     |
-| [**CONFIGURATION.md**](docs/CONFIGURATION.md)               | Configuration system guide (ConfigManager, env vars, priority) |
-| [**LOGGING.md**](docs/LOGGING.md)                           | Logging standards for Node.js and Python services              |
-| [**CONTRIBUTING.md**](CONTRIBUTING.md)                      | Contribution guidelines and code standards                     |
+| Document                                      | Description                                                    |
+| --------------------------------------------- | -------------------------------------------------------------- |
+| [**DATABASE.md**](docs/DATABASE.md)           | PostgreSQL schema, repositories, and SQL analysis tools        |
+| [**OPERATIONS.md**](docs/OPERATIONS.md)       | Health checks, monitoring, rate limiting, dashboard API        |
+| [**ARCHITECTURE.md**](docs/ARCHITECTURE.md)   | Technical architecture and component overview                  |
+| [**API_REFERENCE.md**](docs/API_REFERENCE.md) | REST API endpoints documentation                               |
+| [**CONFIGURATION.md**](docs/CONFIGURATION.md) | Configuration system guide (ConfigManager, env vars, priority) |
+| [**LOGGING.md**](docs/LOGGING.md)             | Logging standards for Node.js and Python services              |
+| [**CONTRIBUTING.md**](CONTRIBUTING.md)        | Contribution guidelines and code standards                     |
 
 ---
 

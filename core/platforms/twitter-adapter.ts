@@ -35,7 +35,11 @@ export const twitterAdapter: PlatformAdapter = {
 
     const engine = new ScraperEngine(
       () => ctx.getShouldStop(),
-      { apiOnly: jobConfig.mode === 'graphql', eventBus: jobEventBus }
+      { 
+        apiOnly: jobConfig.mode === 'graphql', 
+        eventBus: jobEventBus,
+        jobId: data.jobId // Pass BullMQ Job ID
+      }
     );
 
     let result: any;
@@ -58,6 +62,7 @@ export const twitterAdapter: PlatformAdapter = {
           saveMarkdown: true,
           scrapeMode: (jobConfig.mode || 'puppeteer') as 'puppeteer' | 'graphql',
           dateRange: jobConfig.dateRange,
+          jobId: data.jobId, // Pass to config as well
         };
 
         if (jobConfig.tab === 'likes' || jobConfig.tab === 'replies') {

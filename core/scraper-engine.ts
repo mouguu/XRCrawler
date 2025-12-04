@@ -26,6 +26,7 @@ import { ScraperErrors, ScraperError, ErrorCode, ErrorClassifier } from './error
 import { runTimelineApi } from './timeline-api-runner';
 import { runTimelineDom } from './timeline-dom-runner';
 import { runTimelineDateChunks } from './timeline-date-chunker';
+import { TweetRepository } from './db/tweet-repo';
 // Legacy thread runners moved to archive/deprecated/
 // import { ThreadGraphqlRunner } from './thread-graphql-runner';
 // import { ThreadDomRunner } from './thread-dom-runner';
@@ -76,6 +77,8 @@ export class ScraperEngine {
     public browserPool?: BrowserPool;
     /** Current browser instance (for pool management) */
     private pooledBrowser: import('puppeteer').Browser | null = null;
+    /** Linked BullMQ Job ID */
+    private jobId?: string;
 
     private xApiClient: XApiClient | null = null;
 
@@ -156,6 +159,8 @@ export class ScraperEngine {
             this.browserPool = getBrowserPool(options.browserPoolOptions);
             this.eventBus.emitLog('[BrowserPool] Browser pool enabled with options', 'info');
         }
+        
+        this.jobId = options.jobId;
     }
 
     setStopSignal(value: boolean): void {
@@ -490,6 +495,11 @@ export class ScraperEngine {
             return runTimelineDateChunks(this, config);
         }
 
+        // Ensure config has jobId if engine has it
+        if (this.jobId && !config.jobId) {
+            config.jobId = this.jobId;
+        }
+
         if (scrapeMode === 'puppeteer') {
             return runTimelineDom(this, config);
         }
@@ -586,6 +596,21 @@ export class ScraperEngine {
             if (exportCsv) await exportUtils.exportToCsv(result.tweets, runContext);
             if (exportJson) await exportUtils.exportToJson(result.tweets, runContext);
         }
+
+        // Save to DB if jobId is present
+        if (this.jobId && result.tweets.length > 0) {
+            this.eventBus.emitLog(`Saving ${result.tweets.length} tweets to database...`);
+            try {
+                const savedCount = await TweetRepository.saveTweets({
+                    tweets: result.tweets,
+                    jobId: this.jobId
+                });
+                this.eventBus.emitLog(`Saved ${savedCount} tweets to database.`);
+            } catch (error: any) {
+                this.eventBus.emitLog(`Failed to save tweets to DB: ${error.message}`, 'error');
+            }
+        }
+
         this.performanceMonitor.endPhase();
 
         const activeSession = this.getCurrentSession();
@@ -674,7 +699,7 @@ export class ScraperEngine {
         this.emitPerformanceUpdate(true);
 
         // Track progress (thread replies only; original tweet + replies = total)
-        this.progressManager.startScraping('thread', tweetId, maxReplies);
+        this.progressManager.startScraping('thread', tweetId, maxReplies, false, undefined, this.jobId || options.jobId);
 
         const apiClient = this.ensureApiClient();
         let originalTweet: Tweet | null = null;
@@ -782,6 +807,21 @@ export class ScraperEngine {
                 if (exportCsv) await exportUtils.exportToCsv(allTweets, runContext);
                 if (exportJson) await exportUtils.exportToJson(allTweets, runContext);
             }
+
+            // Save to DB if jobId is present
+            if (this.jobId && allTweets.length > 0) {
+                this.eventBus.emitLog(`Saving ${allTweets.length} tweets to database...`);
+                try {
+                    const savedCount = await TweetRepository.saveTweets({
+                        tweets: allTweets,
+                        jobId: this.jobId
+                    });
+                    this.eventBus.emitLog(`Saved ${savedCount} tweets to database.`);
+                } catch (error: any) {
+                    this.eventBus.emitLog(`Failed to save tweets to DB: ${error.message}`, 'error');
+                }
+            }
+
             this.performanceMonitor.endPhase();
 
             const activeSession = this.getCurrentSession();
@@ -940,6 +980,21 @@ export class ScraperEngine {
                 if (exportCsv) await exportUtils.exportToCsv(allTweets, runContext);
                 if (exportJson) await exportUtils.exportToJson(allTweets, runContext);
             }
+
+            // Save to DB if jobId is present
+            if (this.jobId && allTweets.length > 0) {
+                this.eventBus.emitLog(`Saving ${allTweets.length} tweets to database...`);
+                try {
+                    const savedCount = await TweetRepository.saveTweets({
+                        tweets: allTweets,
+                        jobId: this.jobId
+                    });
+                    this.eventBus.emitLog(`Saved ${savedCount} tweets to database.`);
+                } catch (error: any) {
+                    this.eventBus.emitLog(`Failed to save tweets to DB: ${error.message}`, 'error');
+                }
+            }
+
             this.performanceMonitor.endPhase();
 
             const activeSession = this.getCurrentSession();

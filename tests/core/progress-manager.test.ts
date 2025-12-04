@@ -100,9 +100,18 @@ describe('ProgressManager', () => {
       expect(loaded?.totalScraped).toBe(50);
     });
 
-    it('should return null for non-existent progress', () => {
-      const loaded = manager.loadProgress('profile', 'nonexistent');
-      expect(loaded).toBeNull();
+    it('should return null for non-existent progress', async () => {
+        const loaded = await manager.loadProgress('timeline', 'testuser');
+        expect(loaded).toBeNull();
+    });
+
+    it('should load saved progress', async () => {
+        const manager = new ProgressManager(testProgressDir, mockEventBus);
+        const progress = await manager.startScraping('timeline', 'testuser', 100);
+        
+        const loaded = await manager.loadProgress('timeline', 'testuser');
+        expect(loaded?.totalScraped).toBe(0);
+      expect(progress.completed).toBe(false);
     });
   });
 
@@ -115,35 +124,42 @@ describe('ProgressManager', () => {
       expect(progress.completed).toBe(false);
     });
 
-    it('should resume existing session', () => {
-      const progress1 = {
-        targetType: 'profile',
-        targetValue: 'testuser',
-        totalRequested: 100,
-        totalScraped: 50,
-        startTime: Date.now(),
-        lastUpdate: Date.now(),
-        accountsUsed: [],
-        completed: false
-      };
-      
-      manager.saveProgress(progress1);
-      
-      const progress2 = manager.startScraping('profile', 'testuser', 100, true);
-      expect(progress2.totalScraped).toBe(50);
+    it('should resume from progress', async () => {
+        const manager = new ProgressManager(testProgressDir, mockEventBus);
+        
+        // Create initial progress
+        const initial = await manager.startScraping('timeline', 'testuser', 100);
+        await manager.updateProgress(50, 'tweet123');
+        
+        // Resume
+        const resumed = await manager.startScraping('timeline', 'testuser', 100, true);
+        expect(resumed.totalRequested).toBe(100);
+        expect(resumed.totalScraped).toBe(50);
+        expect(resumed.completed).toBe(false);
     });
   });
 
   describe('updateProgress', () => {
-    it('should update current progress', () => {
-      manager.startScraping('profile', 'testuser', 100);
-      
-      manager.updateProgress(25, 'tweet123', undefined, 'account1');
-      
-      const loaded = manager.loadProgress('profile', 'testuser');
-      expect(loaded?.totalScraped).toBe(25);
-      expect(loaded?.lastTweetId).toBe('tweet123');
+    it('should mark as completed when target reached', async () => {
+        const manager = new ProgressManager(testProgressDir, mockEventBus);
+        
+        const progress = await manager.startScraping('timeline', 'testuser', 50);
+        await manager.updateProgress(50);
+        
+        const current = manager.getCurrentProgress();
+        expect(current?.totalScraped).toBe(50);
+        expect(current?.completed).toBe(true);
+    });
+
+    it('should update progress with additional info', async () => {
+        const manager = new ProgressManager(testProgressDir, mockEventBus);
+        
+        await manager.startScraping('timeline', 'testuser', 100);
+        await manager.updateProgress(25, 'tweet123', 'cursor-abc', 'account1');
+        
+        const loaded = await manager.loadProgress('timeline', 'testuser');
+        expect(loaded?.totalScraped).toBe(25);
+        expect(loaded?.lastTweetId).toBe('tweet123');
     });
   });
 });
-

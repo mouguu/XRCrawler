@@ -17,6 +17,8 @@ import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ExpressAdapter } from '@bull-board/express';
 import jobRoutes from '../server/routes/jobs';
+import healthRoutes from '../routes/health';
+import statsRoutes from '../routes/stats';
 
 // 创建服务器日志器
 const serverLogger = createEnhancedLogger("Server");
@@ -115,6 +117,12 @@ app.use('/admin/queues', serverAdapter.getRouter());
 
 // Job Management Routes
 app.use('/api/job', jobRoutes);
+
+// Health Check Routes
+app.use('/api', healthRoutes);
+
+// Stats Dashboard Routes
+app.use('/api', statsRoutes);
 
 function getSafePathInfo(resolvedPath: string): {
   identifier?: string;
@@ -268,22 +276,6 @@ app.get("/api/metrics/summary", (req: Request, res: Response) => {
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
-});
-
-// API: Health check
-app.get("/api/health", (req: Request, res: Response) => {
-  const health = {
-    status: "ok",
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    memory: {
-      used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
-      total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
-      rss: Math.round(process.memoryUsage().rss / 1024 / 1024),
-    },
-  };
-
-  res.json(health);
 });
 
 // API: Public config for frontend

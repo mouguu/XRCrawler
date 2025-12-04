@@ -34,6 +34,7 @@ Request:
 ```
 
 Response:
+
 ```json
 {
   "success": true,
@@ -62,7 +63,51 @@ Returns `{ id, state, progress, result }`
 
 **GET /api/metrics/summary** - Get metrics summary
 
-**GET /api/health** - Health check (status, uptime, memory, active tasks)
+### Health & Operations
+
+**GET /api/health** - Overall system health check
+
+Response:
+
+```json
+{
+  "status": "healthy",
+  "timestamp": "2024-12-03T20:00:00Z",
+  "checks": {
+    "database": { "status": "healthy", "responseTime": 5 },
+    "redis": { "status": "healthy", "responseTime": 2 },
+    "proxy": { "status": "healthy", "responseTime": 850 }
+  }
+}
+```
+
+**GET /api/health/database** - PostgreSQL health check
+
+**GET /api/health/redis** - Redis health check
+
+**GET /api/health/proxy** - Proxy health check
+
+**GET /api/stats** - System statistics and dashboard
+
+Response:
+
+```json
+{
+  "summary": {
+    "totalTweets": 15230,
+    "totalJobs": 45,
+    "activeJobs": 2,
+    "totalErrors": 12
+  },
+  "today": {
+    "tweetsScraped": 340,
+    "uniqueUsers": 8,
+    "errors": 2
+  },
+  "recentErrors": [...],
+  "runningJobs": [...]
+}
+```
 
 ### Session Management
 
