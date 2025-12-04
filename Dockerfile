@@ -60,18 +60,16 @@ COPY --from=deps /app/node_modules ./node_modules
 # 复制 package.json
 COPY package.json ./
 
-# 生成 Prisma Client（需要 schema 和 config）
+# 复制 Prisma schema 和 config（稍后生成）
 COPY prisma ./prisma
 COPY prisma.config.ts ./
-# 构建时需要 DATABASE_URL 给 prisma.config.ts，用临时值即可（不会实际连接）
-RUN DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" npx prisma generate
 
 # 复制预编译的 WASM 模块（在本地编译好）
 COPY wasm/tweet-cleaner/pkg ./wasm/tweet-cleaner/pkg
 COPY wasm/reddit-cleaner/pkg ./wasm/reddit-cleaner/pkg
 COPY wasm/url-normalizer/pkg ./wasm/url-normalizer/pkg
 
-# 复制源码并编译 TypeScript
+# 复制源码
 COPY tsconfig.json ./
 COPY core ./core
 COPY cmd ./cmd
@@ -81,12 +79,16 @@ COPY types ./types
 COPY utils ./utils
 COPY middleware ./middleware
 COPY routes ./routes
-
 COPY proxy ./proxy
 COPY tests ./tests
 COPY scripts ./scripts
 COPY *.ts ./
 
+# 先生成 Prisma Client（生成 TypeScript 源码）
+# 构建时需要 DATABASE_URL 给 prisma.config.ts，用临时值即可（不会实际连接）
+RUN DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" npx prisma generate
+
+# 然后编译所有 TypeScript（包括 generated/prisma）
 RUN npm run build
 
 # 构建前端
