@@ -47,7 +47,9 @@ export { NavigationService } from './navigation-service';
 export * from './data-extractor';
 export { ErrorSnapshotter } from './error-snapshotter';
 export { FingerprintManager } from './fingerprint-manager';
-export { MonitorService } from './monitor-service';
+export { AntiDetection } from './anti-detection';
+export { HumanBehavior } from './human-behavior';
+export { AdvancedFingerprint } from './advanced-fingerprint';
 
 export { XApiClient } from './x-api';
 

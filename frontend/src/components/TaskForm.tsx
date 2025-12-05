@@ -31,6 +31,12 @@ interface TaskFormProps {
   startDate: string;
   endDate: string;
   redditStrategy: string;
+  lookbackHours?: number;
+  keywords?: string;
+  onLookbackHoursChange?: (value: number) => void;
+  onKeywordsChange?: (value: string) => void;
+  antiDetectionLevel?: 'low' | 'medium' | 'high' | 'paranoid';
+  onAntiDetectionLevelChange?: (level: 'low' | 'medium' | 'high' | 'paranoid') => void;
   isScraping: boolean;
   canSubmit: boolean;
   onTabChange: (tab: TabType) => void;
@@ -97,6 +103,8 @@ export function TaskForm(props: TaskFormProps) {
     onStartDateChange,
     onEndDateChange,
     onRedditStrategyChange,
+    antiDetectionLevel = 'high',
+    onAntiDetectionLevelChange,
     onSubmit,
     onStop,
   } = props;
@@ -365,6 +373,49 @@ export function TaskForm(props: TaskFormProps) {
                           </div>
                         </label>
                       </>
+                    )}
+
+                    {/* Anti-Detection Level */}
+                    {activeTab !== "reddit" && onAntiDetectionLevelChange && (
+                      <div className="space-y-2 pt-2 border-t border-border/50">
+                        <Label className="text-sm font-medium">
+                          Anti-Detection Level
+                        </Label>
+                        <Select
+                          value={antiDetectionLevel}
+                          onValueChange={(v: any) => onAntiDetectionLevelChange(v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="low">
+                              <div className="flex flex-col">
+                                <span className="font-medium">Low</span>
+                                <span className="text-xs text-muted-foreground">Basic fingerprint only</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="medium">
+                              <div className="flex flex-col">
+                                <span className="font-medium">Medium</span>
+                                <span className="text-xs text-muted-foreground">Advanced fingerprint (Canvas/WebGL)</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="high">
+                              <div className="flex flex-col">
+                                <span className="font-medium">High (Recommended)</span>
+                                <span className="text-xs text-muted-foreground">Human behavior + Advanced FP</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="paranoid">
+                              <div className="flex flex-col">
+                                <span className="font-medium">Paranoid</span>
+                                <span className="text-xs text-muted-foreground">Full simulation (Slowest)</span>
+                              </div>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     )}
 
                     {activeTab === "search" && (

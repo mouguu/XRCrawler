@@ -203,7 +203,7 @@ app.post(
     if (rejectIfShuttingDown(res)) return;
 
     try {
-      const { type, input, limit, likes, mode, dateRange, enableRotation, enableProxy, strategy } = req.body;
+      const { type, input, limit, likes, mode, dateRange, enableRotation, enableProxy, strategy, antiDetectionLevel } = req.body;
 
       serverLogger.info('收到队列爬取请求', { type, input, limit });
 
@@ -233,6 +233,7 @@ app.post(
           enableRotation: enableRotation !== false,
           enableProxy: enableProxy || false,
           dateRange,
+          antiDetectionLevel,
         };
       } else if (isReddit) {
         const parsed = parseRedditInput(input);
