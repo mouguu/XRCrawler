@@ -2,6 +2,7 @@
  * PerformanceMonitor 单元测试
  */
 
+import { describe, it, expect, beforeEach } from 'bun:test';
 import { PerformanceMonitor, PerformanceStats } from '../../core/performance-monitor';
 
 describe('PerformanceMonitor', () => {

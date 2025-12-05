@@ -2,6 +2,7 @@
  * ProxyManager 单元测试
  */
 
+import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { ProxyManager } from '../../core/proxy-manager';
 import { ScraperEventBus } from '../../core/event-bus';
 import * as fs from 'fs';
@@ -11,21 +12,21 @@ import * as os from 'os';
 describe('ProxyManager', () => {
   let testProxyDir: string;
   let manager: ProxyManager;
-  let mockEventBus: jest.Mocked<ScraperEventBus>;
+  let mockEventBus: Partial<ScraperEventBus>;
 
   beforeEach(() => {
     testProxyDir = path.join(os.tmpdir(), 'test-proxy-' + Date.now());
     fs.mkdirSync(testProxyDir, { recursive: true });
     
     mockEventBus = {
-      emitLog: jest.fn(),
-      emitProgress: jest.fn(),
-      emitPerformance: jest.fn(),
-      on: jest.fn(),
-      off: jest.fn()
+      emitLog: mock(() => {}),
+      emitProgress: mock(() => {}),
+      emitPerformance: mock(() => {}),
+      on: mock(() => {}),
+      off: mock(() => {})
     } as any;
 
-    manager = new ProxyManager(testProxyDir, mockEventBus);
+    manager = new ProxyManager(testProxyDir, mockEventBus as ScraperEventBus);
   });
 
   afterEach(() => {
@@ -131,4 +132,3 @@ describe('ProxyManager', () => {
     });
   });
 });
-

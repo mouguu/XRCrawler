@@ -2,6 +2,7 @@
  * MetricsCollector 单元测试
  */
 
+import { describe, it, expect, beforeEach } from 'bun:test';
 import { MetricsCollector, getMetricsCollector, resetMetricsCollector } from '../../core/metrics-collector';
 
 describe('MetricsCollector', () => {

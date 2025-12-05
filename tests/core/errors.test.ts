@@ -2,6 +2,7 @@
  * ScraperError 单元测试
  */
 
+import { describe, it, expect } from 'bun:test';
 import { ScraperError, ErrorCode, ErrorClassifier } from '../../core/errors';
 
 describe('ScraperError', () => {

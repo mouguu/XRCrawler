@@ -2,6 +2,7 @@
  * ProgressManager 单元测试
  */
 
+import { describe, it, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { ProgressManager } from '../../core/progress-manager';
 import { ScraperEventBus } from '../../core/event-bus';
 import * as fs from 'fs';
@@ -11,20 +12,20 @@ import * as os from 'os';
 describe('ProgressManager', () => {
   let testProgressDir: string;
   let manager: ProgressManager;
-  let mockEventBus: jest.Mocked<ScraperEventBus>;
+  let mockEventBus: Partial<ScraperEventBus>;
 
   beforeEach(() => {
     testProgressDir = path.join(os.tmpdir(), 'test-progress-' + Date.now());
     
     mockEventBus = {
-      emitLog: jest.fn(),
-      emitProgress: jest.fn(),
-      emitPerformance: jest.fn(),
-      on: jest.fn(),
-      off: jest.fn()
+      emitLog: mock(() => {}),
+      emitProgress: mock(() => {}),
+      emitPerformance: mock(() => {}),
+      on: mock(() => {}),
+      off: mock(() => {})
     } as any;
 
-    manager = new ProgressManager(testProgressDir, mockEventBus);
+    manager = new ProgressManager(testProgressDir, mockEventBus as ScraperEventBus);
   });
 
   afterEach(() => {
@@ -106,7 +107,7 @@ describe('ProgressManager', () => {
     });
 
     it('should load saved progress', async () => {
-        const manager = new ProgressManager(testProgressDir, mockEventBus);
+        const manager = new ProgressManager(testProgressDir, mockEventBus as ScraperEventBus);
         const progress = await manager.startScraping('timeline', 'testuser', 100);
         
         const loaded = await manager.loadProgress('timeline', 'testuser');
@@ -125,7 +126,7 @@ describe('ProgressManager', () => {
     });
 
     it('should resume from progress', async () => {
-        const manager = new ProgressManager(testProgressDir, mockEventBus);
+        const manager = new ProgressManager(testProgressDir, mockEventBus as ScraperEventBus);
         
         // Create initial progress
         const initial = await manager.startScraping('timeline', 'testuser', 100);
@@ -141,7 +142,7 @@ describe('ProgressManager', () => {
 
   describe('updateProgress', () => {
     it('should mark as completed when target reached', async () => {
-        const manager = new ProgressManager(testProgressDir, mockEventBus);
+        const manager = new ProgressManager(testProgressDir, mockEventBus as ScraperEventBus);
         
         const progress = await manager.startScraping('timeline', 'testuser', 50);
         await manager.updateProgress(50);
@@ -152,7 +153,7 @@ describe('ProgressManager', () => {
     });
 
     it('should update progress with additional info', async () => {
-        const manager = new ProgressManager(testProgressDir, mockEventBus);
+        const manager = new ProgressManager(testProgressDir, mockEventBus as ScraperEventBus);
         
         await manager.startScraping('timeline', 'testuser', 100);
         await manager.updateProgress(25, 'tweet123', 'cursor-abc', 'account1');
