@@ -293,30 +293,11 @@ app.post(
 
 // Legacy manual stop/status/progress endpoints removed in favor of BullMQ job APIs
 
-// API: Get metrics (简单 JSON 格式)
-app.get("/api/metrics", (req: Request, res: Response) => {
-  try {
-    const { getMetricsCollector } = require("../core/metrics-collector");
-    const collector = getMetricsCollector();
-    res.json(collector.getMetrics());
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
+// API: Get metrics (简单 JSON 格式) - DEPRECATED/REMOVED
+// app.get("/api/metrics", ...);
 
-// API: Get metrics summary
-app.get("/api/metrics/summary", (req: Request, res: Response) => {
-  try {
-    const { getMetricsCollector } = require("../core/metrics-collector");
-    const collector = getMetricsCollector();
-    res.json({
-      summary: collector.getSummary(),
-      metrics: collector.getMetrics(),
-    });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
+// API: Get metrics summary - DEPRECATED/REMOVED
+// app.get("/api/metrics/summary", ...);
 
 // API: Public config for frontend
 app.get("/api/config", (req: Request, res: Response) => {

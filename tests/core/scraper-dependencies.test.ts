@@ -26,7 +26,7 @@ describe('ScraperDependencies', () => {
       expect(deps).toHaveProperty('navigationService');
       expect(deps).toHaveProperty('rateLimitManager');
       expect(deps).toHaveProperty('errorSnapshotter');
-      expect(deps).toHaveProperty('fingerprintManager');
+      expect(deps).toHaveProperty('antiDetection');
       expect(deps).toHaveProperty('performanceMonitor');
       expect(deps).toHaveProperty('progressManager');
       expect(deps).toHaveProperty('sessionManager');

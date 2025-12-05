@@ -40,7 +40,7 @@ export { ProxyManager } from './proxy-manager';
 export { RateLimitManager } from './rate-limit-manager';
 export { ProgressManager } from './progress-manager';
 export { PerformanceMonitor, type PerformanceStats } from './performance-monitor';
-export { MetricsCollector } from './metrics-collector';
+
 
 // Services
 export { NavigationService } from './navigation-service';
