@@ -1,11 +1,14 @@
-import { promises as fs } from 'fs';
-import * as path from 'path';
+import { promises as fs } from 'node:fs';
+import * as path from 'node:path';
+import type { ProfileInfo, Tweet } from '../types/tweet-definitions';
 import { RunContext } from './fileutils';
-import type { Tweet, ProfileInfo } from '../types/tweet-definitions';
 
 type AnalysisType = 'persona' | 'feed_analysis';
 
-const buildSafeOutputPath = (runContext: RunContext | undefined, filename: string): string | null => {
+const buildSafeOutputPath = (
+  runContext: RunContext | undefined,
+  filename: string,
+): string | null => {
   const outputDir = runContext?.runDir;
   if (!outputDir) {
     console.error('Error: runContext.runDir is undefined');
@@ -18,11 +21,14 @@ export async function generatePersonaAnalysis(
   tweets: Tweet[],
   profile: ProfileInfo | null | undefined,
   runContext: RunContext,
-  type: AnalysisType = 'persona'
-): Promise<string | void> {
+  type: AnalysisType = 'persona',
+): Promise<string | undefined> {
   if (!tweets || tweets.length === 0) return;
 
-  const filePath = buildSafeOutputPath(runContext, `ai_analysis_prompt_${runContext.identifier}.md`);
+  const filePath = buildSafeOutputPath(
+    runContext,
+    `ai_analysis_prompt_${runContext.identifier}.md`,
+  );
   if (!filePath) return;
 
   let systemPrompt = '';
@@ -72,24 +78,26 @@ Please provide the analysis in the following structure:
 `;
   }
 
-  const formattedTweets = tweets.map((tweet, index) => {
-    const date = tweet.time ? new Date(tweet.time).toISOString().split('T')[0] : 'Unknown Date';
-    let typeLabel = tweet.isReply ? '[REPLY]' : '[POST]';
-    if ((tweet as any).isLiked) typeLabel = '[LIKED]';
+  const formattedTweets = tweets
+    .map((tweet, index) => {
+      const date = tweet.time ? new Date(tweet.time).toISOString().split('T')[0] : 'Unknown Date';
+      let typeLabel = tweet.isReply ? '[REPLY]' : '[POST]';
+      if ((tweet as any).isLiked) typeLabel = '[LIKED]';
 
-    const metrics = `(❤️${tweet.likes || 0} 🔁${tweet.retweets || 0})`;
-    const media = tweet.hasMedia ? '[HAS_MEDIA]' : '';
+      const metrics = `(❤️${tweet.likes || 0} 🔁${tweet.retweets || 0})`;
+      const media = tweet.hasMedia ? '[HAS_MEDIA]' : '';
 
-    const cleanText = (tweet.text || '').toString().replace(/\n+/g, ' ').trim();
-    let line = `${index + 1}. ${date} ${typeLabel} ${metrics} ${media}: "${cleanText}"`;
+      const cleanText = (tweet.text || '').toString().replace(/\n+/g, ' ').trim();
+      let line = `${index + 1}. ${date} ${typeLabel} ${metrics} ${media}: "${cleanText}"`;
 
-    if ((tweet as any).quotedContent) {
-      const cleanQuote = (tweet as any).quotedContent.replace(/\n+/g, ' ').trim();
-      line += `\n    [QUOTING]: "${cleanQuote}"`;
-    }
+      if ((tweet as any).quotedContent) {
+        const cleanQuote = (tweet as any).quotedContent.replace(/\n+/g, ' ').trim();
+        line += `\n    [QUOTING]: "${cleanQuote}"`;
+      }
 
-    return line;
-  }).join('\n');
+      return line;
+    })
+    .join('\n');
 
   const fileContent = `${systemPrompt}\n\n# Raw Data\n\n${formattedTweets}`;
 
@@ -100,10 +108,17 @@ Please provide the analysis in the following structure:
   return filePath;
 }
 
-export async function generateThreadAnalysis(tweets: Tweet[], originalTweet: Tweet | undefined, runContext: RunContext): Promise<string | void> {
+export async function generateThreadAnalysis(
+  tweets: Tweet[],
+  originalTweet: Tweet | undefined,
+  runContext: RunContext,
+): Promise<string | undefined> {
   if (!tweets || tweets.length === 0) return;
 
-  const filePath = buildSafeOutputPath(runContext, `ai_analysis_prompt_${runContext.identifier}.md`);
+  const filePath = buildSafeOutputPath(
+    runContext,
+    `ai_analysis_prompt_${runContext.identifier}.md`,
+  );
   if (!filePath) return;
 
   const systemPrompt = `
@@ -133,30 +148,32 @@ Please provide the analysis in the following structure:
 - Total Items in Thread: ${tweets.length}
 `;
 
-  const formattedTweets = tweets.map((tweet, index) => {
-    const date = tweet.time ? new Date(tweet.time).toISOString().split('T')[0] : 'Unknown Date';
-    let typeLabel = '[REPLY]';
-    if (originalTweet && tweet.id === originalTweet.id) {
-      typeLabel = '[ORIGINAL]';
-    } else if ((tweet as any).isLiked) {
-      typeLabel = '[LIKED]';
-    }
+  const formattedTweets = tweets
+    .map((tweet, index) => {
+      const date = tweet.time ? new Date(tweet.time).toISOString().split('T')[0] : 'Unknown Date';
+      let typeLabel = '[REPLY]';
+      if (originalTweet && tweet.id === originalTweet.id) {
+        typeLabel = '[ORIGINAL]';
+      } else if ((tweet as any).isLiked) {
+        typeLabel = '[LIKED]';
+      }
 
-    const metrics = `(❤️${tweet.likes || 0} 🔁${tweet.retweets || 0} 💬${tweet.replies || 0})`;
-    const media = tweet.hasMedia ? '[HAS_MEDIA]' : '';
-    const author = (tweet as any).author ? `@${(tweet as any).author}` : 'Unknown';
+      const metrics = `(❤️${tweet.likes || 0} 🔁${tweet.retweets || 0} 💬${tweet.replies || 0})`;
+      const media = tweet.hasMedia ? '[HAS_MEDIA]' : '';
+      const author = (tweet as any).author ? `@${(tweet as any).author}` : 'Unknown';
 
-    const cleanText = (tweet.text || '').toString().replace(/\n+/g, ' ').trim();
+      const cleanText = (tweet.text || '').toString().replace(/\n+/g, ' ').trim();
 
-    let line = `${index + 1}. ${date} ${typeLabel} ${author} ${metrics} ${media}: "${cleanText}"`;
+      let line = `${index + 1}. ${date} ${typeLabel} ${author} ${metrics} ${media}: "${cleanText}"`;
 
-    if ((tweet as any).quotedContent) {
-      const cleanQuote = (tweet as any).quotedContent.replace(/\n+/g, ' ').trim();
-      line += `\n    [QUOTING]: "${cleanQuote}"`;
-    }
+      if ((tweet as any).quotedContent) {
+        const cleanQuote = (tweet as any).quotedContent.replace(/\n+/g, ' ').trim();
+        line += `\n    [QUOTING]: "${cleanQuote}"`;
+      }
 
-    return line;
-  }).join('\n');
+      return line;
+    })
+    .join('\n');
 
   const fileContent = `${systemPrompt}\n\n# Raw Data\n\n${formattedTweets}`;
 

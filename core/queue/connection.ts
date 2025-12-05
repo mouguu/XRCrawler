@@ -1,6 +1,6 @@
 /**
  * Redis Connection Setup
- * 
+ *
  * Provides Redis connection instances for BullMQ queue and Pub/Sub
  */
 
@@ -68,9 +68,9 @@ connectRedis();
 
 // Connection event handlers
 redisConnection.on('connect', () => {
-  logger.info('Redis connection established', { 
-    host: redisConfig.host, 
-    port: redisConfig.port 
+  logger.info('Redis connection established', {
+    host: redisConfig.host,
+    port: redisConfig.port,
   });
 });
 
@@ -91,10 +91,6 @@ redisSubscriber.on('error', (err) => {
  */
 export async function closeRedisConnections(): Promise<void> {
   logger.info('Closing Redis connections...');
-  await Promise.all([
-    redisConnection.quit(),
-    redisPublisher.quit(),
-    redisSubscriber.quit(),
-  ]);
+  await Promise.all([redisConnection.quit(), redisPublisher.quit(), redisSubscriber.quit()]);
   logger.info('Redis connections closed');
 }

@@ -1,6 +1,6 @@
 /**
  * Queue Monitor Routes - Pure Hono Implementation
- * 
+ *
  * Replaces Bull Board with a simple, lightweight queue monitoring API
  */
 
@@ -50,12 +50,18 @@ queueMonitor.get('/', async (c) => {
  */
 queueMonitor.get('/jobs', async (c) => {
   try {
-    const state = c.req.query('state') as 'waiting' | 'active' | 'completed' | 'failed' | 'delayed' | undefined;
+    const state = c.req.query('state') as
+      | 'waiting'
+      | 'active'
+      | 'completed'
+      | 'failed'
+      | 'delayed'
+      | undefined;
     const start = parseInt(c.req.query('start') || '0', 10);
     const limit = Math.min(parseInt(c.req.query('limit') || '20', 10), 100);
 
     let jobs;
-    
+
     if (state === 'waiting') {
       jobs = await scrapeQueue.getWaiting(start, start + limit - 1);
     } else if (state === 'active') {
@@ -93,7 +99,7 @@ queueMonitor.get('/jobs', async (c) => {
         finishedOn: job.finishedOn,
         failedReason: job.failedReason,
         attemptsMade: job.attemptsMade,
-      }))
+      })),
     );
 
     return c.json({

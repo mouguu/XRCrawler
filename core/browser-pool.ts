@@ -1,20 +1,20 @@
 /**
  * 浏览器池管理器（可选功能，默认关闭）
- * 
+ *
  * 作用：复用浏览器实例，减少资源消耗和启动时间
- * 
+ *
  * 适用场景：
  * - 批量爬取多个任务时，可以复用浏览器实例节省启动时间（5-10秒）
  * - 单任务场景不需要，每次创建新浏览器即可
- * 
+ *
  * 使用方式：
  * - 默认不启用，需要在 ScraperEngineOptions 中明确提供 browserPoolOptions
  * - 如果不提供，每次任务会创建新的浏览器实例
  */
 
 import { Browser } from 'puppeteer';
-import { BrowserManager, BrowserLaunchOptions } from './browser-manager';
-import { ScraperError, ErrorCode } from './errors';
+import { BrowserLaunchOptions, BrowserManager } from './browser-manager';
+import { ErrorCode, ScraperError } from './errors';
 
 export interface BrowserPoolOptions {
   maxSize?: number;
@@ -56,7 +56,7 @@ export class BrowserPool {
    */
   async acquire(): Promise<Browser> {
     // 1. 尝试从池中获取空闲浏览器
-    const available = this.pool.find(b => !b.inUse);
+    const available = this.pool.find((b) => !b.inUse);
     if (available) {
       available.inUse = true;
       available.lastUsed = Date.now();
@@ -69,7 +69,7 @@ export class BrowserPool {
       const pooled: PooledBrowser = {
         browser,
         lastUsed: Date.now(),
-        inUse: true
+        inUse: true,
       };
       this.pool.push(pooled);
       return browser;
@@ -83,7 +83,7 @@ export class BrowserPool {
    * 释放浏览器实例（归还到池中）
    */
   release(browser: Browser): void {
-    const pooled = this.pool.find(p => p.browser === browser);
+    const pooled = this.pool.find((p) => p.browser === browser);
     if (pooled) {
       pooled.inUse = false;
       pooled.lastUsed = Date.now();
@@ -102,7 +102,7 @@ export class BrowserPool {
       throw new ScraperError(
         ErrorCode.BROWSER_ERROR,
         `Failed to create browser: ${error.message}`,
-        { retryable: true, originalError: error }
+        { retryable: true, originalError: error },
       );
     }
   }
@@ -116,21 +116,19 @@ export class BrowserPool {
     const startTime = Date.now();
 
     while (Date.now() - startTime < maxWait) {
-      const available = this.pool.find(b => !b.inUse);
+      const available = this.pool.find((b) => !b.inUse);
       if (available) {
         available.inUse = true;
         available.lastUsed = Date.now();
         return available.browser;
       }
 
-      await new Promise(resolve => setTimeout(resolve, checkInterval));
+      await new Promise((resolve) => setTimeout(resolve, checkInterval));
     }
 
-    throw new ScraperError(
-      ErrorCode.BROWSER_ERROR,
-      'Timeout waiting for available browser',
-      { retryable: true }
-    );
+    throw new ScraperError(ErrorCode.BROWSER_ERROR, 'Timeout waiting for available browser', {
+      retryable: true,
+    });
   }
 
   /**
@@ -151,7 +149,7 @@ export class BrowserPool {
 
     // 找出需要清理的浏览器（空闲且超过超时时间）
     for (const pooled of this.pool) {
-      if (!pooled.inUse && (now - pooled.lastUsed) > this.idleTimeout) {
+      if (!pooled.inUse && now - pooled.lastUsed > this.idleTimeout) {
         // 保持最小池大小
         if (this.pool.length > this.minSize) {
           toRemove.push(pooled);
@@ -184,9 +182,9 @@ export class BrowserPool {
   } {
     return {
       total: this.pool.length,
-      inUse: this.pool.filter(b => b.inUse).length,
-      available: this.pool.filter(b => !b.inUse).length,
-      maxSize: this.maxSize
+      inUse: this.pool.filter((b) => b.inUse).length,
+      available: this.pool.filter((b) => !b.inUse).length,
+      maxSize: this.maxSize,
     };
   }
 
@@ -215,7 +213,7 @@ export class BrowserPool {
    * 关闭所有空闲浏览器（保持最小池大小）
    */
   async shrink(): Promise<void> {
-    const available = this.pool.filter(b => !b.inUse);
+    const available = this.pool.filter((b) => !b.inUse);
     const toKeep = Math.max(this.minSize, this.pool.length - available.length);
 
     const toClose = available.slice(toKeep);
@@ -255,4 +253,3 @@ export function resetBrowserPool(): void {
     globalBrowserPool = null;
   }
 }
-

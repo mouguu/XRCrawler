@@ -1,4 +1,4 @@
-export type TabType = "profile" | "thread" | "search" | "reddit";
+export type TabType = 'profile' | 'thread' | 'search' | 'reddit';
 
 export interface Progress {
   current: number;
@@ -24,5 +24,5 @@ export interface PerformanceStats {
   apiAverageLatency?: number;
   apiRetryCount?: number;
   rateLimitWaitTime?: number;
-  mode?: "graphql" | "puppeteer" | "mixed";
+  mode?: 'graphql' | 'puppeteer' | 'mixed';
 }

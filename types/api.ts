@@ -8,9 +8,9 @@
 // Request Types
 // ============================================================================
 
-export type ScrapeType = "profile" | "thread" | "search" | "reddit";
-export type ScrapeMode = "graphql" | "puppeteer" | "mixed";
-export type RedditStrategy = "auto" | "super_full" | "super_recent" | "new";
+export type ScrapeType = 'profile' | 'thread' | 'search' | 'reddit';
+export type ScrapeMode = 'graphql' | 'puppeteer' | 'mixed';
+export type RedditStrategy = 'auto' | 'super_full' | 'super_recent' | 'new';
 
 export interface DateRange {
   start: string; // ISO date string
@@ -33,7 +33,7 @@ export interface ScrapeRequest {
   parallelChunks?: number;
   /** Reddit only: subreddit scraping strategy */
   strategy?: RedditStrategy;
-  /** 
+  /**
    * Anti-detection level (optional, default: 'high')
    * - 'low': Basic fingerprint only
    * - 'medium': + Advanced fingerprint (Canvas/WebGL/Audio)
@@ -108,7 +108,7 @@ export interface StopResponse {
 // ============================================================================
 
 export interface LogEvent {
-  level: "info" | "warn" | "error" | "debug";
+  level: 'info' | 'warn' | 'error' | 'debug';
   message: string;
   timestamp?: string;
 }
@@ -131,17 +131,12 @@ export interface PerformanceEvent {
 export function isScrapeRequest(body: any): body is ScrapeRequest {
   return (
     body &&
-    typeof body === "object" &&
-    ["profile", "thread", "search", "reddit"].includes(body.type) &&
-    typeof body.input === "string"
+    typeof body === 'object' &&
+    ['profile', 'thread', 'search', 'reddit'].includes(body.type) &&
+    typeof body.input === 'string'
   );
 }
 
 export function isMonitorRequest(body: any): body is MonitorRequest {
-  return (
-    body &&
-    typeof body === "object" &&
-    Array.isArray(body.users) &&
-    body.users.length > 0
-  );
+  return body && typeof body === 'object' && Array.isArray(body.users) && body.users.length > 0;
 }

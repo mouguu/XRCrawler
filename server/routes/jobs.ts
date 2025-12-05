@@ -1,13 +1,13 @@
 /**
  * Job Management API Routes - Hono
- * 
+ *
  * Endpoints for querying job status, streaming progress, and cancelling jobs
  */
 
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
-import { scrapeQueue } from '../../core/queue/scrape-queue';
 import { redisSubscriber } from '../../core/queue/connection';
+import { scrapeQueue } from '../../core/queue/scrape-queue';
 import { markJobAsCancelled } from '../../core/queue/worker';
 import { createEnhancedLogger, safeJsonParse } from '../../utils';
 
@@ -66,7 +66,7 @@ jobRoutes.get('/', async (c) => {
         createdAt: job.timestamp,
         processedAt: job.processedOn,
         finishedAt: job.finishedOn,
-      }))
+      })),
     );
 
     return c.json({
@@ -175,7 +175,7 @@ jobRoutes.get('/:jobId/stream', async (c) => {
       let isEnded = false;
       const pollInterval = setInterval(async () => {
         if (isEnded) return;
-        
+
         try {
           const currentState = await job.getState();
 
@@ -210,7 +210,7 @@ jobRoutes.get('/:jobId/stream', async (c) => {
         // Keep stream open until client disconnects or job ends
         while (!isEnded) {
           await stream.sleep(1000);
-          
+
           // Check if job has ended
           const state = await job.getState();
           if (state === 'completed' || state === 'failed') {
@@ -247,16 +247,19 @@ jobRoutes.post('/:jobId/cancel', async (c) => {
     const state = await job.getState();
 
     if (state === 'completed' || state === 'failed') {
-      return c.json({
-        error: `Cannot cancel job in ${state} state`,
-      }, 400);
+      return c.json(
+        {
+          error: `Cannot cancel job in ${state} state`,
+        },
+        400,
+      );
     }
 
     // For active jobs, mark them for cancellation
     if (state === 'active') {
       markJobAsCancelled(jobId);
       logger.info('Active job marked for cancellation', { jobId });
-      
+
       return c.json({
         success: true,
         message: 'Job cancellation requested. The job will stop shortly.',

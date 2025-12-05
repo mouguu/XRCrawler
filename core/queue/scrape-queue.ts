@@ -1,13 +1,13 @@
 /**
  * Scrape Queue Definition
- * 
+ *
  * BullMQ queue for managing scraping tasks
  */
 
 import { Queue, QueueEvents } from 'bullmq';
+import { createEnhancedLogger } from '../../utils/logger';
 import { redisConnection } from './connection';
 import { ScrapeJobData, ScrapeJobResult } from './types';
-import { createEnhancedLogger } from '../../utils/logger';
 
 const logger = createEnhancedLogger('ScrapeQueue');
 
@@ -74,8 +74,11 @@ export function getScrapeQueueEvents(): QueueEvents {
 
 // Legacy export for compatibility (lazy getter)
 export const scrapeQueue = {
-  get queue() { return getScrapeQueue(); },
-  add: (...args: Parameters<Queue<ScrapeJobData, ScrapeJobResult>['add']>) => getScrapeQueue().add(...args),
+  get queue() {
+    return getScrapeQueue();
+  },
+  add: (...args: Parameters<Queue<ScrapeJobData, ScrapeJobResult>['add']>) =>
+    getScrapeQueue().add(...args),
   getJob: (id: string) => getScrapeQueue().getJob(id),
   getJobs: (...args: Parameters<Queue['getJobs']>) => getScrapeQueue().getJobs(...args),
   getWaiting: (start?: number, end?: number) => getScrapeQueue().getWaiting(start, end),
@@ -96,7 +99,9 @@ export const scrapeQueue = {
 };
 
 export const scrapeQueueEvents = {
-  get events() { return getScrapeQueueEvents(); },
+  get events() {
+    return getScrapeQueueEvents();
+  },
   close: () => getScrapeQueueEvents().close(),
 };
 
@@ -109,4 +114,3 @@ export async function closeScrapeQueue(): Promise<void> {
   if (_scrapeQueueEvents) await _scrapeQueueEvents.close();
   logger.info('Scrape queue closed');
 }
-

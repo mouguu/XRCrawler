@@ -3,9 +3,9 @@
  * 集中管理所有配置，支持环境变量、配置文件和默认值
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import { ScraperError, ErrorCode } from '../core/errors';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { ErrorCode, ScraperError } from '../core/errors';
 import { safeJsonParse } from './safe-json';
 
 export interface AppConfig {
@@ -87,56 +87,57 @@ const DEFAULT_CONFIG: AppConfig = {
     port: 5001,
     host: '0.0.0.0',
     publicUrl: undefined,
-    apiKey: undefined
+    apiKey: undefined,
   },
   output: {
     baseDir: path.resolve(process.cwd(), 'output'),
-    enableLegacyCompat: false
+    enableLegacyCompat: false,
   },
   redis: {
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379', 10),
     db: 0,
-    password: process.env.REDIS_PASSWORD
+    password: process.env.REDIS_PASSWORD,
   },
   queue: {
     concurrency: 2,
     rateLimit: {
       max: 10,
-      duration: 60000
-    }
+      duration: 60000,
+    },
   },
   twitter: {
     defaultMode: 'graphql',
     defaultLimit: 50,
     apiTimeout: 30000,
-    browserTimeout: 60000
+    browserTimeout: 60000,
   },
   reddit: {
     apiUrl: 'http://127.0.0.1:5002',
     apiPort: 5002,
     apiTimeout: 300000,
-    defaultStrategy: 'auto'
+    defaultStrategy: 'auto',
   },
   browser: {
     headless: true,
-    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+    userAgent:
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
     viewport: {
       width: 1280,
-      height: 960
-    }
+      height: 960,
+    },
   },
   rateLimit: {
     maxRetries: 3,
     baseDelay: 2000,
     maxDelay: 60000,
-    enableRotation: true
+    enableRotation: true,
   },
   logging: {
     level: 'info',
     enableFileLogging: false,
-    logDir: path.resolve(process.cwd(), 'logs')
-  }
+    logDir: path.resolve(process.cwd(), 'logs'),
+  },
 };
 
 export class ConfigManager {
@@ -262,7 +263,7 @@ export class ConfigManager {
       throw new ScraperError(
         ErrorCode.INVALID_CONFIG,
         `Invalid server port: ${this.config.server.port}`,
-        { context: { port: this.config.server.port } }
+        { context: { port: this.config.server.port } },
       );
     }
 
@@ -271,7 +272,7 @@ export class ConfigManager {
       throw new ScraperError(
         ErrorCode.INVALID_CONFIG,
         `Twitter API timeout too small: ${this.config.twitter.apiTimeout}`,
-        { context: { timeout: this.config.twitter.apiTimeout } }
+        { context: { timeout: this.config.twitter.apiTimeout } },
       );
     }
 
@@ -282,7 +283,7 @@ export class ConfigManager {
       throw new ScraperError(
         ErrorCode.INVALID_CONFIG,
         `Cannot create output directory: ${error.message}`,
-        { context: { baseDir: this.config.output.baseDir } }
+        { context: { baseDir: this.config.output.baseDir } },
       );
     }
   }
@@ -370,12 +371,12 @@ export class ConfigManager {
    */
   getPublicConfig(): {
     apiBase: string;
-    twitter: Pick<AppConfig["twitter"], "defaultLimit" | "defaultMode">;
-    reddit: Pick<AppConfig["reddit"], "defaultStrategy">;
-    output: Pick<AppConfig["output"], "baseDir">;
+    twitter: Pick<AppConfig['twitter'], 'defaultLimit' | 'defaultMode'>;
+    reddit: Pick<AppConfig['reddit'], 'defaultStrategy'>;
+    output: Pick<AppConfig['output'], 'baseDir'>;
   } {
     return {
-      apiBase: this.config.server.publicUrl || "",
+      apiBase: this.config.server.publicUrl || '',
       twitter: {
         defaultLimit: this.config.twitter.defaultLimit,
         defaultMode: this.config.twitter.defaultMode,
@@ -395,16 +396,12 @@ export class ConfigManager {
   saveToFile(filePath?: string): void {
     const targetPath = filePath || this.configFilePath;
     try {
-      fs.writeFileSync(
-        targetPath,
-        JSON.stringify(this.config, null, 2),
-        'utf-8'
-      );
+      fs.writeFileSync(targetPath, JSON.stringify(this.config, null, 2), 'utf-8');
     } catch (error: any) {
       throw new ScraperError(
         ErrorCode.FILE_SYSTEM_ERROR,
         `Failed to save config file: ${error.message}`,
-        { context: { filePath: targetPath } }
+        { context: { filePath: targetPath } },
       );
     }
   }

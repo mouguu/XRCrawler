@@ -1,6 +1,6 @@
 /**
  * AdvancedFingerprint - 高级指纹伪装模块
- * 
+ *
  * 扩展基础的 FingerprintManager，提供更深层的反检测能力：
  * - Canvas 指纹伪装
  * - WebGL 指纹伪装
@@ -13,152 +13,152 @@ import { Page } from 'puppeteer';
 
 // Canvas 噪声注入参数
 interface CanvasNoiseConfig {
-    enabled: boolean;
-    factor: number;  // 噪声因子 (0-1)，值越大噪声越明显
+  enabled: boolean;
+  factor: number; // 噪声因子 (0-1)，值越大噪声越明显
 }
 
 // WebGL 伪装参数
 interface WebGLSpoofConfig {
-    enabled: boolean;
-    vendor: string;
-    renderer: string;
-    unmaskedVendor?: string;
-    unmaskedRenderer?: string;
+  enabled: boolean;
+  vendor: string;
+  renderer: string;
+  unmaskedVendor?: string;
+  unmaskedRenderer?: string;
 }
 
 // 音频伪装参数
 interface AudioSpoofConfig {
-    enabled: boolean;
-    noiseFactor: number;  // 音频噪声因子
+  enabled: boolean;
+  noiseFactor: number; // 音频噪声因子
 }
 
 // 硬件伪装参数
 interface HardwareSpoofConfig {
-    deviceMemory?: number;       // GB
-    hardwareConcurrency?: number; // CPU 核心数
-    maxTouchPoints?: number;
+  deviceMemory?: number; // GB
+  hardwareConcurrency?: number; // CPU 核心数
+  maxTouchPoints?: number;
 }
 
 // 完整配置
 export interface AdvancedFingerprintConfig {
-    canvas: CanvasNoiseConfig;
-    webgl: WebGLSpoofConfig;
-    audio: AudioSpoofConfig;
-    hardware: HardwareSpoofConfig;
-    timezone?: string;
-    languages?: string[];
+  canvas: CanvasNoiseConfig;
+  webgl: WebGLSpoofConfig;
+  audio: AudioSpoofConfig;
+  hardware: HardwareSpoofConfig;
+  timezone?: string;
+  languages?: string[];
 }
 
 // 预设配置：Windows Chrome 用户
 export const WINDOWS_CHROME_CONFIG: AdvancedFingerprintConfig = {
-    canvas: { enabled: true, factor: 0.01 },
-    webgl: {
-        enabled: true,
-        vendor: 'Google Inc. (NVIDIA)',
-        renderer: 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1060 Direct3D11 vs_5_0 ps_5_0, D3D11)',
-        unmaskedVendor: 'NVIDIA Corporation',
-        unmaskedRenderer: 'GeForce GTX 1060/PCIe/SSE2',
-    },
-    audio: { enabled: true, noiseFactor: 0.0003 },
-    hardware: {
-        deviceMemory: 8,
-        hardwareConcurrency: 8,
-        maxTouchPoints: 0,
-    },
-    timezone: 'America/New_York',
-    languages: ['en-US', 'en'],
+  canvas: { enabled: true, factor: 0.01 },
+  webgl: {
+    enabled: true,
+    vendor: 'Google Inc. (NVIDIA)',
+    renderer: 'ANGLE (NVIDIA, NVIDIA GeForce GTX 1060 Direct3D11 vs_5_0 ps_5_0, D3D11)',
+    unmaskedVendor: 'NVIDIA Corporation',
+    unmaskedRenderer: 'GeForce GTX 1060/PCIe/SSE2',
+  },
+  audio: { enabled: true, noiseFactor: 0.0003 },
+  hardware: {
+    deviceMemory: 8,
+    hardwareConcurrency: 8,
+    maxTouchPoints: 0,
+  },
+  timezone: 'America/New_York',
+  languages: ['en-US', 'en'],
 };
 
 // 预设配置：MacOS Safari 用户
 export const MACOS_SAFARI_CONFIG: AdvancedFingerprintConfig = {
-    canvas: { enabled: true, factor: 0.008 },
-    webgl: {
-        enabled: true,
-        vendor: 'Apple Inc.',
-        renderer: 'Apple M1',
-    },
-    audio: { enabled: true, noiseFactor: 0.0002 },
-    hardware: {
-        deviceMemory: 16,
-        hardwareConcurrency: 8,
-        maxTouchPoints: 0,
-    },
-    timezone: 'America/Los_Angeles',
-    languages: ['en-US', 'en'],
+  canvas: { enabled: true, factor: 0.008 },
+  webgl: {
+    enabled: true,
+    vendor: 'Apple Inc.',
+    renderer: 'Apple M1',
+  },
+  audio: { enabled: true, noiseFactor: 0.0002 },
+  hardware: {
+    deviceMemory: 16,
+    hardwareConcurrency: 8,
+    maxTouchPoints: 0,
+  },
+  timezone: 'America/Los_Angeles',
+  languages: ['en-US', 'en'],
 };
 
 // 随机配置生成器
 const GPU_MODELS = [
-    { vendor: 'NVIDIA Corporation', renderer: 'GeForce GTX 1080/PCIe/SSE2' },
-    { vendor: 'NVIDIA Corporation', renderer: 'GeForce RTX 2070/PCIe/SSE2' },
-    { vendor: 'NVIDIA Corporation', renderer: 'GeForce RTX 3060/PCIe/SSE2' },
-    { vendor: 'AMD', renderer: 'AMD Radeon RX 580 Series' },
-    { vendor: 'AMD', renderer: 'AMD Radeon RX 6700 XT' },
-    { vendor: 'Intel', renderer: 'Intel(R) UHD Graphics 630' },
-    { vendor: 'Intel', renderer: 'Intel(R) Iris(R) Xe Graphics' },
+  { vendor: 'NVIDIA Corporation', renderer: 'GeForce GTX 1080/PCIe/SSE2' },
+  { vendor: 'NVIDIA Corporation', renderer: 'GeForce RTX 2070/PCIe/SSE2' },
+  { vendor: 'NVIDIA Corporation', renderer: 'GeForce RTX 3060/PCIe/SSE2' },
+  { vendor: 'AMD', renderer: 'AMD Radeon RX 580 Series' },
+  { vendor: 'AMD', renderer: 'AMD Radeon RX 6700 XT' },
+  { vendor: 'Intel', renderer: 'Intel(R) UHD Graphics 630' },
+  { vendor: 'Intel', renderer: 'Intel(R) Iris(R) Xe Graphics' },
 ];
 
 const TIMEZONES = [
-    'America/New_York',
-    'America/Chicago',
-    'America/Los_Angeles',
-    'America/Denver',
-    'Europe/London',
-    'Europe/Paris',
-    'Asia/Tokyo',
+  'America/New_York',
+  'America/Chicago',
+  'America/Los_Angeles',
+  'America/Denver',
+  'Europe/London',
+  'Europe/Paris',
+  'Asia/Tokyo',
 ];
 
 export function generateRandomConfig(): AdvancedFingerprintConfig {
-    const gpu = GPU_MODELS[Math.floor(Math.random() * GPU_MODELS.length)];
-    const timezone = TIMEZONES[Math.floor(Math.random() * TIMEZONES.length)];
-    const cores = [4, 6, 8, 12, 16][Math.floor(Math.random() * 5)];
-    const memory = [4, 8, 16, 32][Math.floor(Math.random() * 4)];
+  const gpu = GPU_MODELS[Math.floor(Math.random() * GPU_MODELS.length)];
+  const timezone = TIMEZONES[Math.floor(Math.random() * TIMEZONES.length)];
+  const cores = [4, 6, 8, 12, 16][Math.floor(Math.random() * 5)];
+  const memory = [4, 8, 16, 32][Math.floor(Math.random() * 4)];
 
-    return {
-        canvas: { enabled: true, factor: 0.005 + Math.random() * 0.01 },
-        webgl: {
-            enabled: true,
-            vendor: `Google Inc. (${gpu.vendor})`,
-            renderer: `ANGLE (${gpu.vendor}, ${gpu.renderer} Direct3D11 vs_5_0 ps_5_0, D3D11)`,
-            unmaskedVendor: gpu.vendor,
-            unmaskedRenderer: gpu.renderer,
-        },
-        audio: { enabled: true, noiseFactor: 0.0001 + Math.random() * 0.0004 },
-        hardware: {
-            deviceMemory: memory,
-            hardwareConcurrency: cores,
-            maxTouchPoints: 0,
-        },
-        timezone,
-        languages: ['en-US', 'en'],
-    };
+  return {
+    canvas: { enabled: true, factor: 0.005 + Math.random() * 0.01 },
+    webgl: {
+      enabled: true,
+      vendor: `Google Inc. (${gpu.vendor})`,
+      renderer: `ANGLE (${gpu.vendor}, ${gpu.renderer} Direct3D11 vs_5_0 ps_5_0, D3D11)`,
+      unmaskedVendor: gpu.vendor,
+      unmaskedRenderer: gpu.renderer,
+    },
+    audio: { enabled: true, noiseFactor: 0.0001 + Math.random() * 0.0004 },
+    hardware: {
+      deviceMemory: memory,
+      hardwareConcurrency: cores,
+      maxTouchPoints: 0,
+    },
+    timezone,
+    languages: ['en-US', 'en'],
+  };
 }
 
 /**
  * AdvancedFingerprint 类
  */
 export class AdvancedFingerprint {
-    private config: AdvancedFingerprintConfig;
+  private config: AdvancedFingerprintConfig;
 
-    constructor(config?: Partial<AdvancedFingerprintConfig>) {
-        this.config = config ? { ...generateRandomConfig(), ...config } : generateRandomConfig();
-    }
+  constructor(config?: Partial<AdvancedFingerprintConfig>) {
+    this.config = config ? { ...generateRandomConfig(), ...config } : generateRandomConfig();
+  }
 
-    /**
-     * 注入所有指纹伪装到页面
-     */
-    async inject(page: Page): Promise<void> {
-        // 需要在页面加载前注入
-        await page.evaluateOnNewDocument(this.getInjectionScript());
-    }
+  /**
+   * 注入所有指纹伪装到页面
+   */
+  async inject(page: Page): Promise<void> {
+    // 需要在页面加载前注入
+    await page.evaluateOnNewDocument(this.getInjectionScript());
+  }
 
-    /**
-     * 获取注入脚本
-     */
-    private getInjectionScript(): string {
-        const config = this.config;
+  /**
+   * 获取注入脚本
+   */
+  private getInjectionScript(): string {
+    const config = this.config;
 
-        return `
+    return `
             (function() {
                 'use strict';
                 
@@ -427,28 +427,28 @@ export class AdvancedFingerprint {
                 console.log('[AdvancedFingerprint] Injected successfully');
             })();
         `;
-    }
+  }
 
-    /**
-     * 更新配置
-     */
-    setConfig(config: Partial<AdvancedFingerprintConfig>): void {
-        this.config = { ...this.config, ...config };
-    }
+  /**
+   * 更新配置
+   */
+  setConfig(config: Partial<AdvancedFingerprintConfig>): void {
+    this.config = { ...this.config, ...config };
+  }
 
-    /**
-     * 获取当前配置
-     */
-    getConfig(): AdvancedFingerprintConfig {
-        return { ...this.config };
-    }
+  /**
+   * 获取当前配置
+   */
+  getConfig(): AdvancedFingerprintConfig {
+    return { ...this.config };
+  }
 
-    /**
-     * 重新生成随机配置
-     */
-    regenerate(): void {
-        this.config = generateRandomConfig();
-    }
+  /**
+   * 重新生成随机配置
+   */
+  regenerate(): void {
+    this.config = generateRandomConfig();
+  }
 }
 
 // 导出默认实例

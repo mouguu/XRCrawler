@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Check, ChevronDown, Key, Menu, X } from "lucide-react";
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Check, ChevronDown, Key, Menu, X } from 'lucide-react';
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 interface HeaderBarProps {
   apiKey: string;
@@ -13,10 +13,10 @@ interface HeaderBarProps {
 }
 
 const navLinks = [
-  { label: "Scrape", href: "#scrape" },
-  { label: "Dashboard", href: "#dashboard" },
-  { label: "Queue", href: "/queue-monitor.html" },
-  { label: "Sessions", href: "#sessions" },
+  { label: 'Scrape', href: '#scrape' },
+  { label: 'Dashboard', href: '#dashboard' },
+  { label: 'Queue', href: '/queue-monitor.html' },
+  { label: 'Sessions', href: '#sessions' },
 ];
 
 export function HeaderBar({ apiKey, apiKeyInput, onApiKeyInputChange, onApply }: HeaderBarProps) {
@@ -60,11 +60,11 @@ export function HeaderBar({ apiKey, apiKeyInput, onApiKeyInputChange, onApply }:
               >
                 <Key className="w-4 h-4 text-muted-foreground" />
                 <span className="text-muted-foreground">
-                  {apiKey ? "API Connected" : "Connect API"}
+                  {apiKey ? 'API Connected' : 'Connect API'}
                 </span>
                 {apiKey && <span className="w-2 h-2 rounded-full bg-green-500" />}
                 <ChevronDown
-                  className={`w-4 h-4 text-muted-foreground transition-transform ${apiDropdownOpen ? "rotate-180" : ""}`}
+                  className={`w-4 h-4 text-muted-foreground transition-transform ${apiDropdownOpen ? 'rotate-180' : ''}`}
                 />
               </button>
 
@@ -127,7 +127,7 @@ export function HeaderBar({ apiKey, apiKeyInput, onApiKeyInputChange, onApply }:
           {mobileMenuOpen && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
+              animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
               className="md:hidden border-t border-border/40 overflow-hidden"
             >

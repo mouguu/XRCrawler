@@ -1,12 +1,16 @@
-import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+
 /**
  * OutputPathManager 单元测试
  */
 
-import { OutputPathManager, getOutputPathManager, resetOutputPathManager } from '../../utils/output-path-manager';
-import * as path from 'path';
-import * as fs from 'fs';
-import { promises as fsPromises } from 'fs';
+import { promises as fsPromises } from 'node:fs';
+import * as path from 'node:path';
+import {
+  getOutputPathManager,
+  OutputPathManager,
+  resetOutputPathManager,
+} from '../../utils/output-path-manager';
 
 describe('OutputPathManager', () => {
   let testBaseDir: string;
@@ -23,7 +27,7 @@ describe('OutputPathManager', () => {
     // 清理测试目录
     try {
       await fsPromises.rm(testBaseDir, { recursive: true, force: true });
-    } catch (error) {
+    } catch (_error) {
       // 忽略清理错误
     }
   });
@@ -66,8 +70,12 @@ describe('OutputPathManager', () => {
       expect(runPath.identifier).toBe('elonmusk');
       expect(runPath.runId).toBe('run-2024-01-01');
       expect(runPath.runDir).toBe(path.join(testBaseDir, 'twitter', 'elonmusk', 'run-2024-01-01'));
-      expect(runPath.markdownDir).toBe(path.join(testBaseDir, 'twitter', 'elonmusk', 'run-2024-01-01', 'markdown'));
-      expect(runPath.screenshotDir).toBe(path.join(testBaseDir, 'twitter', 'elonmusk', 'run-2024-01-01', 'screenshots'));
+      expect(runPath.markdownDir).toBe(
+        path.join(testBaseDir, 'twitter', 'elonmusk', 'run-2024-01-01', 'markdown'),
+      );
+      expect(runPath.screenshotDir).toBe(
+        path.join(testBaseDir, 'twitter', 'elonmusk', 'run-2024-01-01', 'screenshots'),
+      );
     });
 
     test('should create directories if they do not exist', async () => {
@@ -131,4 +139,3 @@ describe('OutputPathManager', () => {
     });
   });
 });
-

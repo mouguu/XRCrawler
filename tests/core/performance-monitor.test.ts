@@ -2,8 +2,8 @@
  * PerformanceMonitor 单元测试
  */
 
-import { describe, it, expect, beforeEach, test } from 'bun:test';
-import { PerformanceMonitor, PerformanceStats } from '../../core/performance-monitor';
+import { beforeEach, describe, expect, test } from 'bun:test';
+import { PerformanceMonitor } from '../../core/performance-monitor';
 
 describe('PerformanceMonitor', () => {
   let monitor: PerformanceMonitor;
@@ -16,7 +16,7 @@ describe('PerformanceMonitor', () => {
     test('should record API request time', () => {
       monitor.recordApiRequest(100);
       monitor.recordApiRequest(200);
-      
+
       const stats = monitor.getStats();
       expect(stats.apiRequestCount).toBe(2);
       expect(stats.apiAverageLatency).toBeGreaterThan(0);
@@ -26,7 +26,7 @@ describe('PerformanceMonitor', () => {
       monitor.recordApiRequest(100);
       monitor.recordApiRequest(200);
       monitor.recordApiRequest(300);
-      
+
       const stats = monitor.getStats();
       expect(stats.apiAverageLatency).toBe(200);
     });
@@ -36,7 +36,7 @@ describe('PerformanceMonitor', () => {
     test('should record tweets collected', () => {
       monitor.recordTweets(10);
       monitor.recordTweets(20);
-      
+
       const stats = monitor.getStats();
       expect(stats.tweetsCollected).toBe(20); // recordTweets sets, not adds
     });
@@ -46,7 +46,7 @@ describe('PerformanceMonitor', () => {
     test('should add to tweets count', () => {
       monitor.addTweets(10);
       monitor.addTweets(20);
-      
+
       const stats = monitor.getStats();
       expect(stats.tweetsCollected).toBe(30);
     });
@@ -56,7 +56,7 @@ describe('PerformanceMonitor', () => {
     test('should increment scroll count', () => {
       monitor.recordScroll();
       monitor.recordScroll();
-      
+
       const stats = monitor.getStats();
       expect(stats.scrollCount).toBe(2);
     });
@@ -65,7 +65,7 @@ describe('PerformanceMonitor', () => {
   describe('recordSessionSwitch', () => {
     test('should increment session switch count', () => {
       monitor.recordSessionSwitch();
-      
+
       const stats = monitor.getStats();
       expect(stats.sessionSwitches).toBe(1);
     });
@@ -74,7 +74,7 @@ describe('PerformanceMonitor', () => {
   describe('recordRateLimitWait', () => {
     test('should record rate limit hit', () => {
       monitor.recordRateLimitWait(5000);
-      
+
       const stats = monitor.getStats();
       expect(stats.rateLimitHits).toBe(1);
       expect(stats.rateLimitWaitTime).toBe(5000);
@@ -88,9 +88,9 @@ describe('PerformanceMonitor', () => {
       monitor.addTweets(10);
       monitor.recordScroll();
       monitor.recordSessionSwitch();
-      
+
       const stats = monitor.getStats();
-      
+
       expect(stats).toHaveProperty('apiRequestCount');
       expect(stats).toHaveProperty('apiAverageLatency');
       expect(stats).toHaveProperty('tweetsCollected');
@@ -101,7 +101,7 @@ describe('PerformanceMonitor', () => {
 
     test('should return zero stats initially', () => {
       const stats = monitor.getStats();
-      
+
       expect(stats.apiRequestCount).toBe(0);
       expect(stats.tweetsCollected).toBe(0);
       expect(stats.scrollCount).toBe(0);
@@ -114,9 +114,9 @@ describe('PerformanceMonitor', () => {
       monitor.recordApiRequest(100);
       monitor.addTweets(10);
       monitor.recordScroll();
-      
+
       monitor.reset();
-      
+
       const stats = monitor.getStats();
       expect(stats.apiRequestCount).toBe(0);
       expect(stats.tweetsCollected).toBe(0);
@@ -129,7 +129,7 @@ describe('PerformanceMonitor', () => {
       monitor.start();
       monitor.recordTweets(100);
       monitor.stop();
-      
+
       const stats = monitor.getStats();
       if (stats.totalDuration > 0) {
         expect(stats.tweetsPerSecond).toBeGreaterThan(0);
@@ -137,4 +137,3 @@ describe('PerformanceMonitor', () => {
     });
   });
 });
-

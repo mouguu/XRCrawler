@@ -1,6 +1,6 @@
 /**
  * Queue API Client
- * 
+ *
  * Utility for interacting with the queue-based scraping API
  */
 
@@ -84,7 +84,7 @@ export async function submitJob(params: {
  */
 export async function getJobStatus(jobId: string): Promise<JobStatus> {
   const response = await fetch(`/api/jobs/${jobId}`);
-  
+
   if (!response.ok) {
     throw new Error('Failed to get job status');
   }
@@ -116,7 +116,7 @@ export function connectToJobStream(
     onCompleted?: (result: any) => void;
     onFailed?: (error: string) => void;
     onConnected?: (data: any) => void;
-  }
+  },
 ): EventSource {
   const eventSource = new EventSource(`/api/jobs/${jobId}/stream`);
 
@@ -167,7 +167,7 @@ export async function listJobs(filters?: {
   if (filters?.type) params.append('type', filters.type);
 
   const response = await fetch(`/api/jobs?${params.toString()}`);
-  
+
   if (!response.ok) {
     throw new Error('Failed to list jobs');
   }

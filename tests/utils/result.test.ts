@@ -1,15 +1,15 @@
-import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 /**
  * Result 工具单元测试
  */
 
-import { ok, fail, isOk, isFail, unwrapOr, fromPromise, wrap } from '../../utils/result';
+import { fail, fromPromise, isFail, isOk, ok, unwrapOr, wrap } from '../../utils/result';
 
 describe('Result Utils', () => {
   describe('ok', () => {
     test('should create success result', () => {
       const result = ok({ id: 1, name: 'test' });
-      
+
       expect(result.success).toBe(true);
       expect(result.data).toEqual({ id: 1, name: 'test' });
       expect(result.error).toBeNull();
@@ -17,7 +17,7 @@ describe('Result Utils', () => {
 
     test('should include metadata', () => {
       const result = ok('data', { timestamp: 123 });
-      
+
       expect(result.success).toBe(true);
       expect(result.metadata).toEqual({ timestamp: 123 });
     });
@@ -26,7 +26,7 @@ describe('Result Utils', () => {
   describe('fail', () => {
     test('should create failure result', () => {
       const result = fail('Error message');
-      
+
       expect(result.success).toBe(false);
       expect(result.data).toBeNull();
       expect(result.error).toBe('Error message');
@@ -34,7 +34,7 @@ describe('Result Utils', () => {
 
     test('should include metadata', () => {
       const result = fail('Error', { code: 500 });
-      
+
       expect(result.success).toBe(false);
       expect(result.metadata).toEqual({ code: 500 });
     });
@@ -80,7 +80,7 @@ describe('Result Utils', () => {
     test('should convert successful promise to ok result', async () => {
       const promise = Promise.resolve('data');
       const result = await fromPromise(promise);
-      
+
       expect(result.success).toBe(true);
       expect(result.data).toBe('data');
     });
@@ -88,7 +88,7 @@ describe('Result Utils', () => {
     test('should convert failed promise to fail result', async () => {
       const promise = Promise.reject(new Error('error'));
       const result = await fromPromise(promise);
-      
+
       expect(result.success).toBe(false);
       expect(result.error).toBeDefined();
     });
@@ -98,7 +98,7 @@ describe('Result Utils', () => {
     test('should wrap sync function', () => {
       const fn = (x: number) => x * 2;
       const wrapped = wrap(fn);
-      
+
       const result = wrapped(5);
       expect(result.success).toBe(true);
       expect(result.data).toBe(10);
@@ -107,16 +107,18 @@ describe('Result Utils', () => {
     test('should wrap async function', async () => {
       const fn = async (x: number) => x * 2;
       const wrapped = wrap(fn);
-      
+
       const result = await wrapped(5);
       expect(result.success).toBe(true);
       expect(result.data).toBe(10);
     });
 
     test('should handle errors in wrapped function', () => {
-      const fn = () => { throw new Error('test'); };
+      const fn = () => {
+        throw new Error('test');
+      };
       const wrapped = wrap(fn);
-      
+
       const result = wrapped() as any; // Type assertion for test
       // wrap catches sync errors and returns fail result
       expect(result.success).toBe(false);
@@ -124,12 +126,13 @@ describe('Result Utils', () => {
     });
 
     test('should handle errors in async wrapped function', async () => {
-      const fn = async () => { throw new Error('test'); };
+      const fn = async () => {
+        throw new Error('test');
+      };
       const wrapped = wrap(fn);
-      
+
       const result = await wrapped();
       expect(result.success).toBe(false);
     });
   });
 });
-

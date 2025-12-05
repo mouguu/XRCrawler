@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 /**
  * Validation 工具单元测试
  */
@@ -53,12 +53,10 @@ describe('Validation Utils', () => {
   describe('validateEnvCookieData', () => {
     test('should validate correct cookie data', () => {
       const cookieData = {
-        cookies: [
-          { name: 'auth_token', value: 'token123', domain: '.twitter.com' }
-        ],
-        username: 'testuser'
+        cookies: [{ name: 'auth_token', value: 'token123', domain: '.twitter.com' }],
+        username: 'testuser',
       };
-      
+
       const result = validation.validateEnvCookieData(cookieData);
       expect(result.valid).toBe(true);
       expect(result.cookies).toBeDefined();
@@ -66,9 +64,9 @@ describe('Validation Utils', () => {
 
     test('should reject missing cookies', () => {
       const cookieData = {
-        username: 'testuser'
+        username: 'testuser',
       };
-      
+
       const result = validation.validateEnvCookieData(cookieData);
       expect(result.valid).toBe(false);
     });
@@ -76,15 +74,15 @@ describe('Validation Utils', () => {
     test('should filter expired cookies', () => {
       const expiredDate = new Date();
       expiredDate.setDate(expiredDate.getDate() - 1);
-      
+
       const cookieData = {
         cookies: [
           { name: 'expired', value: 'value', expires: expiredDate.getTime() / 1000 },
           { name: 'valid', value: 'value', expires: Date.now() / 1000 + 86400 },
-          { name: 'auth_token', value: 'token123', expires: Date.now() / 1000 + 86400 } // Required cookie
-        ]
+          { name: 'auth_token', value: 'token123', expires: Date.now() / 1000 + 86400 }, // Required cookie
+        ],
       };
-      
+
       const result = validation.validateEnvCookieData(cookieData);
       // Should be valid if it has auth_token or ct0
       expect(result.valid).toBe(true);
@@ -97,19 +95,19 @@ describe('Validation Utils', () => {
       const config = {
         type: 'profile',
         input: 'testuser',
-        limit: 100
+        limit: 100,
       };
-      
+
       const result = validation.validateScraperConfig(config);
       expect(result.valid).toBe(true);
     });
 
     test('should reject missing required fields', () => {
       const config = {
-        type: 'profile'
+        type: 'profile',
         // missing input
       };
-      
+
       const result = validation.validateScraperConfig(config as any);
       // The validation might be lenient, check if it validates at all
       expect(result).toHaveProperty('valid');
@@ -120,12 +118,11 @@ describe('Validation Utils', () => {
       const config = {
         type: 'profile',
         input: 'testuser',
-        limit: 0
+        limit: 0,
       };
-      
+
       const result = validation.validateScraperConfig(config);
       expect(result.valid).toBe(false);
     });
   });
 });
-

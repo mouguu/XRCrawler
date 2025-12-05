@@ -1,6 +1,6 @@
 /**
  * Queue Type Definitions
- * 
+ *
  * Types for BullMQ job data, results, progress, and logs
  */
 
@@ -16,12 +16,12 @@ export interface ScrapeJobData {
     mode?: 'puppeteer' | 'graphql' | 'mixed';
     likes?: boolean;
     tab?: 'posts' | 'likes' | 'replies'; // 'posts' is the default, but we don't pass it to scrapeTimeline
-    
+
     // Reddit options
     subreddit?: string;
     postUrl?: string;
     strategy?: string;
-    
+
     // Common options
     enableRotation?: boolean;
     enableProxy?: boolean;

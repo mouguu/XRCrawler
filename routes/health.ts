@@ -17,22 +17,22 @@ const healthRoutes = new Hono();
 healthRoutes.get('/health', async (c) => {
   try {
     const health = await healthChecker.checkAll();
-    
+
     // Set appropriate HTTP status code based on health
-    const statusCode = 
-      health.status === 'down' ? 503 :
-      health.status === 'degraded' ? 200 :
-      200;
+    const statusCode = health.status === 'down' ? 503 : health.status === 'degraded' ? 200 : 200;
 
     return c.json(health, statusCode);
   } catch (error: any) {
     logger.error('Health check endpoint failed', error);
-    return c.json({
-      status: 'down',
-      timestamp: new Date(),
-      message: 'Health check failed',
-      error: error.message
-    }, 500);
+    return c.json(
+      {
+        status: 'down',
+        timestamp: new Date(),
+        message: 'Health check failed',
+        error: error.message,
+      },
+      500,
+    );
   }
 });
 

@@ -23,9 +23,9 @@ export class RateLimiter {
    */
   async updateFromHeaders(endpoint: string, headers: Record<string, string>): Promise<void> {
     try {
-      const remaining = parseInt(headers['x-rate-limit-remaining'] || '0');
-      const reset = parseInt(headers['x-rate-limit-reset'] || '0');
-      const limit = parseInt(headers['x-rate-limit-limit'] || '0');
+      const remaining = parseInt(headers['x-rate-limit-remaining'] || '0', 10);
+      const reset = parseInt(headers['x-rate-limit-reset'] || '0', 10);
+      const limit = parseInt(headers['x-rate-limit-limit'] || '0', 10);
 
       if (remaining > 0 && reset > 0) {
         const info: RateLimitInfo = { remaining, reset, limit };
@@ -33,7 +33,7 @@ export class RateLimiter {
         const ttl = Math.max(reset - Math.floor(Date.now() / 1000), 60);
 
         await redisConnection.set(key, JSON.stringify(info), 'EX', ttl);
-        
+
         logger.debug('Updated rate limit', { endpoint, remaining, reset, limit });
       }
     } catch (error: any) {
@@ -48,14 +48,14 @@ export class RateLimiter {
     try {
       const key = `rate_limit:${endpoint}`;
       const data = await redisConnection.get(key);
-      
+
       if (data) {
         return safeJsonParse(data);
       }
     } catch (error: any) {
       logger.error('Failed to get rate limit info', error);
     }
-    
+
     return null;
   }
 
@@ -64,7 +64,7 @@ export class RateLimiter {
    */
   async getDelay(endpoint: string): Promise<number> {
     const info = await this.getRateLimitInfo(endpoint);
-    
+
     if (!info) {
       return this.DEFAULT_DELAY;
     }
@@ -99,7 +99,7 @@ export class RateLimiter {
    */
   async shouldWait(endpoint: string): Promise<boolean> {
     const info = await this.getRateLimitInfo(endpoint);
-    
+
     if (!info) {
       return false;
     }
@@ -120,12 +120,12 @@ export class RateLimiter {
    */
   async wait(endpoint: string): Promise<void> {
     const delay = await this.getDelay(endpoint);
-    
+
     if (delay > this.DEFAULT_DELAY) {
       logger.info(`Throttling request to ${endpoint} for ${delay}ms`);
     }
-    
-    await new Promise(resolve => setTimeout(resolve, delay));
+
+    await new Promise((resolve) => setTimeout(resolve, delay));
   }
 }
 

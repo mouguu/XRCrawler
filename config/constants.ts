@@ -1,11 +1,11 @@
 /**
  * Application Constants
- * 
+ *
  * This file contains ONLY truly immutable constants:
  * - API endpoints and GraphQL query IDs
  * - Platform identifiers
  * - Browser configuration (args, user agent)
- * 
+ *
  * For configurable values (timeouts, delays, limits), see:
  * - utils/config-manager.ts (ConfigManager)
  */
@@ -16,12 +16,12 @@
  * Puppeteer 浏览器启动参数
  */
 export const BROWSER_ARGS = [
-  "--no-sandbox",
-  "--disable-setuid-sandbox",
-  "--disable-dev-shm-usage",
-  "--disable-accelerated-2d-canvas",
-  "--disable-gpu",
-  "--window-size=1280,960",
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-dev-shm-usage',
+  '--disable-accelerated-2d-canvas',
+  '--disable-gpu',
+  '--window-size=1280,960',
   // Removed '--no-proxy-server' to allow proxy configuration
 ];
 
@@ -37,7 +37,7 @@ export const BROWSER_VIEWPORT = {
  * 浏览器 User Agent (默认)
  */
 export const BROWSER_USER_AGENT =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36";
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36';
 
 /**
  * 🆕 User-Agent 池用于指纹随机化
@@ -45,22 +45,22 @@ export const BROWSER_USER_AGENT =
  */
 export const USER_AGENT_POOL = [
   // Chrome on macOS
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   // Chrome on Windows
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   // Edge on Windows
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0",
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0',
   // Safari on macOS
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
   // Firefox on Windows/macOS
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:121.0) Gecko/20100101 Firefox/121.0",
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:121.0) Gecko/20100101 Firefox/121.0',
 ] as const;
 
 /**
@@ -68,14 +68,14 @@ export const USER_AGENT_POOL = [
  * 包含常见的桌面分辨率
  */
 export const VIEWPORT_POOL = [
-  { width: 1920, height: 1080 },  // 1080p (最常见)
-  { width: 1366, height: 768 },   // 笔记本常见
-  { width: 1440, height: 900 },   // MacBook Air
-  { width: 1536, height: 864 },   // 低端笔记本
-  { width: 1680, height: 1050 },  // MacBook Pro 15"
-  { width: 2560, height: 1440 },  // 2K
-  { width: 1280, height: 800 },   // MacBook 13"
-  { width: 1600, height: 900 },   // 16:9 变体
+  { width: 1920, height: 1080 }, // 1080p (最常见)
+  { width: 1366, height: 768 }, // 笔记本常见
+  { width: 1440, height: 900 }, // MacBook Air
+  { width: 1536, height: 864 }, // 低端笔记本
+  { width: 1680, height: 1050 }, // MacBook Pro 15"
+  { width: 2560, height: 1440 }, // 2K
+  { width: 1280, height: 800 }, // MacBook 13"
+  { width: 1600, height: 900 }, // 16:9 变体
 ] as const;
 
 /**
@@ -113,7 +113,7 @@ export function getRandomFingerprint(): {
 /**
  * 需要屏蔽的资源类型（加快加载速度）
  */
-export const BLOCKED_RESOURCE_TYPES = ["image", "media", "font"];
+export const BLOCKED_RESOURCE_TYPES = ['image', 'media', 'font'];
 
 // ==================== 超时配置 ====================
 // NOTE: Timeout values have been moved to ConfigManager.
@@ -125,7 +125,7 @@ export const BLOCKED_RESOURCE_TYPES = ["image", "media", "font"];
 export const NAVIGATION_TIMEOUT = 60000;
 
 /**
- * @deprecated Use ConfigManager.twitter.apiTimeout instead  
+ * @deprecated Use ConfigManager.twitter.apiTimeout instead
  */
 export const WAIT_FOR_TWEETS_TIMEOUT = 45000;
 
@@ -159,16 +159,16 @@ export const API_RATE_LIMIT = {
  * Calculate random wait time for API requests
  */
 export function getApiWaitTime(): number {
-  return API_RATE_LIMIT.MIN_WAIT + 
-         Math.random() * (API_RATE_LIMIT.MAX_WAIT - API_RATE_LIMIT.MIN_WAIT);
+  return (
+    API_RATE_LIMIT.MIN_WAIT + Math.random() * (API_RATE_LIMIT.MAX_WAIT - API_RATE_LIMIT.MIN_WAIT)
+  );
 }
 
 /**
  * Calculate random wait time for thread detail requests
  */
 export function getThreadDetailWaitTime(): number {
-  return API_RATE_LIMIT.THREAD_WAIT_BASE + 
-         Math.random() * API_RATE_LIMIT.THREAD_WAIT_JITTER;
+  return API_RATE_LIMIT.THREAD_WAIT_BASE + Math.random() * API_RATE_LIMIT.THREAD_WAIT_JITTER;
 }
 
 // ==================== 重试配置 ====================
@@ -409,12 +409,12 @@ export const DEFAULT_SCHEDULER_OPTIONS = {
 /**
  * 平台名称
  */
-export const PLATFORM_NAME = "x";
+export const PLATFORM_NAME = 'x';
 
 /**
  * 平台显示名称
  */
-export const PLATFORM_DISPLAY_NAME = "X (Twitter)";
+export const PLATFORM_DISPLAY_NAME = 'X (Twitter)';
 
 // ==================== 数值转换常量 ====================
 
@@ -435,46 +435,46 @@ export const COUNT_MULTIPLIER_M = 1000000;
  * 注意：这是公开的 Bearer Token，用于未认证请求
  */
 export const X_API_BEARER_TOKEN =
-  "Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
+  'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
 
 /**
  * GraphQL API 操作定义
  */
 export const X_API_OPS = {
   UserByScreenName: {
-    queryId: "-oaLodhGbbnzJBACb1kk2Q",
-    operationName: "UserByScreenName",
-    operationType: "query",
+    queryId: '-oaLodhGbbnzJBACb1kk2Q',
+    operationName: 'UserByScreenName',
+    operationType: 'query',
   },
   UserTweets: {
-    queryId: "lZRf8IC-GTuGxDwcsHW8aw",
-    operationName: "UserTweets",
-    operationType: "query",
+    queryId: 'lZRf8IC-GTuGxDwcsHW8aw',
+    operationName: 'UserTweets',
+    operationType: 'query',
   },
   SearchTimeline: {
     // keep in sync with latest browser network requests
-    queryId: "bshMIjqDk8LTXTq4w91WKw",
-    operationName: "SearchTimeline",
-    operationType: "query",
+    queryId: 'bshMIjqDk8LTXTq4w91WKw',
+    operationName: 'SearchTimeline',
+    operationType: 'query',
   },
   TweetDetail: {
     // 获取推文详情及其对话/回复
     // Updated from browser inspection 2025-11-30
-    queryId: "6QzqakNMdh_YzBAR9SYPkQ",
-    operationName: "TweetDetail",
-    operationType: "query",
+    queryId: '6QzqakNMdh_YzBAR9SYPkQ',
+    operationName: 'TweetDetail',
+    operationType: 'query',
   },
   TweetResultByRestId: {
     // 单条推文详情 (用于批量查询/补全)
-    queryId: "kLXoXTloWpv9d2FSXRg-Tg",
-    operationName: "TweetResultByRestId",
-    operationType: "query",
+    queryId: 'kLXoXTloWpv9d2FSXRg-Tg',
+    operationName: 'TweetResultByRestId',
+    operationType: 'query',
   },
   TweetResultsByRestIds: {
     // 批量获取推文详情
-    queryId: "BWy5aoI-WvwbeSiHUIf2Hw",
-    operationName: "TweetResultsByRestIds",
-    operationType: "query"
+    queryId: 'BWy5aoI-WvwbeSiHUIf2Hw',
+    operationName: 'TweetResultsByRestIds',
+    operationType: 'query',
   },
 } as const;
 
@@ -482,14 +482,14 @@ export const X_API_OPS = {
  * 搜索 API 的反机器人请求头（从真实浏览器请求中捕获）
  */
 export const X_API_SEARCH_HEADERS = {
-  xpf: "f06f4d1ed144fdb9b6a429bb1cd1410334bc5d3a3739de5893b1f864888503b23cc58e30586a810c23f2de1b03d05f8c48bad910913835ff90d5abaa13b1e827aca9993ecd16e0ab3b0bdd062508d6a0f4642847fe88d942c243034a6a6da7520986e86bacc7887a6b89c315f4c6b7b60b08a4503cd1cb24f81227e6c75c58d164f3e874c4e1c908ae80c4279e99d4e49a7b0faa0c4dd595abb257cd5c030d2d1207503f7fac3f3887dfebda85f4d5860eb8390d9f37249526be7f2aa7b8a0184b87a13ace19c31083a0d94e928c10021be2266421c701fa9251954bfc1acea9e442bcadb5250d8eb210ef87caa0aafed9a5dd08a962ce6d8a438f1c23a40a294b",
-  clid: "qiZQzHpRH6sM/HpovvVQDARl/PkdDw20+hRk6JkgAMb5/clzwOybZgsact47/+KfiZeOcq53EbGhTRl58REfduSu5D25qQ",
+  xpf: 'f06f4d1ed144fdb9b6a429bb1cd1410334bc5d3a3739de5893b1f864888503b23cc58e30586a810c23f2de1b03d05f8c48bad910913835ff90d5abaa13b1e827aca9993ecd16e0ab3b0bdd062508d6a0f4642847fe88d942c243034a6a6da7520986e86bacc7887a6b89c315f4c6b7b60b08a4503cd1cb24f81227e6c75c58d164f3e874c4e1c908ae80c4279e99d4e49a7b0faa0c4dd595abb257cd5c030d2d1207503f7fac3f3887dfebda85f4d5860eb8390d9f37249526be7f2aa7b8a0184b87a13ace19c31083a0d94e928c10021be2266421c701fa9251954bfc1acea9e442bcadb5250d8eb210ef87caa0aafed9a5dd08a962ce6d8a438f1c23a40a294b',
+  clid: 'qiZQzHpRH6sM/HpovvVQDARl/PkdDw20+hRk6JkgAMb5/clzwOybZgsact47/+KfiZeOcq53EbGhTRl58REfduSu5D25qQ',
   secChUa: '" Not;A Brand";v="99", "Google Chrome";v="127", "Chromium";v="127"',
-  secChUaMobile: "?0",
+  secChUaMobile: '?0',
   secChUaPlatform: '"Mac OS X"',
-  acceptLanguage: "en-US,en;q=0.9",
-  refererBase: "https://x.com/search?q=",
-  clientLanguage: "en",
+  acceptLanguage: 'en-US,en;q=0.9',
+  refererBase: 'https://x.com/search?q=',
+  clientLanguage: 'en',
 } as const;
 
 /**
@@ -562,34 +562,29 @@ export function validateScrapeConfig(config: {
   limit?: number;
   username?: string;
   searchQuery?: string;
-  mode?: "timeline" | "search";
-  scrapeMode?: "graphql" | "puppeteer" | "mixed";
+  mode?: 'timeline' | 'search';
+  scrapeMode?: 'graphql' | 'puppeteer' | 'mixed';
 }): void {
   if (config.limit !== undefined) {
-    if (typeof config.limit !== "number" || config.limit < 1) {
-      throw new Error(
-        `Invalid limit: must be a positive number, got ${config.limit}`
-      );
+    if (typeof config.limit !== 'number' || config.limit < 1) {
+      throw new Error(`Invalid limit: must be a positive number, got ${config.limit}`);
     }
     if (config.limit > 10000) {
       throw new Error(`Invalid limit: must be <= 10000, got ${config.limit}`);
     }
   }
 
-  if (config.mode === "timeline" && !config.username) {
-    throw new Error("Username is required for timeline mode");
+  if (config.mode === 'timeline' && !config.username) {
+    throw new Error('Username is required for timeline mode');
   }
 
-  if (config.mode === "search" && !config.searchQuery) {
-    throw new Error("Search query is required for search mode");
+  if (config.mode === 'search' && !config.searchQuery) {
+    throw new Error('Search query is required for search mode');
   }
 
-  if (
-    config.scrapeMode &&
-    !["graphql", "puppeteer", "mixed"].includes(config.scrapeMode)
-  ) {
+  if (config.scrapeMode && !['graphql', 'puppeteer', 'mixed'].includes(config.scrapeMode)) {
     throw new Error(
-      `Invalid scrapeMode: must be 'graphql', 'puppeteer', or 'mixed', got ${config.scrapeMode}`
+      `Invalid scrapeMode: must be 'graphql', 'puppeteer', or 'mixed', got ${config.scrapeMode}`,
     );
   }
 }
@@ -604,24 +599,17 @@ export function validateBrowserOptions(options: {
   userAgent?: string;
   blockResources?: boolean;
 }): void {
-  if (options.headless !== undefined && typeof options.headless !== "boolean") {
-    throw new Error(
-      `Invalid headless option: must be boolean, got ${typeof options.headless}`
-    );
+  if (options.headless !== undefined && typeof options.headless !== 'boolean') {
+    throw new Error(`Invalid headless option: must be boolean, got ${typeof options.headless}`);
   }
 
-  if (options.userAgent && typeof options.userAgent !== "string") {
-    throw new Error(
-      `Invalid userAgent: must be string, got ${typeof options.userAgent}`
-    );
+  if (options.userAgent && typeof options.userAgent !== 'string') {
+    throw new Error(`Invalid userAgent: must be string, got ${typeof options.userAgent}`);
   }
 
-  if (
-    options.blockResources !== undefined &&
-    typeof options.blockResources !== "boolean"
-  ) {
+  if (options.blockResources !== undefined && typeof options.blockResources !== 'boolean') {
     throw new Error(
-      `Invalid blockResources option: must be boolean, got ${typeof options.blockResources}`
+      `Invalid blockResources option: must be boolean, got ${typeof options.blockResources}`,
     );
   }
 }
@@ -633,12 +621,8 @@ export function validateBrowserOptions(options: {
  * @param max 最大超时时间（毫秒）
  * @throws {Error} 如果超时配置无效
  */
-export function validateTimeout(
-  timeout: number,
-  min: number = 1000,
-  max: number = 300000
-): void {
-  if (typeof timeout !== "number" || isNaN(timeout)) {
+export function validateTimeout(timeout: number, min: number = 1000, max: number = 300000): void {
+  if (typeof timeout !== 'number' || Number.isNaN(timeout)) {
     throw new Error(`Invalid timeout: must be a number, got ${timeout}`);
   }
   if (timeout < min) {

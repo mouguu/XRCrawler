@@ -22,7 +22,7 @@ export function validateTwitterUsername(username: any): ValidationResult {
   }
 
   // 移除可能的 @ 前缀和空格
-  let normalized = username.trim().replace(/^@/, '');
+  const normalized = username.trim().replace(/^@/, '');
 
   // Twitter 用户名规则：
   // - 长度 1-15 字符
@@ -111,7 +111,7 @@ export function validateCookies(cookies: any): CookieValidationResult {
   if (invalidCookies.length > 0) {
     return {
       valid: false,
-      error: `发现 ${invalidCookies.length} 个无效的 Cookie（索引: ${invalidCookies.join(', ')}）`
+      error: `发现 ${invalidCookies.length} 个无效的 Cookie（索引: ${invalidCookies.join(', ')}）`,
     };
   }
 
@@ -120,7 +120,7 @@ export function validateCookies(cookies: any): CookieValidationResult {
   const expiredCookies: { name: string; expiredAt: string }[] = [];
   const validCookies: Cookie[] = [];
 
-  initialValidCookies.forEach(cookie => {
+  initialValidCookies.forEach((cookie) => {
     // Cloudflare bot mitigation cookie (__cf_bm) is required even when expired; keep it.
     if (cookie.name === '__cf_bm') {
       validCookies.push(cookie);
@@ -132,7 +132,7 @@ export function validateCookies(cookies: any): CookieValidationResult {
       if (cookie.expires < now) {
         expiredCookies.push({
           name: cookie.name,
-          expiredAt: new Date(cookie.expires * 1000).toISOString()
+          expiredAt: new Date(cookie.expires * 1000).toISOString(),
         });
       } else {
         validCookies.push(cookie);
@@ -145,20 +145,23 @@ export function validateCookies(cookies: any): CookieValidationResult {
 
   // 如果有过期的 cookie，记录警告但不报错
   if (expiredCookies.length > 0) {
-    console.warn(`[Cookie Validation] Found ${expiredCookies.length} expired cookie(s), automatically filtering them out:`);
-    expiredCookies.forEach(c => {
+    console.warn(
+      `[Cookie Validation] Found ${expiredCookies.length} expired cookie(s), automatically filtering them out:`,
+    );
+    expiredCookies.forEach((c) => {
       console.warn(`  - ${c.name} (expired at ${c.expiredAt})`);
     });
   }
 
   // 检查是否还有足够的有效 cookie（至少需要 auth_token 或 ct0）
-  const hasAuthToken = validCookies.some(c => c.name === 'auth_token');
-  const hasCt0 = validCookies.some(c => c.name === 'ct0');
+  const hasAuthToken = validCookies.some((c) => c.name === 'auth_token');
+  const hasCt0 = validCookies.some((c) => c.name === 'ct0');
 
   if (!hasAuthToken && !hasCt0) {
     return {
       valid: false,
-      error: 'Missing critical authentication cookies (auth_token or ct0) after filtering expired cookies. Please update your cookies.'
+      error:
+        'Missing critical authentication cookies (auth_token or ct0) after filtering expired cookies. Please update your cookies.',
     };
   }
 
@@ -166,7 +169,7 @@ export function validateCookies(cookies: any): CookieValidationResult {
     valid: true,
     validCount: validCookies.length,
     cookies: validCookies,
-    filteredCount: expiredCookies.length
+    filteredCount: expiredCookies.length,
   };
 }
 
@@ -199,7 +202,7 @@ export function validateEnvCookieData(envData: any): EnvCookieDataResult {
   } else {
     return {
       valid: false,
-      error: 'Cookie file must be an array of cookies or an object containing a "cookies" field'
+      error: 'Cookie file must be an array of cookies or an object containing a "cookies" field',
     };
   }
 
@@ -212,7 +215,7 @@ export function validateEnvCookieData(envData: any): EnvCookieDataResult {
   return {
     valid: true,
     cookies: cookieValidation.cookies,
-    username: envData.username || null
+    username: envData.username || null,
   };
 }
 
@@ -240,7 +243,7 @@ export function validateTwitterUrl(url: any): TwitterUrlResult {
     }
 
     // 解析路径
-    const pathParts = urlObj.pathname.split('/').filter(p => p);
+    const pathParts = urlObj.pathname.split('/').filter((p) => p);
 
     if (pathParts.length === 0) {
       // 只是主页
@@ -262,7 +265,7 @@ export function validateTwitterUrl(url: any): TwitterUrlResult {
     return {
       valid: true,
       username: usernameValidation.normalized,
-      withReplies
+      withReplies,
     };
   } catch (error: any) {
     return { valid: false, error: `无效的 URL 格式: ${error.message}` };
@@ -303,7 +306,13 @@ export function validateScraperConfig(config: any): ScraperConfigResult {
   }
 
   // 验证布尔选项
-  const booleanOptions = ['saveMarkdown', 'saveScreenshots', 'exportCsv', 'exportJson', 'withReplies'];
+  const booleanOptions = [
+    'saveMarkdown',
+    'saveScreenshots',
+    'exportCsv',
+    'exportJson',
+    'withReplies',
+  ];
   for (const option of booleanOptions) {
     if (config[option] !== undefined && typeof config[option] !== 'boolean') {
       errors.push(`${option} 必须是布尔值`);
@@ -321,7 +330,7 @@ export function validateScraperConfig(config: any): ScraperConfigResult {
 
   return {
     valid: errors.length === 0,
-    errors
+    errors,
   };
 }
 
@@ -343,7 +352,7 @@ export function normalizeUsernameInput(input: any): UsernameInputResult {
   }
 
   // 转换为数组
-  let inputs = Array.isArray(input) ? input : [input];
+  const inputs = Array.isArray(input) ? input : [input];
 
   for (const item of inputs) {
     if (!item || typeof item !== 'string') {
@@ -363,6 +372,6 @@ export function normalizeUsernameInput(input: any): UsernameInputResult {
   return {
     valid: errors.length === 0 && usernames.length > 0,
     usernames: [...new Set(usernames)], // 去重
-    errors
+    errors,
   };
 }

@@ -2,9 +2,9 @@
  * Markdown merge utilities for convergence outputs.
  */
 
-import { promises as fs } from 'fs';
-import * as path from 'path';
-import { ensureBaseStructure, getMarkdownFiles, getDefaultOutputRoot } from './fileutils';
+import { promises as fs } from 'node:fs';
+import * as path from 'node:path';
+import { ensureBaseStructure, getDefaultOutputRoot, getMarkdownFiles } from './fileutils';
 
 const DEFAULT_CONVERGENCE_DIR = path.join(getDefaultOutputRoot(), 'convergence');
 const COOKIE_FILE = path.join(__dirname, '..', 'env.json');
@@ -58,7 +58,7 @@ export async function mergeMarkdownFiles(
   sourceDir: string,
   outputDir: string,
   platform: Platform,
-  deleteSourceFiles = false
+  deleteSourceFiles = false,
 ): Promise<string | null> {
   if (!sourceDir || !outputDir || !platform) {
     console.error('mergeMarkdownFiles missing required parameters: sourceDir, outputDir, platform');
@@ -66,7 +66,9 @@ export async function mergeMarkdownFiles(
   }
 
   try {
-    console.log(`[${platform.toUpperCase()}] Starting to merge Markdown files from ${sourceDir}...`);
+    console.log(
+      `[${platform.toUpperCase()}] Starting to merge Markdown files from ${sourceDir}...`,
+    );
     console.log(`[DEBUG] mergeMarkdownFiles called with deleteSourceFiles=${deleteSourceFiles}`);
     await ensureBaseStructure();
     await fs.mkdir(outputDir, { recursive: true });
@@ -78,7 +80,9 @@ export async function mergeMarkdownFiles(
     }
 
     mdFiles.sort((a, b) => path.basename(b).localeCompare(path.basename(a)));
-    console.log(`[${platform.toUpperCase()}] Found ${mdFiles.length} Markdown files ready to merge`);
+    console.log(
+      `[${platform.toUpperCase()}] Found ${mdFiles.length} Markdown files ready to merge`,
+    );
 
     const mergeTime = new Date();
     const username = await getUsernameFromEnv();
@@ -91,10 +95,12 @@ export async function mergeMarkdownFiles(
       `platform: ${platform}`,
       `mergedFilename: ${mergedFilename}`,
       `mergeTimestamp: ${mergeTime.toISOString()}`,
-      username ? `accountUsername: ${username}` : '# accountUsername: (not found in env.json/medium-cookies.json)',
+      username
+        ? `accountUsername: ${username}`
+        : '# accountUsername: (not found in env.json/medium-cookies.json)',
       `totalItemsMerged: ${mdFiles.length}`,
       '---',
-      '\n'
+      '\n',
     ].join('\n');
 
     const separator = '\n\n---\n\n';
@@ -114,10 +120,14 @@ export async function mergeMarkdownFiles(
     const finalContent = metadataBlock + allItemsContent;
     const mergedFilePath = path.join(outputDir, mergedFilename);
     await fs.writeFile(mergedFilePath, finalContent, 'utf-8');
-    console.log(`[${platform.toUpperCase()}] ✅ All Markdown files merged and saved as: ${mergedFilename}`);
+    console.log(
+      `[${platform.toUpperCase()}] ✅ All Markdown files merged and saved as: ${mergedFilename}`,
+    );
 
     if (deleteSourceFiles) {
-      console.log(`[${platform.toUpperCase()}] Deleting ${mdFiles.length} source Markdown files from ${sourceDir}...`);
+      console.log(
+        `[${platform.toUpperCase()}] Deleting ${mdFiles.length} source Markdown files from ${sourceDir}...`,
+      );
       let deletedCount = 0;
       for (const file of mdFiles) {
         const base = path.basename(file);
@@ -129,7 +139,10 @@ export async function mergeMarkdownFiles(
           await fs.unlink(file);
           deletedCount++;
         } catch (delError: any) {
-          console.warn(`[${platform.toUpperCase()}] Failed to delete file: ${file}`, delError.message);
+          console.warn(
+            `[${platform.toUpperCase()}] Failed to delete file: ${file}`,
+            delError.message,
+          );
         }
       }
       console.log(`[${platform.toUpperCase()}] Successfully deleted ${deletedCount} source files`);
@@ -151,8 +164,10 @@ function formatTweetForConvergence(tweet: TweetLike, index: number): string {
     `> ${text.replace(/\n/g, '\n> ')}`,
     '',
     `❤️ ${tweet.likes || 0} | 🔄 ${tweet.retweets || 0} | 💬 ${tweet.replies || 0}${tweet.hasMedia ? ' | 🖼️' : ''}`,
-    tweet.url ? `🔗 [View on X](${tweet.url})` : ''
-  ].filter(Boolean).join('\n');
+    tweet.url ? `🔗 [View on X](${tweet.url})` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
   return content;
 }
 
@@ -171,19 +186,23 @@ function formatMediumForConvergence(article: ArticleLike, index: number): string
     '',
     '---',
     article.originalUrl ? `🔗 [View Original](${article.originalUrl})` : '',
-    article.url && article.originalUrl && article.url !== article.originalUrl ? `🔗 [View Scraped Version](${article.url})` : ''
-  ].filter(Boolean).join('\n');
+    article.url && article.originalUrl && article.url !== article.originalUrl
+      ? `🔗 [View Scraped Version](${article.url})`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
   return content;
 }
 
 export async function mergeAllPlatforms(
   twitterResults: TweetLike[] = [],
   mediumResults: ArticleLike[] = [],
-  outputDir: string = DEFAULT_CONVERGENCE_DIR
+  outputDir: string = DEFAULT_CONVERGENCE_DIR,
 ): Promise<string | null> {
   const allItems = [
-    ...twitterResults.map(item => ({ ...item, platform: 'x' as Platform })),
-    ...mediumResults.map(item => ({ ...item, platform: 'medium' as Platform }))
+    ...twitterResults.map((item) => ({ ...item, platform: 'x' as Platform })),
+    ...mediumResults.map((item) => ({ ...item, platform: 'medium' as Platform })),
   ];
 
   if (allItems.length === 0) {
@@ -197,7 +216,9 @@ export async function mergeAllPlatforms(
     return dateB - dateA;
   });
 
-  console.log(`[Convergence] Starting to merge ${allItems.length} items (from ${twitterResults.length} X, ${mediumResults.length} Medium)...`);
+  console.log(
+    `[Convergence] Starting to merge ${allItems.length} items (from ${twitterResults.length} X, ${mediumResults.length} Medium)...`,
+  );
   await ensureBaseStructure();
   await fs.mkdir(outputDir, { recursive: true });
 
@@ -216,7 +237,7 @@ export async function mergeAllPlatforms(
     `twitterItems: ${twitterResults.length}`,
     `mediumItems: ${mediumResults.length}`,
     '---',
-    '\n'
+    '\n',
   ].join('\n');
 
   const separator = '\n\n---\n\n';

@@ -2,9 +2,9 @@
  * Winston-based logger with structured output.
  */
 
-import { createLogger as createWinstonLogger, format, transports, Logger } from 'winston';
-import * as path from 'path';
-import * as fs from 'fs';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { createLogger as createWinstonLogger, format, Logger, transports } from 'winston';
 
 const hasFs =
   typeof fs.existsSync === 'function' &&
@@ -13,8 +13,8 @@ const hasFs =
 const logDir = path.join(process.cwd(), 'logs');
 
 if (hasFs) {
-if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir, { recursive: true });
+  if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir, { recursive: true });
   }
 } else {
   console.warn('[Logger] File system APIs unavailable, falling back to console-only logging.');
@@ -24,7 +24,7 @@ const logFormat = format.combine(
   format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
   format.errors({ stack: true }),
   format.splat(),
-  format.json()
+  format.json(),
 );
 
 const consoleFormat = format.combine(
@@ -36,43 +36,43 @@ const consoleFormat = format.combine(
       msg += ` ${JSON.stringify(meta)}`;
     }
     return msg;
-  })
+  }),
 );
 
 const fileTransports: transports.StreamTransportInstance[] = hasFs
   ? [
-    new transports.File({
-      filename: path.join(logDir, 'error.log'),
-      level: 'error',
-      maxsize: 5 * 1024 * 1024,
-      maxFiles: 5
-    }),
-    new transports.File({
-      filename: path.join(logDir, 'combined.log'),
-      maxsize: 5 * 1024 * 1024,
-      maxFiles: 5
-    })
+      new transports.File({
+        filename: path.join(logDir, 'error.log'),
+        level: 'error',
+        maxsize: 5 * 1024 * 1024,
+        maxFiles: 5,
+      }),
+      new transports.File({
+        filename: path.join(logDir, 'combined.log'),
+        maxsize: 5 * 1024 * 1024,
+        maxFiles: 5,
+      }),
     ]
   : [];
 
 const exceptionHandlers = hasFs
   ? [
-    new transports.File({
-      filename: path.join(logDir, 'exceptions.log'),
-      maxsize: 5 * 1024 * 1024,
-      maxFiles: 3
-    })
+      new transports.File({
+        filename: path.join(logDir, 'exceptions.log'),
+        maxsize: 5 * 1024 * 1024,
+        maxFiles: 3,
+      }),
     ]
   : [];
 
 const rejectionHandlers = hasFs
   ? [
-    new transports.File({
-      filename: path.join(logDir, 'rejections.log'),
-      maxsize: 5 * 1024 * 1024,
-      maxFiles: 3
-    })
-  ]
+      new transports.File({
+        filename: path.join(logDir, 'rejections.log'),
+        maxsize: 5 * 1024 * 1024,
+        maxFiles: 3,
+      }),
+    ]
   : [];
 
 export const logger: Logger = createWinstonLogger({
@@ -81,14 +81,14 @@ export const logger: Logger = createWinstonLogger({
   defaultMeta: { service: 'xrcrawler' },
   transports: [...fileTransports],
   exceptionHandlers,
-  rejectionHandlers
+  rejectionHandlers,
 });
 
 if (process.env.NODE_ENV !== 'production') {
   logger.add(
     new transports.Console({
-      format: consoleFormat
-    })
+      format: consoleFormat,
+    }),
   );
 }
 
@@ -150,7 +150,6 @@ export type LogContext = Record<string, unknown>;
  * 增强的模块日志器（集成性能追踪和上下文管理）
  */
 export class EnhancedLogger {
-  private module: string;
   private baseLogger: ModuleLogger;
   private context: LogContext = {};
 
@@ -189,7 +188,7 @@ export class EnhancedLogger {
       ...metadata,
       duration,
       operation,
-      type: 'performance'
+      type: 'performance',
     });
   }
 
@@ -202,11 +201,7 @@ export class EnhancedLogger {
     };
   }
 
-  async trackAsync<T>(
-    operation: string,
-    fn: () => Promise<T>,
-    metadata?: LogContext
-  ): Promise<T> {
+  async trackAsync<T>(operation: string, fn: () => Promise<T>, metadata?: LogContext): Promise<T> {
     const endOperation = this.startOperation(operation, metadata);
     try {
       const result = await fn();
@@ -219,11 +214,7 @@ export class EnhancedLogger {
     }
   }
 
-  trackSync<T>(
-    operation: string,
-    fn: () => T,
-    metadata?: LogContext
-  ): T {
+  trackSync<T>(operation: string, fn: () => T, metadata?: LogContext): T {
     const endOperation = this.startOperation(operation, metadata);
     try {
       const result = fn();
@@ -246,7 +237,7 @@ export const LOG_LEVELS = {
   WARN: 'warn',
   INFO: 'info',
   DEBUG: 'debug',
-  VERBOSE: 'verbose'
+  VERBOSE: 'verbose',
 } as const;
 
 export function setLogLevel(level: keyof typeof LOG_LEVELS | string): void {

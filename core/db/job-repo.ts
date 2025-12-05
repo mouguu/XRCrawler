@@ -1,6 +1,6 @@
-import { prisma } from './prisma';
-import { Job, Task, ErrorLog } from '../../generated/prisma/client';
+import { ErrorLog, Job, Task } from '../../generated/prisma/client';
 import { createEnhancedLogger } from '../../utils/logger';
+import { prisma } from './prisma';
 
 const logger = createEnhancedLogger('JobRepo');
 
@@ -33,11 +33,7 @@ export class JobRepository {
   /**
    * Update job status
    */
-  static async updateStatus(
-    id: string,
-    status: string,
-    error?: string
-  ): Promise<Job> {
+  static async updateStatus(id: string, status: string, error?: string): Promise<Job> {
     return prisma.job.update({
       where: { id },
       data: {
@@ -71,11 +67,7 @@ export class JobRepository {
   /**
    * Create a task for a job (e.g. a date chunk)
    */
-  static async createTask(data: {
-    jobId: string;
-    type: string;
-    config: any;
-  }): Promise<Task> {
+  static async createTask(data: { jobId: string; type: string; config: any }): Promise<Task> {
     return prisma.task.create({
       data: {
         jobId: data.jobId,
@@ -93,7 +85,7 @@ export class JobRepository {
     id: string,
     status: string,
     result?: any,
-    error?: string
+    error?: string,
   ): Promise<Task> {
     return prisma.task.update({
       where: { id },

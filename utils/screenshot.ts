@@ -3,11 +3,11 @@
  * 根据新的运行目录结构存放截图
  */
 
-import * as path from 'path';
+import * as path from 'node:path';
 import { Page } from 'puppeteer';
+import type { Tweet } from '../types/tweet-definitions';
 import * as fileUtils from './fileutils';
 import { RunContext } from './fileutils';
-import type { Tweet } from '../types/tweet-definitions';
 
 export interface ScreenshotOptions {
   runContext?: RunContext;
@@ -31,7 +31,7 @@ function resolveScreenshotDir(runContext?: RunContext, fallbackDir?: string): st
 export async function takeScreenshotOfTweet(
   page: Page,
   tweetUrl: string,
-  options: ScreenshotOptions = {}
+  options: ScreenshotOptions = {},
 ): Promise<string | null> {
   if (!page || !tweetUrl) {
     console.warn('Missing required parameters, cannot take screenshot');
@@ -73,7 +73,7 @@ export async function takeScreenshotOfTweet(
 export async function takeScreenshotsOfTweets(
   page: Page,
   tweets: Tweet[],
-  options: ScreenshotOptions = {}
+  options: ScreenshotOptions = {},
 ): Promise<string[]> {
   if (!page || !Array.isArray(tweets) || tweets.length === 0) {
     console.log('No tweets to screenshot');
@@ -85,7 +85,7 @@ export async function takeScreenshotsOfTweets(
     if (!tweet.url) continue;
     const shot = await takeScreenshotOfTweet(page, tweet.url, options);
     if (shot) results.push(shot);
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 1500));
   }
   console.log(`Completed ${results.length} tweet screenshots`);
   return results;
@@ -96,7 +96,7 @@ export async function takeScreenshotsOfTweets(
  */
 export async function takeTimelineScreenshot(
   page: Page,
-  options: ScreenshotOptions = {}
+  options: ScreenshotOptions = {},
 ): Promise<string | null> {
   if (!page) {
     console.warn('Missing page object, cannot take screenshot');

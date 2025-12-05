@@ -1,11 +1,19 @@
-import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+
 /**
  * Logger 单元测试
  */
 
-import { logger, createModuleLogger, createEnhancedLogger, EnhancedLogger, setLogLevel, LOG_LEVELS } from '../../utils/logger';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import {
+  createEnhancedLogger,
+  createModuleLogger,
+  EnhancedLogger,
+  LOG_LEVELS,
+  logger,
+  setLogLevel,
+} from '../../utils/logger';
 
 describe('Logger', () => {
   let testLogDir: string;
@@ -20,7 +28,7 @@ describe('Logger', () => {
   afterEach(() => {
     try {
       fs.rmSync(testLogDir, { recursive: true, force: true });
-    } catch (error) {
+    } catch (_error) {
       // Ignore cleanup errors
     }
   });
@@ -41,7 +49,7 @@ describe('Logger', () => {
   describe('createModuleLogger', () => {
     test('should create module logger', () => {
       const moduleLogger = createModuleLogger('TestModule');
-      
+
       expect(moduleLogger).toBeDefined();
       expect(typeof moduleLogger.info).toBe('function');
       expect(typeof moduleLogger.warn).toBe('function');
@@ -50,7 +58,7 @@ describe('Logger', () => {
 
     test('should include module name in logs', () => {
       const moduleLogger = createModuleLogger('TestModule');
-      
+
       // Just verify it doesn't throw
       expect(() => {
         moduleLogger.info('Test message');
@@ -61,7 +69,7 @@ describe('Logger', () => {
   describe('createEnhancedLogger', () => {
     test('should create enhanced logger', () => {
       const enhancedLogger = createEnhancedLogger('TestModule');
-      
+
       expect(enhancedLogger).toBeInstanceOf(EnhancedLogger);
       expect(typeof enhancedLogger.info).toBe('function');
       expect(typeof enhancedLogger.setContext).toBe('function');
@@ -69,7 +77,7 @@ describe('Logger', () => {
 
     test('should support context', () => {
       const enhancedLogger = createEnhancedLogger('TestModule');
-      
+
       enhancedLogger.setContext({ userId: '123' });
       expect(() => {
         enhancedLogger.info('Test message');
@@ -78,30 +86,30 @@ describe('Logger', () => {
 
     test('should support performance tracking', () => {
       const enhancedLogger = createEnhancedLogger('TestModule');
-      
+
       const endOperation = enhancedLogger.startOperation('test-op');
       expect(typeof endOperation).toBe('function');
-      
+
       endOperation();
     });
 
     test('should track async operations', async () => {
       const enhancedLogger = createEnhancedLogger('TestModule');
-      
+
       const result = await enhancedLogger.trackAsync('async-op', async () => {
         return 'result';
       });
-      
+
       expect(result).toBe('result');
     });
 
     test('should track sync operations', () => {
       const enhancedLogger = createEnhancedLogger('TestModule');
-      
+
       const result = enhancedLogger.trackSync('sync-op', () => {
         return 'result';
       });
-      
+
       expect(result).toBe('result');
     });
   });
@@ -128,4 +136,3 @@ describe('Logger', () => {
     });
   });
 });
-

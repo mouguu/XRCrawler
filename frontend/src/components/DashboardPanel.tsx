@@ -1,15 +1,15 @@
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Download, X, CheckCircle2, XCircle, Loader2, Clock, Zap } from "lucide-react";
-import { connectToJobStream, cancelJob, type JobProgressEvent } from "../utils/queueClient";
+import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Download, X, CheckCircle2, XCircle, Loader2, Clock, Zap } from 'lucide-react';
+import { connectToJobStream, cancelJob, type JobProgressEvent } from '../utils/queueClient';
 
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
 
 interface ActiveJob {
   jobId: string;
-  type: "twitter" | "reddit";
+  type: 'twitter' | 'reddit';
   state: string;
   progress?: JobProgressEvent;
   logs: string[];
@@ -23,7 +23,7 @@ interface ActiveJob {
 interface DashboardPanelProps {
   onJobComplete?: (jobId: string, downloadUrl?: string) => void;
   appendApiKey?: (url: string | null) => string | null;
-  fetchJobStatus?: (jobId: string) => Promise<ActiveJob["result"] | undefined>;
+  fetchJobStatus?: (jobId: string) => Promise<ActiveJob['result'] | undefined>;
 }
 
 export function DashboardPanel({
@@ -46,7 +46,7 @@ export function DashboardPanel({
 
   const fetchJobStatus =
     fetchJobStatusProp ||
-    (async (jobId: string): Promise<ActiveJob["result"] | undefined> => {
+    (async (jobId: string): Promise<ActiveJob['result'] | undefined> => {
       try {
         const res = await fetch(`/api/jobs/${jobId}`);
         if (!res.ok) return undefined;
@@ -57,11 +57,11 @@ export function DashboardPanel({
       }
     });
 
-  const addJob = (jobId: string, type: "twitter" | "reddit") => {
+  const addJob = (jobId: string, type: 'twitter' | 'reddit') => {
     const job: ActiveJob = {
       jobId,
       type,
-      state: "connecting",
+      state: 'connecting',
       logs: [`Connecting to job ${jobId}...`],
     };
 
@@ -100,9 +100,9 @@ export function DashboardPanel({
             if (existing) {
               updated.set(jobId, {
                 ...existing,
-                state: "completed",
+                state: 'completed',
                 result: latestResult,
-                logs: [...(existing.logs || []), "✅ Job completed!"],
+                logs: [...(existing.logs || []), '✅ Job completed!'],
               });
             }
             return updated;
@@ -114,7 +114,7 @@ export function DashboardPanel({
       onFailed: (error) => {
         const job = activeJobs.get(jobId);
         updateJob(jobId, {
-          state: "failed",
+          state: 'failed',
           logs: [...(job?.logs || []), `❌ Job failed: ${error}`],
         });
       },
@@ -141,21 +141,21 @@ export function DashboardPanel({
       await cancelJob(jobId);
       const job = activeJobs.get(jobId);
       updateJob(jobId, {
-        state: "cancelled",
-        logs: [...(job?.logs || []), "🛑 Job cancelled by user"],
+        state: 'cancelled',
+        logs: [...(job?.logs || []), '🛑 Job cancelled by user'],
       });
       setTimeout(() => removeJob(jobId), 2000);
     } catch (error) {
-      console.error("Failed to cancel job:", error);
+      console.error('Failed to cancel job:', error);
     }
   };
 
   // Fetch active jobs on mount and restore them
   useEffect(() => {
     const fetchActiveJobs = async () => {
-      console.log("🔄 [DashboardPanel] Fetching active jobs on mount...");
+      console.log('🔄 [DashboardPanel] Fetching active jobs on mount...');
       try {
-        const states = ["active", "waiting", "delayed"];
+        const states = ['active', 'waiting', 'delayed'];
         const jobPromises = states.map((state) =>
           fetch(`/api/jobs?state=${state}&count=50`)
             .then((res) => {
@@ -165,7 +165,7 @@ export function DashboardPanel({
             .catch((err) => {
               console.error(`❌ [API] Failed to fetch ${state} jobs:`, err);
               return { jobs: [] };
-            })
+            }),
         );
 
         const results = await Promise.all(jobPromises);
@@ -188,7 +188,7 @@ export function DashboardPanel({
             addJob(job.id, job.type);
           } else {
             console.warn(
-              `⚠️ [DashboardPanel] Skipping job ${job.id}: missing ${!job.id ? "id" : "type"}`
+              `⚠️ [DashboardPanel] Skipping job ${job.id}: missing ${!job.id ? 'id' : 'type'}`,
             );
           }
         });
@@ -196,10 +196,10 @@ export function DashboardPanel({
         if (allJobs.length > 0) {
           console.log(`✅ [DashboardPanel] Restored ${allJobs.length} active jobs from server`);
         } else {
-          console.log("ℹ️ [DashboardPanel] No active jobs found");
+          console.log('ℹ️ [DashboardPanel] No active jobs found');
         }
       } catch (error) {
-        console.error("❌ [DashboardPanel] Failed to fetch active jobs:", error);
+        console.error('❌ [DashboardPanel] Failed to fetch active jobs:', error);
       }
     };
 
@@ -224,8 +224,8 @@ export function DashboardPanel({
   }, [activeJobs]);
 
   const jobsArray = Array.from(activeJobs.values());
-  const activeCount = jobsArray.filter((j) => j.state === "active").length;
-  const completedCount = jobsArray.filter((j) => j.state === "completed").length;
+  const activeCount = jobsArray.filter((j) => j.state === 'active').length;
+  const completedCount = jobsArray.filter((j) => j.state === 'completed').length;
 
   return (
     <section id="dashboard" className="py-12">
@@ -303,18 +303,18 @@ function JobCard({
   onCancel: () => void;
   onRemove: () => void;
   appendApiKey?: (url: string | null) => string | null;
-  fetchJobStatus: (jobId: string) => Promise<ActiveJob["result"] | undefined>;
+  fetchJobStatus: (jobId: string) => Promise<ActiveJob['result'] | undefined>;
 }) {
   const progressPercent = job.progress?.percentage || 0;
-  const isCompleted = job.state === "completed";
-  const isFailed = job.state === "failed";
-  const isCancelled = job.state === "cancelled";
-  const isActive = job.state === "active";
+  const isCompleted = job.state === 'completed';
+  const isFailed = job.state === 'failed';
+  const isCancelled = job.state === 'cancelled';
+  const isActive = job.state === 'active';
 
   const [resolvedDownload, setResolvedDownload] = useState<string | null>(
     job.result?.downloadUrl
       ? appendApiKey?.(job.result.downloadUrl) || job.result.downloadUrl
-      : null
+      : null,
   );
   const [resolving, setResolving] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
@@ -365,7 +365,7 @@ function JobCard({
               {job.type}
             </Badge>
             <Badge
-              variant={isCompleted ? "success" : isFailed ? "destructive" : "outline"}
+              variant={isCompleted ? 'success' : isFailed ? 'destructive' : 'outline'}
               className="uppercase text-2xs"
             >
               {job.state}
@@ -400,7 +400,7 @@ function JobCard({
             onClick={() => setShowLogs(!showLogs)}
             className="text-xs"
           >
-            {showLogs ? "Hide" : "Logs"}
+            {showLogs ? 'Hide' : 'Logs'}
           </Button>
 
           {/* Download or Fetch */}
@@ -419,7 +419,7 @@ function JobCard({
                 onClick={handleResolveDownload}
                 disabled={resolving}
               >
-                {resolving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Get Link"}
+                {resolving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Get Link'}
               </Button>
             )
           )}
@@ -447,7 +447,7 @@ function JobCard({
         {showLogs && (
           <motion.div
             initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
+            animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             className="border-t border-border/50 bg-muted/30"
           >

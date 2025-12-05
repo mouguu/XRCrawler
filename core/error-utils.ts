@@ -3,7 +3,7 @@
  * Provides helper functions to improve error handling consistency
  */
 
-import { ErrorClassifier, ScraperError, ErrorCode } from './errors';
+import { ErrorClassifier, ErrorCode, ScraperError } from './errors';
 
 /**
  * Safely handles errors with proper classification
@@ -11,10 +11,7 @@ import { ErrorClassifier, ScraperError, ErrorCode } from './errors';
  * @param context - Additional context for error classification
  * @returns A properly classified ScraperError
  */
-export function handleError(
-  error: unknown,
-  context?: Record<string, any>
-): ScraperError {
+export function handleError(error: unknown, context?: Record<string, any>): ScraperError {
   if (error instanceof ScraperError) {
     if (context && Object.keys(context).length > 0) {
       Object.assign(error.context, context);
@@ -23,12 +20,12 @@ export function handleError(
   }
 
   const scraperError = ErrorClassifier.classify(error);
-  
+
   // Add context if provided
   if (context && Object.keys(context).length > 0) {
     Object.assign(scraperError.context, context);
   }
-  
+
   return scraperError;
 }
 
@@ -44,13 +41,13 @@ export async function withErrorHandling<T>(
   fn: () => Promise<T>,
   errorMessage: string,
   errorCode?: ErrorCode,
-  context?: Record<string, any>
+  context?: Record<string, any>,
 ): Promise<T> {
   try {
     return await fn();
   } catch (error: unknown) {
     const classifiedError = handleError(error, context);
-    
+
     // Enhance error with custom message if provided
     if (errorMessage && !(error instanceof ScraperError)) {
       throw new ScraperError(
@@ -58,12 +55,13 @@ export async function withErrorHandling<T>(
         `${errorMessage}: ${classifiedError.message}`,
         {
           retryable: classifiedError.retryable,
-          originalError: classifiedError.originalError || (error instanceof Error ? error : undefined),
-          context: { ...classifiedError.context, ...context }
-        }
+          originalError:
+            classifiedError.originalError || (error instanceof Error ? error : undefined),
+          context: { ...classifiedError.context, ...context },
+        },
       );
     }
-    
+
     throw classifiedError;
   }
 }
@@ -76,10 +74,10 @@ export async function withErrorHandling<T>(
  */
 export function createErrorResult(
   error: unknown,
-  operation?: string
+  operation?: string,
 ): { success: false; error: string; code?: ErrorCode; retryable?: boolean } {
   const scraperError = handleError(error, operation ? { operation } : undefined);
-  
+
   return {
     success: false,
     error: scraperError.getUserMessage(),
@@ -105,15 +103,15 @@ export function isRecoverableError(error: unknown): boolean {
  */
 export function logError(
   error: unknown,
-  logger: (message: string, level?: string) => void = console.error
+  logger: (message: string, level?: string) => void = console.error,
 ): void {
   const scraperError = handleError(error);
   logger(`[${scraperError.code}] ${scraperError.message}`, 'error');
-  
+
   if (scraperError.originalError) {
     logger(`Original error: ${scraperError.originalError.message}`, 'debug');
   }
-  
+
   if (Object.keys(scraperError.context).length > 0) {
     logger(`Context: ${JSON.stringify(scraperError.context, null, 2)}`, 'debug');
   }

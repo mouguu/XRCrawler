@@ -5,13 +5,13 @@
 let shouldStopScraping = false;
 
 export function setShouldStopScraping(value: boolean): void {
-    shouldStopScraping = value;
+  shouldStopScraping = value;
 }
 
 export function getShouldStopScraping(): boolean {
-    return shouldStopScraping;
+  return shouldStopScraping;
 }
 
 export function resetShouldStopScraping(): void {
-    shouldStopScraping = false;
+  shouldStopScraping = false;
 }

@@ -1,23 +1,23 @@
-import { motion } from "framer-motion";
-import { ArrowRight, Square, Zap, Globe, MessageSquare, MessageCircle } from "lucide-react";
+import { motion } from 'framer-motion';
+import { ArrowRight, Square, Zap, Globe, MessageSquare, MessageCircle } from 'lucide-react';
 
-import type { TabType } from "../types/ui";
+import type { TabType } from '../types/ui';
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { DatePicker } from "@/components/ui/date-picker";
+} from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { DatePicker } from '@/components/ui/date-picker';
 
-type ScrapeMode = "graphql" | "puppeteer" | "mixed";
+type ScrapeMode = 'graphql' | 'puppeteer' | 'mixed';
 
 interface TaskFormProps {
   activeTab: TabType;
@@ -57,23 +57,33 @@ interface TaskFormProps {
 }
 
 const tabs = [
-  { id: "profile" as const, label: "Profile", icon: Globe, description: "Scrape user tweets" },
-  { id: "thread" as const, label: "Thread", icon: MessageSquare, description: "Get full conversations" },
-  { id: "search" as const, label: "Search", icon: Zap, description: "Query-based extraction" },
-  { id: "reddit" as const, label: "Reddit", icon: MessageCircle, description: "Subreddit scraping" },
+  { id: 'profile' as const, label: 'Profile', icon: Globe, description: 'Scrape user tweets' },
+  {
+    id: 'thread' as const,
+    label: 'Thread',
+    icon: MessageSquare,
+    description: 'Get full conversations',
+  },
+  { id: 'search' as const, label: 'Search', icon: Zap, description: 'Query-based extraction' },
+  {
+    id: 'reddit' as const,
+    label: 'Reddit',
+    icon: MessageCircle,
+    description: 'Subreddit scraping',
+  },
 ];
 
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
-    transition: { staggerChildren: 0.1 }
-  }
+    transition: { staggerChildren: 0.1 },
+  },
 };
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.5 } }
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5 } },
 };
 
 export function TaskForm(props: TaskFormProps) {
@@ -110,8 +120,9 @@ export function TaskForm(props: TaskFormProps) {
     onStop,
   } = props;
 
-  const isRedditPostUrl = activeTab === "reddit" && input.includes('reddit.com') && input.includes('/comments/');
-  const currentTab = tabs.find(t => t.id === activeTab);
+  const isRedditPostUrl =
+    activeTab === 'reddit' && input.includes('reddit.com') && input.includes('/comments/');
+  const currentTab = tabs.find((t) => t.id === activeTab);
 
   return (
     <section id="scrape" className="pt-24 pb-16 px-6">
@@ -124,12 +135,10 @@ export function TaskForm(props: TaskFormProps) {
         >
           {/* Hero Section */}
           <motion.div variants={itemVariants} className="text-center space-y-4">
-            <h1 className="text-4xl md:text-5xl font-semibold tracking-tight">
-              Data Extraction
-            </h1>
+            <h1 className="text-4xl md:text-5xl font-semibold tracking-tight">Data Extraction</h1>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Extract data from Twitter/X and Reddit with precision. 
-              Choose your source and configure how you want to scrape.
+              Extract data from Twitter/X and Reddit with precision. Choose your source and
+              configure how you want to scrape.
             </p>
           </motion.div>
 
@@ -144,17 +153,22 @@ export function TaskForm(props: TaskFormProps) {
                   onClick={() => onTabChange(tab.id)}
                   className={`
                     relative p-4 rounded-2xl border text-left transition-all duration-300
-                    ${isActive 
-                      ? 'bg-foreground text-background border-foreground shadow-lg' 
-                      : 'bg-card border-border/50 hover:border-border hover:shadow-md'
+                    ${
+                      isActive
+                        ? 'bg-foreground text-background border-foreground shadow-lg'
+                        : 'bg-card border-border/50 hover:border-border hover:shadow-md'
                     }
                   `}
                 >
-                  <Icon className={`w-5 h-5 mb-2 ${isActive ? 'text-background' : 'text-muted-foreground'}`} />
+                  <Icon
+                    className={`w-5 h-5 mb-2 ${isActive ? 'text-background' : 'text-muted-foreground'}`}
+                  />
                   <div className={`font-medium ${isActive ? '' : 'text-foreground'}`}>
                     {tab.label}
                   </div>
-                  <div className={`text-xs mt-0.5 ${isActive ? 'text-background/70' : 'text-muted-foreground'}`}>
+                  <div
+                    className={`text-xs mt-0.5 ${isActive ? 'text-background/70' : 'text-muted-foreground'}`}
+                  >
                     {tab.description}
                   </div>
                   {isActive && (
@@ -169,7 +183,7 @@ export function TaskForm(props: TaskFormProps) {
           </motion.div>
 
           {/* Main Form Card */}
-          <motion.div 
+          <motion.div
             variants={itemVariants}
             className="bg-card border border-border/50 rounded-3xl p-8 md:p-10 shadow-sm"
           >
@@ -178,10 +192,10 @@ export function TaskForm(props: TaskFormProps) {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-medium">
-                    {activeTab === "profile" && "Username or Profile URL"}
-                    {activeTab === "thread" && "Tweet URL"}
-                    {activeTab === "search" && "Search Query"}
-                    {activeTab === "reddit" && "Subreddit or Post URL"}
+                    {activeTab === 'profile' && 'Username or Profile URL'}
+                    {activeTab === 'thread' && 'Tweet URL'}
+                    {activeTab === 'search' && 'Search Query'}
+                    {activeTab === 'reddit' && 'Subreddit or Post URL'}
                   </Label>
                   <span className="text-xs text-muted-foreground font-mono">
                     {currentTab?.id.toUpperCase()}
@@ -192,10 +206,13 @@ export function TaskForm(props: TaskFormProps) {
                     value={input}
                     onChange={(e) => onInputChange(e.target.value)}
                     placeholder={
-                      activeTab === "profile" ? "elonmusk or https://x.com/elonmusk"
-                      : activeTab === "thread" ? "https://x.com/user/status/..."
-                      : activeTab === "reddit" ? "MachineLearning or https://reddit.com/r/..."
-                      : "#AI from:elonmusk -is:retweet"
+                      activeTab === 'profile'
+                        ? 'elonmusk or https://x.com/elonmusk'
+                        : activeTab === 'thread'
+                          ? 'https://x.com/user/status/...'
+                          : activeTab === 'reddit'
+                            ? 'MachineLearning or https://reddit.com/r/...'
+                            : '#AI from:elonmusk -is:retweet'
                     }
                     className="h-14 text-lg px-5 rounded-xl border-border/50 focus:border-foreground/20 transition-colors"
                   />
@@ -203,16 +220,23 @@ export function TaskForm(props: TaskFormProps) {
               </div>
 
               {/* Search Hints */}
-              {activeTab === "search" && (
-                <motion.div 
+              {activeTab === 'search' && (
+                <motion.div
                   initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
+                  animate={{ opacity: 1, height: 'auto' }}
                   className="flex flex-wrap gap-2"
                 >
-                  {["from:user", "to:user", "#hashtag", "min_faves:100", "-is:retweet", "lang:en"].map((hint) => (
+                  {[
+                    'from:user',
+                    'to:user',
+                    '#hashtag',
+                    'min_faves:100',
+                    '-is:retweet',
+                    'lang:en',
+                  ].map((hint) => (
                     <button
                       key={hint}
-                      onClick={() => onInputChange(input + (input ? " " : "") + hint)}
+                      onClick={() => onInputChange(input + (input ? ' ' : '') + hint)}
                       className="px-3 py-1.5 text-xs font-mono bg-muted rounded-lg hover:bg-muted/80 transition-colors"
                     >
                       {hint}
@@ -229,7 +253,11 @@ export function TaskForm(props: TaskFormProps) {
                   {!isRedditPostUrl && (
                     <div className="space-y-2">
                       <Label className="text-sm font-medium">
-                        {activeTab === "thread" ? "Max Replies" : activeTab === "reddit" ? "Post Limit" : "Tweet Limit"}
+                        {activeTab === 'thread'
+                          ? 'Max Replies'
+                          : activeTab === 'reddit'
+                            ? 'Post Limit'
+                            : 'Tweet Limit'}
                       </Label>
                       <Input
                         type="number"
@@ -243,10 +271,8 @@ export function TaskForm(props: TaskFormProps) {
                     </div>
                   )}
 
-
-
                   {/* Reddit Strategy */}
-                  {activeTab === "reddit" && !isRedditPostUrl && (
+                  {activeTab === 'reddit' && !isRedditPostUrl && (
                     <div className="space-y-2">
                       <Label className="text-sm font-medium">Scrape Strategy</Label>
                       <Select value={redditStrategy} onValueChange={onRedditStrategyChange}>
@@ -264,35 +290,40 @@ export function TaskForm(props: TaskFormProps) {
                   )}
 
                   {/* Extraction Mode */}
-                  {(activeTab === "profile" || activeTab === "thread") && (
+                  {(activeTab === 'profile' || activeTab === 'thread') && (
                     <div className="space-y-3">
                       <Label className="text-sm font-medium">Extraction Mode</Label>
                       <div className="flex flex-wrap gap-2">
-                        {(["graphql", "puppeteer", "mixed"] as const).map((mode) => (
+                        {(['graphql', 'puppeteer', 'mixed'] as const).map((mode) => (
                           <button
                             key={mode}
                             onClick={() => onScrapeModeChange(mode)}
                             className={`
                               px-4 py-2 rounded-xl text-sm font-medium transition-all
-                              ${scrapeMode === mode 
-                                ? 'bg-foreground text-background' 
-                                : 'bg-muted hover:bg-muted/80'
+                              ${
+                                scrapeMode === mode
+                                  ? 'bg-foreground text-background'
+                                  : 'bg-muted hover:bg-muted/80'
                               }
                             `}
                           >
-                            {mode === "graphql" ? "GraphQL" : mode === "puppeteer" ? "Puppeteer" : "Mixed"}
+                            {mode === 'graphql'
+                              ? 'GraphQL'
+                              : mode === 'puppeteer'
+                                ? 'Puppeteer'
+                                : 'Mixed'}
                           </button>
                         ))}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {scrapeMode === "graphql" && "Fast extraction using Twitter's internal API"}
-                        {scrapeMode === "puppeteer" && "Browser simulation for reliable results"}
-                        {scrapeMode === "mixed" && "Start with API, fallback to browser if needed"}
+                        {scrapeMode === 'graphql' && "Fast extraction using Twitter's internal API"}
+                        {scrapeMode === 'puppeteer' && 'Browser simulation for reliable results'}
+                        {scrapeMode === 'mixed' && 'Start with API, fallback to browser if needed'}
                       </p>
                     </div>
                   )}
 
-                  {activeTab === "search" && (
+                  {activeTab === 'search' && (
                     <div className="p-4 bg-muted/50 rounded-xl">
                       <div className="flex items-center gap-2 mb-2">
                         <Badge variant="secondary">Puppeteer Mode</Badge>
@@ -307,7 +338,7 @@ export function TaskForm(props: TaskFormProps) {
                 {/* Right Column */}
                 <div className="space-y-6">
                   {/* Date Range for Search */}
-                  {activeTab === "search" && (
+                  {activeTab === 'search' && (
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label className="text-sm font-medium">Start Date</Label>
@@ -321,7 +352,7 @@ export function TaskForm(props: TaskFormProps) {
                               const day = String(date.getDate()).padStart(2, '0');
                               onStartDateChange(`${year}-${month}-${day}`);
                             } else {
-                              onStartDateChange("");
+                              onStartDateChange('');
                             }
                           }}
                           placeholder="Select start date"
@@ -339,7 +370,7 @@ export function TaskForm(props: TaskFormProps) {
                               const day = String(date.getDate()).padStart(2, '0');
                               onEndDateChange(`${year}-${month}-${day}`);
                             } else {
-                              onEndDateChange("");
+                              onEndDateChange('');
                             }
                           }}
                           placeholder="Select end date"
@@ -350,7 +381,7 @@ export function TaskForm(props: TaskFormProps) {
 
                   {/* Options */}
                   <div className="space-y-4">
-                    {activeTab === "profile" && (
+                    {activeTab === 'profile' && (
                       <label className="flex items-center gap-3 cursor-pointer group">
                         <Checkbox
                           checked={scrapeLikes}
@@ -362,7 +393,7 @@ export function TaskForm(props: TaskFormProps) {
                       </label>
                     )}
 
-                    {activeTab !== "reddit" && (
+                    {activeTab !== 'reddit' && (
                       <>
                         <label className="flex items-center gap-3 cursor-pointer group">
                           <Checkbox
@@ -396,9 +427,7 @@ export function TaskForm(props: TaskFormProps) {
                       </>
                     )}
 
-
-
-                    {activeTab === "search" && (
+                    {activeTab === 'search' && (
                       <>
                         <label className="flex items-center gap-3 cursor-pointer group">
                           <Checkbox
@@ -418,7 +447,7 @@ export function TaskForm(props: TaskFormProps) {
                         {enableDeepSearch && (
                           <motion.div
                             initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: "auto" }}
+                            animate={{ opacity: 1, height: 'auto' }}
                             className="pl-7 space-y-2"
                           >
                             <Label className="text-sm">Parallel chunks</Label>
@@ -436,11 +465,9 @@ export function TaskForm(props: TaskFormProps) {
                     )}
 
                     {/* Anti-Detection Level */}
-                    {activeTab !== "reddit" && onAntiDetectionLevelChange && (
+                    {activeTab !== 'reddit' && onAntiDetectionLevelChange && (
                       <div className="space-y-2">
-                        <Label className="text-sm font-medium">
-                          Anti-Detection Level
-                        </Label>
+                        <Label className="text-sm font-medium">Anti-Detection Level</Label>
                         <Select
                           value={antiDetectionLevel}
                           onValueChange={(v: any) => onAntiDetectionLevelChange(v)}
@@ -457,25 +484,33 @@ export function TaskForm(props: TaskFormProps) {
                             <SelectItem value="low">
                               <div className="flex flex-col">
                                 <span className="font-medium">Low</span>
-                                <span className="text-xs text-muted-foreground">Basic fingerprint only</span>
+                                <span className="text-xs text-muted-foreground">
+                                  Basic fingerprint only
+                                </span>
                               </div>
                             </SelectItem>
                             <SelectItem value="medium">
                               <div className="flex flex-col">
                                 <span className="font-medium">Medium</span>
-                                <span className="text-xs text-muted-foreground">Advanced fingerprint (Canvas/WebGL)</span>
+                                <span className="text-xs text-muted-foreground">
+                                  Advanced fingerprint (Canvas/WebGL)
+                                </span>
                               </div>
                             </SelectItem>
                             <SelectItem value="high">
                               <div className="flex flex-col">
                                 <span className="font-medium">High (Recommended)</span>
-                                <span className="text-xs text-muted-foreground">Human behavior + Advanced FP</span>
+                                <span className="text-xs text-muted-foreground">
+                                  Human behavior + Advanced FP
+                                </span>
                               </div>
                             </SelectItem>
                             <SelectItem value="paranoid">
                               <div className="flex flex-col">
                                 <span className="font-medium">Paranoid</span>
-                                <span className="text-xs text-muted-foreground">Full simulation (Slowest)</span>
+                                <span className="text-xs text-muted-foreground">
+                                  Full simulation (Slowest)
+                                </span>
                               </div>
                             </SelectItem>
                           </SelectContent>
@@ -502,9 +537,9 @@ export function TaskForm(props: TaskFormProps) {
               {/* Action Bar */}
               <div className="flex items-center justify-between pt-6 border-t border-border/50">
                 <div className="text-sm text-muted-foreground">
-                  {canSubmit ? "Ready to extract" : "Enter a valid input to start"}
+                  {canSubmit ? 'Ready to extract' : 'Enter a valid input to start'}
                 </div>
-                
+
                 {!isScraping ? (
                   <Button
                     onClick={onSubmit}

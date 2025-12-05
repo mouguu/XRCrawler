@@ -4,10 +4,7 @@
  */
 
 const DEFAULT_TIMEZONE: string =
-  process.env.TWITTER_CRAWLER_TIMEZONE ||
-  process.env.TWITTER_CRAWLER_TZ ||
-  process.env.TZ ||
-  'UTC';
+  process.env.TWITTER_CRAWLER_TIMEZONE || process.env.TWITTER_CRAWLER_TZ || process.env.TZ || 'UTC';
 
 /**
  * 判断给定字符串是否为有效的 IANA 时区。
@@ -18,7 +15,7 @@ export function isValidTimezone(timezone: string | null | undefined): boolean {
     // Intl 会在遇到非法时区时抛出异常
     new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(new Date());
     return true;
-  } catch (error) {
+  } catch (_error) {
     return false;
   }
 }
@@ -97,20 +94,16 @@ interface ZonedTimestamp {
 export function formatZonedTimestamp(
   dateInput: Date | string | number,
   timezone?: string,
-  options: FormatOptions = {}
+  options: FormatOptions = {},
 ): ZonedTimestamp {
-  const date =
-    dateInput instanceof Date ? dateInput : new Date(dateInput ?? Date.now());
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput ?? Date.now());
 
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
     throw new Error('formatZonedTimestamp: Invalid date input');
   }
 
   const tz = resolveTimezone(timezone);
-  const {
-    includeMilliseconds = true,
-    includeOffset = true
-  } = options;
+  const { includeMilliseconds = true, includeOffset = true } = options;
 
   const baseFormatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: tz,
@@ -120,7 +113,7 @@ export function formatZonedTimestamp(
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-    second: '2-digit'
+    second: '2-digit',
   });
 
   const parts = baseFormatter.formatToParts(date);
@@ -131,9 +124,7 @@ export function formatZonedTimestamp(
     }
   });
 
-  const millis = includeMilliseconds
-    ? String(date.getMilliseconds()).padStart(3, '0')
-    : null;
+  const millis = includeMilliseconds ? String(date.getMilliseconds()).padStart(3, '0') : null;
 
   let iso = `${partMap.year}-${partMap.month}-${partMap.day}T${partMap.hour}:${partMap.minute}:${partMap.second}`;
   if (includeMilliseconds && millis) {
@@ -145,25 +136,23 @@ export function formatZonedTimestamp(
     const offsetFormatter = new Intl.DateTimeFormat('en-US', {
       timeZone: tz,
       hour12: false,
-      timeZoneName: 'shortOffset'
+      timeZoneName: 'shortOffset',
     });
     const offsetParts = offsetFormatter.formatToParts(date);
-    const tzName = offsetParts.find(part => part.type === 'timeZoneName');
+    const tzName = offsetParts.find((part) => part.type === 'timeZoneName');
     if (tzName?.value) {
       offset = normalizeOffset(tzName.value);
     }
     iso += offset;
   }
 
-  const fileSafe = iso
-    .replace(/:/g, '-')
-    .replace(/\./g, '-');
+  const fileSafe = iso.replace(/:/g, '-').replace(/\./g, '-');
 
   return {
     iso,
     fileSafe,
     offset,
-    parts: partMap
+    parts: partMap,
   };
 }
 
@@ -173,7 +162,7 @@ export function formatZonedTimestamp(
 export function formatReadableLocal(dateInput: Date | string | number, timezone?: string): string {
   const { iso, offset } = formatZonedTimestamp(dateInput, timezone, {
     includeMilliseconds: false,
-    includeOffset: true
+    includeOffset: true,
   });
   const base = iso.endsWith(offset) ? iso.slice(0, iso.length - offset.length) : iso;
   return `${base.replace('T', ' ')} (${offset})`;

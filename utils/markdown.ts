@@ -3,14 +3,13 @@
  * 负责在新的运行目录结构中生成 Markdown 内容
  */
 
-import { promises as fs } from 'fs';
-import * as path from 'path';
-import * as fileUtils from './fileutils';
-import * as timeUtils from './time';
-import { RunContext } from './fileutils';
-
+import { promises as fs } from 'node:fs';
+import * as path from 'node:path';
 // 从统一类型定义导入并重新导出
 import type { Tweet } from '../types/tweet-definitions';
+import * as fileUtils from './fileutils';
+import { RunContext } from './fileutils';
+import * as timeUtils from './time';
 export type { Tweet };
 
 export interface SaveTweetsOptions {
@@ -25,7 +24,11 @@ export interface SaveTweetsResult {
 /**
  * 生成单条推文的 Markdown 文件
  */
-export async function saveTweetAsMarkdown(tweet: Tweet, runContext: RunContext, index: number = 0): Promise<string | null> {
+export async function saveTweetAsMarkdown(
+  tweet: Tweet,
+  runContext: RunContext,
+  index: number = 0,
+): Promise<string | null> {
   if (!tweet?.time || !tweet?.text || !tweet?.url) {
     console.warn('[X] Tweet missing required data, skipping save');
     return null;
@@ -39,7 +42,7 @@ export async function saveTweetAsMarkdown(tweet: Tweet, runContext: RunContext, 
   try {
     const timestampInfo = timeUtils.formatZonedTimestamp(tweet.time, timezone, {
       includeMilliseconds: true,
-      includeOffset: true
+      includeOffset: true,
     });
     tweetTimestampIso = timestampInfo.iso;
   } catch (error: any) {
@@ -74,8 +77,10 @@ export async function saveTweetAsMarkdown(tweet: Tweet, runContext: RunContext, 
     tweet.text,
     '',
     `🔗 [View on X](${tweet.url})`,
-    ''
-  ].filter(Boolean).join('\n');
+    '',
+  ]
+    .filter(Boolean)
+    .join('\n');
 
   await fs.writeFile(filePath, markdownContent, 'utf-8');
   return filePath;
@@ -87,7 +92,7 @@ export async function saveTweetAsMarkdown(tweet: Tweet, runContext: RunContext, 
 export async function saveTweetsAsMarkdown(
   tweets: Tweet[],
   runContext: RunContext,
-  options: SaveTweetsOptions = {}
+  options: SaveTweetsOptions = {},
 ): Promise<SaveTweetsResult> {
   if (!Array.isArray(tweets) || tweets.length === 0) {
     console.log('[X] No tweets to save as Markdown');
@@ -115,11 +120,11 @@ export async function saveTweetsAsMarkdown(
   for (let i = 0; i < sortedTweets.length; i += batchSize) {
     const batch = sortedTweets.slice(i, i + batchSize);
     const results = await Promise.all(
-      batch.map((tweet, localIdx) => saveTweetAsMarkdown(tweet, runContext, i + localIdx))
+      batch.map((tweet, localIdx) => saveTweetAsMarkdown(tweet, runContext, i + localIdx)),
     );
     savedFiles.push(...(results.filter(Boolean) as string[]));
     if (i + batchSize < tweets.length) {
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise((resolve) => setTimeout(resolve, 50));
     }
   }
 
@@ -128,7 +133,7 @@ export async function saveTweetsAsMarkdown(
     if (tweet.time) {
       try {
         formattedTimestamp = timeUtils.formatReadableLocal(tweet.time, timezone);
-      } catch (error) {
+      } catch (_error) {
         const fallback = new Date(tweet.time);
         formattedTimestamp = Number.isNaN(fallback.getTime())
           ? 'Unknown time'
@@ -138,7 +143,7 @@ export async function saveTweetsAsMarkdown(
     const metrics = [
       `❤️ ${tweet.likes || 0}`,
       `🔁 ${tweet.retweets || 0}`,
-      `💬 ${tweet.replies || 0}`
+      `💬 ${tweet.replies || 0}`,
     ];
     if (tweet.hasMedia) {
       metrics.push('🖼️ Media');
@@ -146,15 +151,17 @@ export async function saveTweetsAsMarkdown(
 
     // Replace "RT @" with "Retweet @" for better readability
     const displayText = (tweet.text || '(No text content)').replace(/^RT @/g, 'Retweet @');
-    
-    aggregatedSections.push([
-      `## ${index + 1}. ${formattedTimestamp}`,
-      '',
-      displayText,
-      '',
-      metrics.join(' · '),
-      `[View Tweet](${tweet.url})`
-    ].join('\n'));
+
+    aggregatedSections.push(
+      [
+        `## ${index + 1}. ${formattedTimestamp}`,
+        '',
+        displayText,
+        '',
+        metrics.join(' · '),
+        `[View Tweet](${tweet.url})`,
+      ].join('\n'),
+    );
   });
 
   const headerLines = [
@@ -168,7 +175,7 @@ export async function saveTweetsAsMarkdown(
     runContext.runTimestampUtc ? `runTimestampUtc: ${runContext.runTimestampUtc}` : null,
     `timezone: ${timezone}`,
     `tweetCount: ${tweets.length}`,
-    '---'
+    '---',
   ].filter(Boolean);
 
   const indexContent = [
@@ -176,7 +183,7 @@ export async function saveTweetsAsMarkdown(
     '',
     `# Twitter Timeline - @${runContext.identifier}`,
     '',
-    ...aggregatedSections
+    ...aggregatedSections,
   ].join('\n\n');
 
   const indexPath = runContext.markdownIndexPath || path.join(runContext.runDir, 'index.md');

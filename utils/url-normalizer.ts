@@ -3,9 +3,9 @@
  * 优先使用WASM，失败时回退到TypeScript实现
  */
 
-import { existsSync } from "fs";
-import path from "path";
-import { pathToFileURL } from "url";
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 export interface NormalizeResult {
   urls: string[];
@@ -34,14 +34,11 @@ async function loadWasmModule(): Promise<any> {
   // 这里按顺序尝试几个可能的位置。
   const candidatePaths = [
     // TS 源代码运行（utils -> wasm）
-    path.resolve(__dirname, "../wasm/url-normalizer/pkg/url_normalizer.js"),
+    path.resolve(__dirname, '../wasm/url-normalizer/pkg/url_normalizer.js'),
     // 编译后 dist 目录运行（dist/utils -> wasm 在项目根）
-    path.resolve(__dirname, "../../wasm/url-normalizer/pkg/url_normalizer.js"),
+    path.resolve(__dirname, '../../wasm/url-normalizer/pkg/url_normalizer.js'),
     // 兜底：基于 CWD
-    path.resolve(
-      process.cwd(),
-      "wasm/url-normalizer/pkg/url_normalizer.js"
-    ),
+    path.resolve(process.cwd(), 'wasm/url-normalizer/pkg/url_normalizer.js'),
   ];
 
   let lastError: unknown = null;
@@ -54,19 +51,14 @@ async function loadWasmModule(): Promise<any> {
     try {
       const wasm = await import(pathToFileURL(candidate).href);
       wasmModule = wasm;
-      console.log(
-        `[url-normalizer] WASM module loaded successfully from ${candidate}`
-      );
+      console.log(`[url-normalizer] WASM module loaded successfully from ${candidate}`);
       return wasm;
     } catch (error) {
       lastError = error;
     }
   }
 
-  console.warn(
-    "[url-normalizer] WASM module not available, using TypeScript fallback:",
-    lastError
-  );
+  console.warn('[url-normalizer] WASM module not available, using TypeScript fallback:', lastError);
   return null;
 }
 
@@ -78,47 +70,47 @@ function normalizeUrlTS(urlStr: string): string {
     const url = new URL(urlStr);
 
     // 1. 统一协议为 https
-    if (url.protocol === "http:") {
-      url.protocol = "https:";
+    if (url.protocol === 'http:') {
+      url.protocol = 'https:';
     }
 
     // 2. 规范化域名
     const hostname = url.hostname;
     if (
-      hostname === "twitter.com" ||
-      hostname === "www.twitter.com" ||
-      hostname === "mobile.twitter.com"
+      hostname === 'twitter.com' ||
+      hostname === 'www.twitter.com' ||
+      hostname === 'mobile.twitter.com'
     ) {
-      url.hostname = "x.com";
+      url.hostname = 'x.com';
     } else if (
-      hostname === "www.reddit.com" ||
-      hostname === "old.reddit.com" ||
-      hostname === "new.reddit.com"
+      hostname === 'www.reddit.com' ||
+      hostname === 'old.reddit.com' ||
+      hostname === 'new.reddit.com'
     ) {
-      url.hostname = "reddit.com";
+      url.hostname = 'reddit.com';
     }
 
     // 3. 移除追踪参数
     const trackingParams = new Set([
-      "utm_source",
-      "utm_medium",
-      "utm_campaign",
-      "utm_term",
-      "utm_content",
-      "fbclid",
-      "gclid",
-      "msclkid",
-      "mc_cid",
-      "mc_eid",
-      "ref",
-      "referrer",
-      "source",
-      "campaign",
-      "s",
-      "_ga",
-      "_gid",
-      "igshid",
-      "ncid",
+      'utm_source',
+      'utm_medium',
+      'utm_campaign',
+      'utm_term',
+      'utm_content',
+      'fbclid',
+      'gclid',
+      'msclkid',
+      'mc_cid',
+      'mc_eid',
+      'ref',
+      'referrer',
+      'source',
+      'campaign',
+      's',
+      '_ga',
+      '_gid',
+      'igshid',
+      'ncid',
     ]);
 
     const searchParams = new URLSearchParams(url.search);
@@ -132,18 +124,18 @@ function normalizeUrlTS(urlStr: string): string {
 
     // 更新查询字符串
     const newSearch = searchParams.toString();
-    url.search = newSearch ? `?${newSearch}` : "";
+    url.search = newSearch ? `?${newSearch}` : '';
 
     // 4. 移除fragment (锚点)
-    url.hash = "";
+    url.hash = '';
 
     // 5. 移除尾部斜杠
-    if (url.pathname.endsWith("/") && url.pathname.length > 1) {
-      url.pathname = url.pathname.replace(/\/+$/, "");
+    if (url.pathname.endsWith('/') && url.pathname.length > 1) {
+      url.pathname = url.pathname.replace(/\/+$/, '');
     }
 
     return url.toString();
-  } catch (error) {
+  } catch (_error) {
     // 解析失败，返回原始URL
     return urlStr;
   }
@@ -186,10 +178,7 @@ export async function normalizeUrl(url: string): Promise<string> {
       const normalizer = new wasm.UrlNormalizer();
       return normalizer.normalize(url);
     } catch (error) {
-      console.warn(
-        "[url-normalizer] WASM normalize failed, using TS fallback:",
-        error
-      );
+      console.warn('[url-normalizer] WASM normalize failed, using TS fallback:', error);
     }
   }
 
@@ -217,10 +206,7 @@ export async function normalizeUrls(urls: string[]): Promise<NormalizeResult> {
         usedWasm: true,
       };
     } catch (error) {
-      console.warn(
-        "[url-normalizer] WASM batch normalize failed, using TS fallback:",
-        error
-      );
+      console.warn('[url-normalizer] WASM batch normalize failed, using TS fallback:', error);
     }
   }
 

@@ -1,34 +1,31 @@
-import type {
-  ScrapeTimelineConfig,
-  ScrapeTimelineResult,
-} from "./scraper-engine.types";
-import type { ScraperEngine } from "./scraper-engine";
-import { ScraperError, ScraperErrors } from "./errors";
-import type { Tweet } from "../types/tweet-definitions";
+import type { Tweet } from '../types/tweet-definitions';
 import {
   extractInstructionsFromResponse,
-  parseTweetsFromInstructions,
   extractNextCursor,
   parseTweetFromRestStatus,
-} from "../types/tweet-definitions";
-import * as fileUtils from "../utils";
-import { cleanTweetsFast } from "../utils";
+  parseTweetsFromInstructions,
+} from '../types/tweet-definitions';
+import * as fileUtils from '../utils';
+import { cleanTweetsFast } from '../utils';
+import { ScraperError, ScraperErrors } from './errors';
+import type { ScraperEngine } from './scraper-engine';
+import type { ScrapeTimelineConfig, ScrapeTimelineResult } from './scraper-engine.types';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Run timeline scraping using REST API v1.1
- * 
+ *
  * ⚠️ **WARNING: This function will fail with 404 errors.**
- * 
+ *
  * Twitter's REST API v1.1 requires OAuth tokens, not web cookies.
  * This function is kept for:
  * - Future OAuth implementation
  * - Reference implementation of max_id pagination (similar to Tweepy)
  * - Documentation purposes
- * 
+ *
  * **For production use, use GraphQL API (default).**
- * 
+ *
  * @deprecated REST API v1.1 not accessible with web cookies
  * @param engine ScraperEngine instance
  * @param config Timeline scraping configuration
@@ -36,21 +33,26 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  */
 async function runTimelineRestApi(
   engine: ScraperEngine,
-  config: ScrapeTimelineConfig
+  config: ScrapeTimelineConfig,
 ): Promise<ScrapeTimelineResult> {
   const { username, limit = 50 } = config;
   if (!username) {
-    return { success: false, tweets: [], error: "Username is required for REST timeline", runContext: config.runContext };
+    return {
+      success: false,
+      tweets: [],
+      error: 'Username is required for REST timeline',
+      runContext: config.runContext,
+    };
   }
 
   // Log warning about REST API limitations
   engine.eventBus.emitLog(
     '⚠️  WARNING: REST API v1.1 requires OAuth tokens and will likely fail with web cookies.',
-    'warn'
+    'warn',
   );
   engine.eventBus.emitLog(
     'Expected error: 404 Not Found. Use GraphQL mode (default) for web-based scraping.',
-    'warn'
+    'warn',
   );
 
   const totalTarget = limit;
@@ -62,7 +64,7 @@ async function runTimelineRestApi(
 
   while (collectedTweets.length < limit) {
     if (engine.shouldStop()) {
-      engine.eventBus.emitLog("Manual stop signal received.");
+      engine.eventBus.emitLog('Manual stop signal received.');
       break;
     }
 
@@ -80,7 +82,7 @@ async function runTimelineRestApi(
       if (!Array.isArray(response) || response.length === 0) {
         consecutiveEmpty += 1;
         engine.eventBus.emitLog(
-          `REST timeline returned empty page (${consecutiveEmpty}/2). Collected ${collectedTweets.length}/${totalTarget}`
+          `REST timeline returned empty page (${consecutiveEmpty}/2). Collected ${collectedTweets.length}/${totalTarget}`,
         );
         if (consecutiveEmpty >= 2) break;
         await sleep(300 + Math.random() * 400);
@@ -125,17 +127,15 @@ async function runTimelineRestApi(
       }
 
       engine.eventBus.emitLog(
-        `REST timeline fetched ${response.length} items, added ${addedCount}. Total: ${collectedTweets.length}`
+        `REST timeline fetched ${response.length} items, added ${addedCount}. Total: ${collectedTweets.length}`,
       );
       engine.eventBus.emitProgress({
         current: collectedTweets.length,
         target: totalTarget,
-        action: "scraping (rest)",
+        action: 'scraping (rest)',
       });
 
-      const oldestId =
-        response[response.length - 1]?.id_str ||
-        response[response.length - 1]?.id;
+      const oldestId = response[response.length - 1]?.id_str || response[response.length - 1]?.id;
       if (!oldestId) break;
 
       try {
@@ -154,10 +154,7 @@ async function runTimelineRestApi(
       await sleep(delay);
     } catch (error: any) {
       lastError = error instanceof Error ? error.message : String(error);
-      engine.eventBus.emitLog(
-        `REST timeline error: ${lastError}`,
-        "error"
-      );
+      engine.eventBus.emitLog(`REST timeline error: ${lastError}`, 'error');
       break;
     }
   }
@@ -167,40 +164,34 @@ async function runTimelineRestApi(
     success,
     tweets: collectedTweets,
     runContext: config.runContext,
-    error: success ? undefined : lastError || "No tweets collected",
+    error: success ? undefined : lastError || 'No tweets collected',
   };
 }
 
 export async function runTimelineApi(
   engine: ScraperEngine,
-  config: ScrapeTimelineConfig
+  config: ScrapeTimelineConfig,
 ): Promise<ScrapeTimelineResult> {
-  const {
-    username,
-    limit = 50,
-    mode = "timeline",
-    searchQuery,
-    scrapeMode = "graphql",
-  } = config;
-  const totalTarget = limit;
-  const apiVariant = config.apiVariant || "graphql";
+  const { username, limit = 50, mode = 'timeline', searchQuery, scrapeMode = 'graphql' } = config;
+  const _totalTarget = limit;
+  const apiVariant = config.apiVariant || 'graphql';
 
   let { runContext } = config;
   if (!runContext) {
-    const identifier = username || searchQuery || "unknown";
+    const identifier = username || searchQuery || 'unknown';
     runContext = await fileUtils.createRunContext({
-      platform: "x",
+      platform: 'x',
       identifier,
       baseOutputDir: config.outputDir,
     });
     engine.eventBus.emitLog(`Created new run context: ${runContext.runId}`);
   }
 
-  if (apiVariant === "rest") {
-    if (mode !== "timeline" || !username || config.tab) {
+  if (apiVariant === 'rest') {
+    if (mode !== 'timeline' || !username || config.tab) {
       engine.eventBus.emitLog(
-        `REST apiVariant only supports user timelines. Falling back to GraphQL mode for ${username || searchQuery || "request"}.`,
-        "warn"
+        `REST apiVariant only supports user timelines. Falling back to GraphQL mode for ${username || searchQuery || 'request'}.`,
+        'warn',
       );
     } else {
       return runTimelineRestApi(engine, { ...config, runContext });
@@ -213,7 +204,7 @@ export async function runTimelineApi(
   let userId: string | null = null;
   let wasmCleanerLogged = false;
 
-  if (mode === "timeline" && username) {
+  if (mode === 'timeline' && username) {
     try {
       engine.eventBus.emitLog(`Resolving user ID for ${username}...`);
       const apiClient = engine.ensureApiClient();
@@ -224,9 +215,7 @@ export async function runTimelineApi(
       engine.eventBus.emitLog(`Resolved user ID: ${userId}`);
     } catch (error: any) {
       const errorMessage =
-        error instanceof ScraperError
-          ? error.message
-          : `Failed to resolve user: ${error.message}`;
+        error instanceof ScraperError ? error.message : `Failed to resolve user: ${error.message}`;
       return { success: false, tweets: [], error: errorMessage };
     }
   }
@@ -247,7 +236,7 @@ export async function runTimelineApi(
 
   while (collectedTweets.length < limit) {
     if (engine.shouldStop()) {
-      engine.eventBus.emitLog("Manual stop signal received.");
+      engine.eventBus.emitLog('Manual stop signal received.');
       break;
     }
 
@@ -256,21 +245,17 @@ export async function runTimelineApi(
       let response: any;
 
       const apiStartTime = Date.now();
-      engine.performanceMonitor.startPhase(
-        mode === "search" ? "api-search" : "api-fetch-tweets"
-      );
+      engine.performanceMonitor.startPhase(mode === 'search' ? 'api-search' : 'api-fetch-tweets');
 
-      if (mode === "search" && searchQuery) {
-        engine.eventBus.emitLog(
-          `Fetching search results for "${searchQuery}"...`
-        );
+      if (mode === 'search' && searchQuery) {
+        engine.eventBus.emitLog(`Fetching search results for "${searchQuery}"...`);
         response = await apiClient.searchTweets(searchQuery, 20, cursor);
       } else if (userId) {
         engine.eventBus.emitLog(`Fetching tweets for user ${username}...`);
         response = await apiClient.getUserTweets(userId, 40, cursor);
       } else {
         throw ScraperErrors.invalidConfiguration(
-          "Invalid configuration: missing username or search query"
+          'Invalid configuration: missing username or search query',
         );
       }
 
@@ -278,7 +263,7 @@ export async function runTimelineApi(
       engine.performanceMonitor.endPhase();
       engine.performanceMonitor.recordApiRequest(apiLatency, false);
 
-      engine.performanceMonitor.startPhase("parse-api-response");
+      engine.performanceMonitor.startPhase('parse-api-response');
       const { tweets, nextCursor } = parseApiResponse(response, username);
       const parseTime = Date.now() - apiStartTime - apiLatency;
       engine.performanceMonitor.endPhase();
@@ -286,19 +271,18 @@ export async function runTimelineApi(
 
       logCursorDiagnostics(engine, tweets.length, cursor, nextCursor);
 
-      const { shouldContinue, updatedCursor, updatedConsecutiveEmpty } =
-        await handleCursorState({
-          engine,
-          tweets,
-          nextCursor,
-          cursor,
-          collectedTweets,
-          limit,
-          consecutiveEmptyResponses,
-          attemptedSessions,
-          cursorHistory,
-          emptyCursorSessions,
-        });
+      const { shouldContinue, updatedCursor, updatedConsecutiveEmpty } = await handleCursorState({
+        engine,
+        tweets,
+        nextCursor,
+        cursor,
+        collectedTweets,
+        limit,
+        consecutiveEmptyResponses,
+        attemptedSessions,
+        cursorHistory,
+        emptyCursorSessions,
+      });
 
       cursor = updatedCursor;
       consecutiveEmptyResponses = updatedConsecutiveEmpty;
@@ -312,10 +296,7 @@ export async function runTimelineApi(
 
       const cleaned = await cleanTweetsFast([], tweets, { limit });
       if (cleaned.usedWasm && !wasmCleanerLogged) {
-        engine.eventBus.emitLog(
-          "Using Rust/WASM tweet cleaner for normalization/dedup.",
-          "info"
-        );
+        engine.eventBus.emitLog('Using Rust/WASM tweet cleaner for normalization/dedup.', 'info');
         wasmCleanerLogged = true;
       }
 
@@ -348,18 +329,18 @@ export async function runTimelineApi(
       }
 
       engine.eventBus.emitLog(
-        `Fetched ${cleaned.tweets.length} cleaned tweets (raw ${tweets.length}), added ${addedCount} new. Total: ${collectedTweets.length}`
+        `Fetched ${cleaned.tweets.length} cleaned tweets (raw ${tweets.length}), added ${addedCount} new. Total: ${collectedTweets.length}`,
       );
       engine.eventBus.emitProgress({
         current: collectedTweets.length,
         target: limit,
-        action: "scraping",
+        action: 'scraping',
       });
       engine.progressManager.updateProgress(
         collectedTweets.length,
         cleaned.tweets[cleaned.tweets.length - 1]?.id,
         nextCursor,
-        engine.getCurrentSession()?.id
+        engine.getCurrentSession()?.id,
       );
       engine.performanceMonitor.recordTweets(collectedTweets.length);
       engine.emitPerformanceUpdate();
@@ -396,7 +377,7 @@ export async function runTimelineApi(
     success,
     tweets: collectedTweets,
     runContext,
-    error: success ? undefined : "No tweets collected",
+    error: success ? undefined : 'No tweets collected',
   };
 }
 
@@ -443,7 +424,7 @@ async function handleCursorState({
   if (!nextCursor || nextCursor === cursor) {
     if (tweets.length === 0) {
       engine.eventBus.emitLog(
-        `No more tweets found. Reached end of timeline. (Collected: ${collectedTweets.length}/${limit})`
+        `No more tweets found. Reached end of timeline. (Collected: ${collectedTweets.length}/${limit})`,
       );
       return {
         shouldContinue: false,
@@ -452,7 +433,7 @@ async function handleCursorState({
       };
     }
     engine.eventBus.emitLog(
-      `Reached end of timeline (last page). (Collected: ${collectedTweets.length}/${limit})`
+      `Reached end of timeline (last page). (Collected: ${collectedTweets.length}/${limit})`,
     );
     return {
       shouldContinue: true,
@@ -510,8 +491,8 @@ async function handleEmptyCursor({
   emptyCursorSessions,
 }: EmptyCursorParams) {
   const updatedConsecutive = consecutiveEmptyResponses + 1;
-  const currentSessionId = engine.getCurrentSession()?.id || "unknown";
-  const cursorValue = nextCursor || "";
+  const currentSessionId = engine.getCurrentSession()?.id || 'unknown';
+  const cursorValue = nextCursor || '';
   const cursorNumMatch = cursorValue.match(/\d+/);
   const cursorNum = cursorNumMatch ? BigInt(cursorNumMatch[0]) : null;
 
@@ -523,25 +504,25 @@ async function handleEmptyCursor({
     if (cursorNum && lastCursorNum && cursorNum === lastCursorNum) {
       engine.eventBus.emitLog(
         `[DIAGNOSIS] Cursor value unchanged (${cursorValue}), may have reached API boundary`,
-        "warn"
+        'warn',
       );
     } else if (cursorNum && lastCursorNum && cursorNum < lastCursorNum) {
       const diff = Number(lastCursorNum - cursorNum);
       if (diff < 10) {
         engine.eventBus.emitLog(
           `[DIAGNOSIS] Cursor decreasing very slowly (diff: ${diff}), may be near API limit`,
-          "warn"
+          'warn',
         );
       }
     }
   }
 
-  if (!emptyCursorSessions.has(nextCursor || "")) {
-    emptyCursorSessions.set(nextCursor || "", new Set());
+  if (!emptyCursorSessions.has(nextCursor || '')) {
+    emptyCursorSessions.set(nextCursor || '', new Set());
   }
-  emptyCursorSessions.get(nextCursor || "")?.add(currentSessionId);
+  emptyCursorSessions.get(nextCursor || '')?.add(currentSessionId);
   cursorHistory.push({
-    cursor: nextCursor || "",
+    cursor: nextCursor || '',
     sessionId: currentSessionId,
     hasTweets: false,
   });
@@ -549,22 +530,19 @@ async function handleEmptyCursor({
   if (updatedConsecutive === 1) {
     engine.eventBus.emitLog(
       `[DIAGNOSIS] First empty response at cursor ${cursorValue}. Possible reasons: API limit (~800-900 tweets), rate limit, or timeline end.`,
-      "info"
+      'info',
     );
   }
 
-  const sessionsAtThisCursor =
-    emptyCursorSessions.get(nextCursor || "")?.size || 0;
+  const sessionsAtThisCursor = emptyCursorSessions.get(nextCursor || '')?.size || 0;
   const allActiveSessions = engine.sessionManager.getAllActiveSessions();
-  const hasMoreSessions = allActiveSessions.some(
-    (s) => !attemptedSessions.has(s.id)
-  );
+  const hasMoreSessions = allActiveSessions.some((s) => !attemptedSessions.has(s.id));
   const likelyRealEnd = sessionsAtThisCursor >= 3 || !hasMoreSessions;
 
   if (!engine.isRotationEnabled()) {
     engine.eventBus.emitLog(
       `Auto-rotation disabled. Stopping at cursor ${cursorValue} after empty response. Collected: ${collectedTweets.length}/${limit}`,
-      "warn"
+      'warn',
     );
     return {
       shouldContinue: false,
@@ -574,17 +552,15 @@ async function handleEmptyCursor({
   }
 
   if (updatedConsecutive >= 2 && attemptedSessions.size < 4 && !likelyRealEnd) {
-    const untriedSessions = allActiveSessions.filter(
-      (s) => !attemptedSessions.has(s.id)
-    );
+    const untriedSessions = allActiveSessions.filter((s) => !attemptedSessions.has(s.id));
 
     if (untriedSessions.length > 0) {
       const nextSession = untriedSessions[0];
       engine.eventBus.emitLog(
         `Found ${untriedSessions.length} untried session(s): ${untriedSessions
           .map((s) => s.id)
-          .join(", ")}`,
-        "debug"
+          .join(', ')}`,
+        'debug',
       );
       try {
         await engine.applySession(nextSession, {
@@ -595,7 +571,7 @@ async function handleEmptyCursor({
         engine.performanceMonitor.recordSessionSwitch();
         engine.eventBus.emitLog(
           `Switched to session: ${nextSession.id} (${attemptedSessions.size} session(s) tried). Retrying same cursor...`,
-          "info"
+          'info',
         );
         await sleep(200 + Math.random() * 300);
         return {
@@ -604,17 +580,14 @@ async function handleEmptyCursor({
           updatedConsecutiveEmpty: 0,
         };
       } catch (e: any) {
-        engine.eventBus.emitLog(
-          `Session rotation failed: ${e.message}`,
-          "error"
-        );
+        engine.eventBus.emitLog(`Session rotation failed: ${e.message}`, 'error');
         attemptedSessions.add(nextSession.id);
       }
     } else {
       engine.eventBus.emitLog(
         `No more untried sessions available. All sessions have been tested: ${Array.from(
-          attemptedSessions
-        ).join(", ")}`
+          attemptedSessions,
+        ).join(', ')}`,
       );
     }
   }
@@ -626,24 +599,24 @@ async function handleEmptyCursor({
     updatedConsecutive >= 5;
 
   if (shouldStop) {
-    const triedSessionsList = Array.from(attemptedSessions).join(", ");
+    const triedSessionsList = Array.from(attemptedSessions).join(', ');
     const reason = allSessionsTried
       ? `All ${attemptedSessions.size} sessions (${triedSessionsList}) confirmed empty at this cursor - likely reached Twitter/X API limit (~${collectedTweets.length} tweets)`
       : likelyRealEnd
-      ? `Multiple sessions (${sessionsAtThisCursor}) confirmed empty at this cursor position - likely reached timeline end`
-      : `Maximum retry attempts (${updatedConsecutive}) reached`;
+        ? `Multiple sessions (${sessionsAtThisCursor}) confirmed empty at this cursor position - likely reached timeline end`
+        : `Maximum retry attempts (${updatedConsecutive}) reached`;
     engine.eventBus.emitLog(
       `${reason}. Stopping. (Collected: ${collectedTweets.length}/${limit})`,
-      "warn"
+      'warn',
     );
     if (collectedTweets.length < limit) {
       engine.eventBus.emitLog(
         `Analysis: Twitter/X GraphQL API appears to have a limit of ~${collectedTweets.length} tweets per request chain.`,
-        "info"
+        'info',
       );
       engine.eventBus.emitLog(
         `Recommendation: Use 'puppeteer' mode (DOM scraping) for deeper timeline access beyond API limits.`,
-        "info"
+        'info',
       );
     }
     return {
@@ -656,9 +629,9 @@ async function handleEmptyCursor({
   const retryDelay = 500 + Math.random() * 500;
   engine.eventBus.emitLog(
     `Empty response (${sessionsAtThisCursor} session(s) tried at this cursor, attempt ${updatedConsecutive}). Retrying in ${Math.round(
-      retryDelay
+      retryDelay,
     )}ms...`,
-    "warn"
+    'warn',
   );
   await sleep(retryDelay);
 
@@ -700,18 +673,14 @@ async function handleApiError({
   engine.performanceMonitor.endPhase();
   engine.eventBus.emitLog(
     `API Error: ${error instanceof Error ? error.message : String(error)}`,
-    "error"
+    'error',
   );
 
-  if (
-    String(error.message || "").includes("404") &&
-    mode === "search" &&
-    cursor
-  ) {
+  if (String(error.message || '').includes('404') && mode === 'search' && cursor) {
     if (!search404Retried) {
       engine.eventBus.emitLog(
         `404 error with cursor in search mode. Refreshing search headers/xclid and retrying current cursor once...`,
-        "warn"
+        'warn',
       );
       await sleep(300 + Math.random() * 300);
       return {
@@ -721,10 +690,7 @@ async function handleApiError({
         shouldBreak: false,
       };
     }
-    engine.eventBus.emitLog(
-      `404 error repeated after retry. Treating as end of results.`,
-      "warn"
-    );
+    engine.eventBus.emitLog(`404 error repeated after retry. Treating as end of results.`, 'warn');
     return {
       cursor,
       consecutiveErrors,
@@ -736,8 +702,8 @@ async function handleApiError({
   let updatedConsecutiveErrors = consecutiveErrors + 1;
 
   if (
-    (error.message && error.message.includes("429")) ||
-    (error.message && error.message.includes("Authentication failed")) ||
+    error.message?.includes('429') ||
+    error.message?.includes('Authentication failed') ||
     updatedConsecutiveErrors >= 3
   ) {
     engine.performanceMonitor.recordRateLimit();
@@ -746,7 +712,7 @@ async function handleApiError({
     if (!engine.isRotationEnabled()) {
       engine.eventBus.emitLog(
         `Auto-rotation disabled. Stopping after error: ${error.message}`,
-        "warn"
+        'warn',
       );
       return {
         cursor,
@@ -756,24 +722,17 @@ async function handleApiError({
       };
     }
 
-    engine.eventBus.emitLog(
-      `API Error: ${error.message}. Attempting session rotation...`,
-      "warn"
-    );
+    engine.eventBus.emitLog(`API Error: ${error.message}. Attempting session rotation...`, 'warn');
     const allActiveSessions = engine.sessionManager.getAllActiveSessions();
-    const untriedSessions = allActiveSessions.filter(
-      (s) => !attemptedSessions.has(s.id)
-    );
+    const untriedSessions = allActiveSessions.filter((s) => !attemptedSessions.has(s.id));
 
     if (untriedSessions.length > 0) {
       const nextSession = untriedSessions[0];
       engine.eventBus.emitLog(
-        `Found ${
-          untriedSessions.length
-        } untried session(s) for rotation: ${untriedSessions
+        `Found ${untriedSessions.length} untried session(s) for rotation: ${untriedSessions
           .map((s) => s.id)
-          .join(", ")}`,
-        "debug"
+          .join(', ')}`,
+        'debug',
       );
       try {
         await engine.applySession(nextSession, {
@@ -790,10 +749,8 @@ async function handleApiError({
         engine.eventBus.emitLog(
           `Switched to session: ${nextSession.id} (${
             attemptedSessions.size
-          } session(s) tried: ${Array.from(attemptedSessions).join(
-            ", "
-          )}). Retrying...`,
-          "info"
+          } session(s) tried: ${Array.from(attemptedSessions).join(', ')}). Retrying...`,
+          'info',
         );
         return {
           cursor,
@@ -802,22 +759,17 @@ async function handleApiError({
           shouldBreak: false,
         };
       } catch (e: any) {
-        engine.eventBus.emitLog(
-          `Session rotation failed: ${e.message}`,
-          "error"
-        );
+        engine.eventBus.emitLog(`Session rotation failed: ${e.message}`, 'error');
         attemptedSessions.add(nextSession.id);
       }
     }
 
     if (untriedSessions.length === 0) {
       engine.eventBus.emitLog(
-        `All ${attemptedSessions.size} session(s) (${Array.from(
-          attemptedSessions
-        ).join(
-          ", "
+        `All ${attemptedSessions.size} session(s) (${Array.from(attemptedSessions).join(
+          ', ',
         )}) have been tried. Rate limit may be account-wide or IP-based. Stopping.`,
-        "error"
+        'error',
       );
       return {
         cursor,
@@ -828,10 +780,7 @@ async function handleApiError({
     }
   } else {
     engine.performanceMonitor.recordApiRequest(0, true);
-    engine.eventBus.emitLog(
-      `Transient error: ${error.message}. Retrying...`,
-      "warn"
-    );
+    engine.eventBus.emitLog(`Transient error: ${error.message}. Retrying...`, 'warn');
     const waitTime = 500 + Math.random() * 500;
     await sleep(waitTime);
     engine.performanceMonitor.recordRateLimitWait(waitTime);
@@ -857,25 +806,23 @@ function logCursorDiagnostics(
   engine: ScraperEngine,
   tweetCount: number,
   cursor?: string,
-  nextCursor?: string
+  nextCursor?: string,
 ) {
   if (!nextCursor || nextCursor === cursor) {
     if (tweetCount === 0) {
       engine.eventBus.emitLog(
         `[DEBUG] API returned ${tweetCount} tweets, no cursor (prev cursor: ${
-          cursor ? "exists" : "none"
-        })`
+          cursor ? 'exists' : 'none'
+        })`,
       );
     } else {
       engine.eventBus.emitLog(
         `[DEBUG] API returned ${tweetCount} tweets, no new cursor (prev cursor: ${
-          cursor ? "exists" : "none"
-        }) - likely last page`
+          cursor ? 'exists' : 'none'
+        }) - likely last page`,
       );
     }
   } else {
-    engine.eventBus.emitLog(
-      `[DEBUG] API returned ${tweetCount} tweets, new cursor exists`
-    );
+    engine.eventBus.emitLog(`[DEBUG] API returned ${tweetCount} tweets, new cursor exists`);
   }
 }

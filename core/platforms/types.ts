@@ -2,12 +2,7 @@ import { JobLog, JobProgress, ScrapeJobData, ScrapeJobResult } from '../queue/ty
 
 export type PlatformName = 'twitter' | 'reddit' | (string & {});
 
-export type PlatformErrorCategory =
-  | 'rate_limit'
-  | 'auth'
-  | 'not_found'
-  | 'network'
-  | 'unknown';
+export type PlatformErrorCategory = 'rate_limit' | 'auth' | 'not_found' | 'network' | 'unknown';
 
 export interface CrawlTarget {
   type: string;

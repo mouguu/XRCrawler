@@ -1,10 +1,10 @@
-import { RedditScraper } from './reddit/scraper';
-import { exportRedditToMarkdown } from './reddit/markdown-export';
-import { createEnhancedLogger } from '../../utils/logger';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { getOutputPathManager } from '../../utils';
+import { createEnhancedLogger } from '../../utils/logger';
+import { exportRedditToMarkdown } from './reddit/markdown-export';
+import { RedditScraper } from './reddit/scraper';
 import { PlatformAdapter } from './types';
-import * as path from 'path';
-import * as fs from 'fs';
 
 const logger = createEnhancedLogger('RedditAdapter');
 
@@ -31,10 +31,12 @@ export const redditAdapter: PlatformAdapter = {
         result = await scraper.scrapePost(jobConfig.postUrl!);
 
         if (result.status === 'success' && result.post && result.comments) {
-          posts = [{
-            ...result.post,
-            comments: result.comments,
-          }];
+          posts = [
+            {
+              ...result.post,
+              comments: result.comments,
+            },
+          ];
 
           // Save to files
           const outputPathManager = getOutputPathManager();
@@ -44,11 +46,11 @@ export const redditAdapter: PlatformAdapter = {
             outputPathManager.getBaseDir(),
             'reddit',
             `post_${postId}`,
-            `run-${timestamp}`
+            `run-${timestamp}`,
           );
 
           fs.mkdirSync(runDir, { recursive: true });
-          
+
           // Save JSON
           const jsonPath = path.join(runDir, 'post.json');
           fs.writeFileSync(jsonPath, JSON.stringify(posts[0], null, 2));
@@ -56,7 +58,7 @@ export const redditAdapter: PlatformAdapter = {
           // Export Markdown with post title
           const mdPath = exportRedditToMarkdown(
             [{ post: result.post, comments: result.comments }],
-            runDir
+            runDir,
           );
           outputPath = mdPath; // Use markdown as primary output
 
@@ -73,7 +75,7 @@ export const redditAdapter: PlatformAdapter = {
 
         // Fetch post URLs
         const postUrls = await scraper.fetchSubredditPosts(subreddit, limit, 'hot');
-        
+
         if (postUrls.length === 0) {
           throw new Error('No posts found');
         }
@@ -85,7 +87,7 @@ export const redditAdapter: PlatformAdapter = {
         for (let i = 0; i < postUrls.length; i += concurrency) {
           const batch = postUrls.slice(i, i + concurrency);
           const batchResults = await Promise.allSettled(
-            batch.map(({ url }) => scraper.fetchPost(url))
+            batch.map(({ url }) => scraper.fetchPost(url)),
           );
 
           for (const batchResult of batchResults) {
@@ -100,10 +102,10 @@ export const redditAdapter: PlatformAdapter = {
           }
 
           const current = Math.min(i + concurrency, postUrls.length);
-          ctx.emitProgress({ 
-            current, 
-            target: postUrls.length, 
-            action: `Scraped ${posts.length}/${postUrls.length} posts` 
+          ctx.emitProgress({
+            current,
+            target: postUrls.length,
+            action: `Scraped ${posts.length}/${postUrls.length} posts`,
           });
 
           await ctx.log(`Progress: ${current}/${postUrls.length} posts processed`);
@@ -116,25 +118,25 @@ export const redditAdapter: PlatformAdapter = {
           outputPathManager.getBaseDir(),
           'reddit',
           subreddit,
-          `run-${timestamp}`
+          `run-${timestamp}`,
         );
 
         fs.mkdirSync(runDir, { recursive: true });
-        
+
         // Save JSON
         const jsonPath = path.join(runDir, 'posts.json');
         fs.writeFileSync(jsonPath, JSON.stringify(posts, null, 2));
 
         // Export Markdown (creates index + individual posts)
-        const postsWithComments = posts.map(p => ({
+        const postsWithComments = posts.map((p) => ({
           post: { ...p, comments: undefined },
-          comments: p.comments || []
+          comments: p.comments || [],
         }));
-        
+
         const mdPath = exportRedditToMarkdown(
           postsWithComments,
           runDir,
-          `r_${subreddit}_${posts.length}posts.md`
+          `r_${subreddit}_${posts.length}posts.md`,
         );
         outputPath = mdPath; // Use markdown index as primary output
 
@@ -146,7 +148,7 @@ export const redditAdapter: PlatformAdapter = {
 
       await ctx.log(
         `Reddit scraping completed! ${count} items scraped (${(duration / 1000).toFixed(1)}s)`,
-        'info'
+        'info',
       );
 
       return {

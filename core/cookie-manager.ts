@@ -3,8 +3,8 @@
  * 负责 Cookie 的加载、验证和注入
  */
 
-import { promises as fs } from 'fs';
-import * as path from 'path';
+import { promises as fs } from 'node:fs';
+import * as path from 'node:path';
 import { Page, Protocol } from 'puppeteer';
 import * as validation from '../utils';
 import { safeJsonParse } from '../utils';
@@ -66,10 +66,10 @@ export class CookieManager {
 
       const files = await fs.readdir(this.cookiesDir);
       this.cookieFiles = files
-        .filter(file => file.endsWith('.json'))
-        .map(file => path.join(this.cookiesDir, file));
+        .filter((file) => file.endsWith('.json'))
+        .map((file) => path.join(this.cookiesDir, file));
       return [...this.cookieFiles];
-    } catch (error: any) {
+    } catch (_error: any) {
       // 静默返回空数组
       return [];
     }
@@ -84,7 +84,9 @@ export class CookieManager {
     }
 
     if (this.cookieFiles.length === 0) {
-      throw ScraperErrors.cookieLoadFailed(`No cookie files found in ${this.cookiesDir}. Please place your exported cookie JSON files there.`);
+      throw ScraperErrors.cookieLoadFailed(
+        `No cookie files found in ${this.cookiesDir}. Please place your exported cookie JSON files there.`,
+      );
     }
   }
 
@@ -125,7 +127,10 @@ export class CookieManager {
       const envData = safeJsonParse(cookiesString);
       return this.parseCookieData(envData, cookieFile);
     } catch (error: any) {
-      throw ScraperErrors.cookieLoadFailed(`Failed to load cookies from ${cookieFile}: ${error.message}`, error);
+      throw ScraperErrors.cookieLoadFailed(
+        `Failed to load cookies from ${cookieFile}: ${error.message}`,
+        error,
+      );
     }
   }
 
@@ -143,7 +148,9 @@ export class CookieManager {
   private parseCookieData(envData: any, sourcePath: string): CookieLoadResult {
     const cookieValidation = validation.validateEnvCookieData(envData);
     if (!cookieValidation.valid) {
-      throw ScraperErrors.cookieLoadFailed(`Cookie validation failed for ${path.basename(sourcePath)}: ${cookieValidation.error}`);
+      throw ScraperErrors.cookieLoadFailed(
+        `Cookie validation failed for ${path.basename(sourcePath)}: ${cookieValidation.error}`,
+      );
     }
 
     this.cookies = cookieValidation.cookies || [];
@@ -155,7 +162,7 @@ export class CookieManager {
     return {
       cookies: this.cookies || [],
       username: this.username,
-      source: this.source
+      source: this.source,
     };
   }
 
@@ -216,22 +223,22 @@ export class CookieManager {
    */
   async listSessions(): Promise<SessionInfo[]> {
     await this.scanCookieFiles();
-    
+
     const sessions: SessionInfo[] = [];
-    
+
     for (const file of this.cookieFiles) {
       const filename = path.basename(file);
       try {
         const content = await fs.readFile(file, 'utf-8');
         const envData = safeJsonParse(content);
         const validationResult = validation.validateEnvCookieData(envData);
-        
+
         sessions.push({
           filename,
           username: validationResult.username || null,
           isValid: validationResult.valid,
           error: validationResult.error,
-          cookieCount: validationResult.cookies?.length || 0
+          cookieCount: validationResult.cookies?.length || 0,
         });
       } catch (error: any) {
         sessions.push({
@@ -239,11 +246,11 @@ export class CookieManager {
           username: null,
           isValid: false,
           error: error.message,
-          cookieCount: 0
+          cookieCount: 0,
         });
       }
     }
-    
+
     return sessions;
   }
 
@@ -260,7 +267,9 @@ export class CookieManager {
 /**
  * 创建并加载 Cookie 管理器
  */
-export async function createCookieManager(options: CookieManagerOptions = {}): Promise<CookieManager> {
+export async function createCookieManager(
+  options: CookieManagerOptions = {},
+): Promise<CookieManager> {
   const manager = new CookieManager(options);
   await manager.load();
   return manager;

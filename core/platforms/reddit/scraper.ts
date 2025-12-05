@@ -1,23 +1,21 @@
 /**
  * Reddit Scraper - Node.js Implementation
- * 
+ *
  * Replaces the Python reddit-helper service with a native TypeScript implementation.
  * Uses Reddit's public JSON API for data retrieval.
  */
 
 import axios, { AxiosInstance } from 'axios';
-import * as fs from 'fs';
-import * as path from 'path';
 import { createEnhancedLogger } from '../../../utils';
 import {
-  RedditListing,
-  RedditThing,
-  RedditPost,
-  RedditComment,
-  RedditMore,
   FlattenedComment,
+  RedditComment,
+  RedditListing,
+  RedditMore,
+  RedditPost,
   RedditScraperConfig,
   RedditScraperResult,
+  RedditThing,
 } from './types';
 
 const logger = createEnhancedLogger('RedditScraper');
@@ -41,7 +39,7 @@ export class RedditScraper {
   async fetchSubredditPosts(
     subreddit: string,
     limit: number = 100,
-    sortType: string = 'hot'
+    sortType: string = 'hot',
   ): Promise<Array<{ url: string; id: string }>> {
     const posts: Array<{ url: string; id: string }> = [];
     let after: string | null = null;
@@ -50,7 +48,7 @@ export class RedditScraper {
     while (posts.length < limit) {
       try {
         logger.info(`Fetching page ${page}...`);
-        
+
         // Rate limiting
         if (page > 1) {
           await this.delay(this.baseDelay);
@@ -62,14 +60,14 @@ export class RedditScraper {
         }
 
         const response = await this.client.get<RedditListing>(url);
-        
+
         if (response.status === 403) {
           logger.warn('Blocked by Reddit (403)');
           break;
         }
 
         const children = response.data.data.children;
-        
+
         if (!children || children.length === 0) {
           logger.info('No more posts available');
           break;
@@ -77,7 +75,7 @@ export class RedditScraper {
 
         for (const child of children) {
           if (posts.length >= limit) break;
-          
+
           if (child.kind === 't3') {
             const postData = child.data as RedditPost;
             posts.push({
@@ -117,7 +115,7 @@ export class RedditScraper {
 
     // Ensure URL ends with .json
     let url = postUrl.endsWith('.json') ? postUrl : `${postUrl}.json`;
-    
+
     // Handle short URLs (redd.it)
     if (url.includes('redd.it/')) {
       url = url.replace('redd.it/', 'reddit.com/comments/');
@@ -155,14 +153,13 @@ export class RedditScraper {
   private parseCommentTree(
     listing: RedditListing | RedditThing,
     depth: number,
-    parentId: string | null
+    parentId: string | null,
   ): FlattenedComment[] {
     const comments: FlattenedComment[] = [];
 
     // Handle both Listing and Thing wrappers
-    const data = 'kind' in listing && listing.kind === 'Listing' 
-      ? listing.data 
-      : (listing as any).data;
+    const data =
+      'kind' in listing && listing.kind === 'Listing' ? listing.data : (listing as any).data;
 
     const children = data?.children || [];
 
@@ -190,7 +187,7 @@ export class RedditScraper {
           const childComments = this.parseCommentTree(
             commentData.replies,
             depth + 1,
-            commentData.id
+            commentData.id,
           );
           comments.push(...childComments);
         }
@@ -218,10 +215,10 @@ export class RedditScraper {
 
     try {
       logger.info(`Starting subreddit scrape: r/${subreddit}`);
-      
+
       // Step 1: Fetch post URLs
       const postUrls = await this.fetchSubredditPosts(subreddit, limit, sortType);
-      
+
       if (postUrls.length === 0) {
         return { status: 'error', message: 'No posts found' };
       }
@@ -234,9 +231,7 @@ export class RedditScraper {
 
       for (let i = 0; i < postUrls.length; i += concurrency) {
         const batch = postUrls.slice(i, i + concurrency);
-        const results = await Promise.allSettled(
-          batch.map(({ url }) => this.fetchPost(url))
-        );
+        const results = await Promise.allSettled(batch.map(({ url }) => this.fetchPost(url)));
 
         for (const result of results) {
           if (result.status === 'fulfilled') {

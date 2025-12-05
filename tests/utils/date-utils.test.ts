@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 /**
  * DateUtils 单元测试
  */
@@ -28,7 +28,7 @@ describe('DateUtils', () => {
   describe('generateDateRanges', () => {
     test('should generate daily date ranges', () => {
       const ranges = DateUtils.generateDateRanges('2024-01-01', '2024-01-05', 'daily');
-      
+
       expect(ranges.length).toBeGreaterThan(0);
       expect(ranges[0]).toHaveProperty('start');
       expect(ranges[0]).toHaveProperty('end');
@@ -37,9 +37,9 @@ describe('DateUtils', () => {
 
     test('should generate monthly date ranges', () => {
       const ranges = DateUtils.generateDateRanges('2024-01-01', '2024-03-01', 'monthly');
-      
+
       expect(ranges.length).toBeGreaterThan(0);
-      ranges.forEach(range => {
+      ranges.forEach((range) => {
         expect(range.start).toMatch(/^\d{4}-\d{2}-\d{2}$/);
         expect(range.end).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       });
@@ -47,9 +47,8 @@ describe('DateUtils', () => {
 
     test('should generate yearly date ranges', () => {
       const ranges = DateUtils.generateDateRanges('2020-01-01', '2024-01-01', 'yearly');
-      
+
       expect(ranges.length).toBeGreaterThan(0);
     });
   });
 });
-

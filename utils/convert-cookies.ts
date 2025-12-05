@@ -3,8 +3,8 @@
  * Converts Netscape cookie file format to JSON format for Puppeteer.
  */
 
-import { promises as fs } from 'fs';
-import * as path from 'path';
+import { promises as fs } from 'node:fs';
+import * as path from 'node:path';
 
 export interface CookieParam {
   name: string;
@@ -31,7 +31,8 @@ export function parseNetscapeCookieLine(line: string): CookieParam | null {
     return null; // Needs at least 7 columns
   }
 
-  const [domain, includeSubdomainsStr, cookiePath, secureStr, expiresTimestampStr, name, value] = parts;
+  const [domain, _includeSubdomainsStr, cookiePath, secureStr, expiresTimestampStr, name, value] =
+    parts;
   const isSecure = secureStr.toUpperCase() === 'TRUE';
   const expiresTimestamp = parseInt(expiresTimestampStr, 10);
 
@@ -41,7 +42,7 @@ export function parseNetscapeCookieLine(line: string): CookieParam | null {
     domain: domain, // keep as-is (leading dot OK)
     path: cookiePath,
     secure: isSecure,
-    httpOnly: false
+    httpOnly: false,
   };
 
   // Handle expiration
@@ -72,7 +73,7 @@ export async function convertCookieFile(inputFile: string, outputFile: string): 
     }
 
     const outputData = {
-      cookies
+      cookies,
     };
 
     await fs.writeFile(outputFile, JSON.stringify(outputData, null, 2), 'utf-8');

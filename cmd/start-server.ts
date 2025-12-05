@@ -1,34 +1,33 @@
 /**
  * XRCrawler Hono Server
- * 
+ *
  * Modern Bun-native HTTP server with type-safe routing
  */
 
 console.log('DEBUG: Hono server starting...');
 
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { Hono } from 'hono';
 import { serveStatic } from 'hono/bun';
 import { logger } from 'hono/logger';
-import * as path from 'path';
-import * as fs from 'fs';
 
 // Core imports
 import { createCookieManager, scrapeQueue } from '../core';
-import {
-  createEnhancedLogger,
-  getOutputPathManager,
-  getConfigManager,
-  setLogLevel,
-  safeJsonParse,
-} from '../utils';
-import { apiKeyMiddleware } from '../middleware/api-key';
 import { JobRepository } from '../core/db/job-repo';
-
+import { apiKeyMiddleware } from '../middleware/api-key';
+import healthRoutes from '../routes/health';
+import queueMonitor from '../routes/queue-monitor';
+import statsRoutes from '../routes/stats';
 // Route imports
 import jobRoutes from '../server/routes/jobs';
-import healthRoutes from '../routes/health';
-import statsRoutes from '../routes/stats';
-import queueMonitor from '../routes/queue-monitor';
+import {
+  createEnhancedLogger,
+  getConfigManager,
+  getOutputPathManager,
+  safeJsonParse,
+  setLogLevel,
+} from '../utils';
 
 const serverLogger = createEnhancedLogger('HonoServer');
 
@@ -61,16 +60,16 @@ function normalizeUsername(input: string | undefined): string | undefined {
 function parseRedditInput(input: string): { subreddit?: string; postUrl?: string } {
   if (!input) return {};
   const trimmed = input.trim();
-  
+
   if (trimmed.includes('/comments/') || trimmed.includes('redd.it/')) {
     return { postUrl: trimmed };
   }
-  
-  const subredditMatch = trimmed.match(/reddit\.com\/r\/([^\/\?#]+)/i);
+
+  const subredditMatch = trimmed.match(/reddit\.com\/r\/([^/?#]+)/i);
   if (subredditMatch) {
     return { subreddit: subredditMatch[1] };
   }
-  
+
   return { subreddit: trimmed };
 }
 
@@ -90,7 +89,7 @@ function getSafePathInfo(resolvedPath: string): {
 
   let runTimestamp: string | undefined;
   const match = runId.match(/run-(.+)/);
-  if (match && match[1]) {
+  if (match?.[1]) {
     runTimestamp = match[1];
   }
 
@@ -115,7 +114,7 @@ function getSafePathInfo(resolvedPath: string): {
 const app = new Hono();
 
 // Global state
-let isShuttingDown = false;
+const isShuttingDown = false;
 
 // Middleware
 app.use('*', logger());
@@ -145,7 +144,18 @@ app.post('/api/scrape-v2', async (c) => {
 
   try {
     const body = await c.req.json();
-    const { type, input, limit, likes, mode, dateRange, enableRotation, enableProxy, strategy, antiDetectionLevel } = body;
+    const {
+      type,
+      input,
+      limit,
+      likes,
+      mode,
+      dateRange,
+      enableRotation,
+      enableProxy,
+      strategy,
+      antiDetectionLevel,
+    } = body;
 
     serverLogger.info('收到队列爬取请求', { type, input, limit });
 
@@ -153,15 +163,18 @@ app.post('/api/scrape-v2', async (c) => {
     const isReddit = type === 'reddit';
 
     if (!isTwitter && !isReddit) {
-      return c.json({
-        success: false,
-        error: 'Invalid scrape type. Must be profile, thread, search, or reddit'
-      }, 400);
+      return c.json(
+        {
+          success: false,
+          error: 'Invalid scrape type. Must be profile, thread, search, or reddit',
+        },
+        400,
+      );
     }
 
     // Build config
     let config: any = {};
-    
+
     if (isTwitter) {
       const normalizedUsername = type === 'profile' ? normalizeUsername(input) : undefined;
       config = {
@@ -199,7 +212,7 @@ app.post('/api/scrape-v2', async (c) => {
     const jobData: any = {
       jobId: dbJob.id,
       type: isTwitter ? 'twitter' : 'reddit',
-      config
+      config,
     };
 
     const bullJob = await scrapeQueue.add(dbJob.id, jobData, {
@@ -218,13 +231,15 @@ app.post('/api/scrape-v2', async (c) => {
       statusUrl: `/api/jobs/${bullJob.id}`,
       progressUrl: `/api/jobs/${bullJob.id}/stream`,
     });
-
   } catch (error: any) {
     serverLogger.error('队列添加失败', error);
-    return c.json({
-      success: false,
-      error: error.message || 'Failed to queue task'
-    }, 500);
+    return c.json(
+      {
+        success: false,
+        error: error.message || 'Failed to queue task',
+      },
+      500,
+    );
   }
 });
 
@@ -268,7 +283,7 @@ app.get('/api/download', (c) => {
         resolvedPath = candidate;
       }
     }
-    
+
     if (!outputPathManager.isPathSafe(resolvedPath)) {
       return c.text('Invalid file path', 400);
     }
@@ -276,7 +291,7 @@ app.get('/api/download', (c) => {
 
   const basename = path.basename(resolvedPath);
   let downloadName = basename;
-  
+
   if (basename === 'tweets.md' || basename === 'index.md') {
     const { identifier, runTimestamp, tweetCount } = getSafePathInfo(resolvedPath);
     const timestamp = runTimestamp || new Date().toISOString().split('T')[0];
@@ -345,10 +360,13 @@ app.post('/api/cookies', async (c) => {
     } catch (validationError: any) {
       // If invalid, delete the file
       fs.unlinkSync(filePath);
-      return c.json({
-        success: false,
-        error: `Invalid cookie file: ${validationError.message}`,
-      }, 400);
+      return c.json(
+        {
+          success: false,
+          error: `Invalid cookie file: ${validationError.message}`,
+        },
+        400,
+      );
     }
   } catch (error: any) {
     serverLogger.error('上传 cookies 失败', error);
@@ -366,7 +384,7 @@ app.use('/icon.png', serveStatic({ path: './public/icon.png' }));
 // SPA fallback - serve requested HTML file or index.html
 app.get('*', (c) => {
   const requestPath = c.req.path;
-  
+
   // Try to serve the exact file if it's an HTML request
   if (requestPath.endsWith('.html')) {
     const filePath = path.join(STATIC_DIR, requestPath);
@@ -374,7 +392,7 @@ app.get('*', (c) => {
       return c.html(fs.readFileSync(filePath, 'utf-8'));
     }
   }
-  
+
   // Fallback to index.html for SPA
   const indexPath = path.join(STATIC_DIR, 'index.html');
   if (fs.existsSync(indexPath)) {
@@ -394,4 +412,3 @@ export default {
   port: PORT,
   fetch: app.fetch,
 };
-

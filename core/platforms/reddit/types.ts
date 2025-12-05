@@ -1,6 +1,6 @@
 /**
  * Reddit API Type Definitions
- * 
+ *
  * Types for Reddit's public JSON API responses.
  * Ref: https://www.reddit.com/dev/api/
  */

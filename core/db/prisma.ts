@@ -1,12 +1,15 @@
-import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 import { PrismaClient } from '../../generated/prisma/client';
 import { createEnhancedLogger } from '../../utils/logger';
 
 const logger = createEnhancedLogger('Prisma');
 
 // 调试日志：检查环境变量是否存在
-console.log('[Prisma Init] Checking DATABASE_URL:', process.env.DATABASE_URL ? 'Present' : 'MISSING');
+console.log(
+  '[Prisma Init] Checking DATABASE_URL:',
+  process.env.DATABASE_URL ? 'Present' : 'MISSING',
+);
 
 // Prevent multiple instances in development due to hot reloading
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
@@ -28,7 +31,7 @@ const createMockPrismaClient = (): PrismaClient => {
 // Create real PrismaClient with pg adapter (Prisma v7 pattern)
 const createRealPrismaClient = (): PrismaClient => {
   const connectionString = process.env.DATABASE_URL;
-  
+
   if (!connectionString) {
     throw new Error('DATABASE_URL environment variable is missing');
   }
@@ -50,7 +53,9 @@ let prismaInstance: PrismaClient;
 
 try {
   console.log('[Prisma Init] Starting initialization...');
-  prismaInstance = globalForPrisma.prisma || (isTestWithoutDb ? createMockPrismaClient() : createRealPrismaClient());
+  prismaInstance =
+    globalForPrisma.prisma ||
+    (isTestWithoutDb ? createMockPrismaClient() : createRealPrismaClient());
   console.log('[Prisma Init] Successfully initialized.');
 } catch (error) {
   console.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');

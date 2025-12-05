@@ -4,10 +4,10 @@
  * 重构：使用 OutputPathManager 统一管理路径
  */
 
-import { promises as fs } from 'fs';
-import * as path from 'path';
-import * as timeUtils from './time';
+import { promises as fs } from 'node:fs';
+import * as path from 'node:path';
 import { getOutputPathManager } from './output-path-manager';
+import * as timeUtils from './time';
 
 const DEFAULT_OUTPUT_ROOT = path.resolve(process.cwd(), 'output');
 
@@ -18,12 +18,14 @@ const DEFAULT_IDENTIFIER = 'timeline';
  * 简单清理文件路径片段，避免非法字符
  */
 export function sanitizeSegment(segment: string = ''): string {
-  return String(segment)
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9-_]+/gi, '-')
-    .replace(/-{2,}/g, '-')
-    .replace(/^-|-$/g, '') || DEFAULT_IDENTIFIER;
+  return (
+    String(segment)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-_]+/gi, '-')
+      .replace(/-{2,}/g, '-')
+      .replace(/^-|-$/g, '') || DEFAULT_IDENTIFIER
+  );
 }
 
 /**
@@ -36,7 +38,7 @@ export async function ensureDirExists(dir: string): Promise<boolean> {
   try {
     await fs.mkdir(dir, { recursive: true });
     return true;
-  } catch (error: any) {
+  } catch (_error: any) {
     // 静默失败，由调用方处理错误
     return false;
   }
@@ -114,7 +116,7 @@ export async function createRunContext(options: RunContextOptions = {}): Promise
 
   const timestampInfo = timeUtils.formatZonedTimestamp(sourceDate, timezone, {
     includeMilliseconds: true,
-    includeOffset: true
+    includeOffset: true,
   });
 
   const runTimestamp = timestampInfo.fileSafe;
@@ -124,9 +126,9 @@ export async function createRunContext(options: RunContextOptions = {}): Promise
 
   // 使用 OutputPathManager 统一管理路径
   const pathManager = getOutputPathManager({
-    baseDir: options.baseOutputDir
+    baseDir: options.baseOutputDir,
   });
-  
+
   const runPath = await pathManager.createRunPath(platform, identifier, runId);
 
   return {
@@ -144,7 +146,7 @@ export async function createRunContext(options: RunContextOptions = {}): Promise
     jsonPath: runPath.jsonPath,
     csvPath: runPath.csvPath,
     markdownIndexPath: runPath.markdownIndexPath,
-    metadataPath: runPath.metadataPath
+    metadataPath: runPath.metadataPath,
   };
 }
 
@@ -165,9 +167,12 @@ export async function getMarkdownFiles(dir: string): Promise<string[]> {
   try {
     const files = await fs.readdir(dir);
     return files
-      .filter(file => file.endsWith('.md') && !file.startsWith('merged-') && !file.startsWith('digest-'))
-      .map(file => path.join(dir, file));
-  } catch (error: any) {
+      .filter(
+        (file) =>
+          file.endsWith('.md') && !file.startsWith('merged-') && !file.startsWith('digest-'),
+      )
+      .map((file) => path.join(dir, file));
+  } catch (_error: any) {
     // 静默返回空数组，由调用方处理
     return [];
   }

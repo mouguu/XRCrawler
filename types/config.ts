@@ -76,11 +76,11 @@ export interface TimelineScrapeOptions {
   /** Search query for search mode */
   searchQuery?: string;
   /** Scraping mode: 'timeline' or 'search' */
-  mode?: "timeline" | "search";
+  mode?: 'timeline' | 'search';
   /** Maximum number of tweets to scrape */
   limit?: number;
   /** Scraping technique: 'graphql', 'puppeteer', or 'mixed' */
-  scrapeMode?: "graphql" | "puppeteer" | "mixed";
+  scrapeMode?: 'graphql' | 'puppeteer' | 'mixed';
   /** Date range for search mode */
   dateRange?: { start: string; end: string };
   /** Enable deep search with date chunking */
@@ -88,7 +88,7 @@ export interface TimelineScrapeOptions {
   /** Number of parallel chunks for date chunking */
   parallelChunks?: number;
   /** Tab to scrape: 'likes' or 'replies' */
-  tab?: "likes" | "replies";
+  tab?: 'likes' | 'replies';
   /** Include replies in timeline */
   withReplies?: boolean;
 }
@@ -102,7 +102,7 @@ export interface ThreadScrapeOptions {
   /** Maximum number of replies to fetch */
   maxReplies?: number;
   /** Scraping technique: 'graphql' or 'puppeteer' */
-  scrapeMode?: "graphql" | "puppeteer";
+  scrapeMode?: 'graphql' | 'puppeteer';
 }
 
 /**
@@ -197,15 +197,15 @@ export const DEFAULT_CONFIG: CompleteConfig = {
       maxIdleTime: 30000,
       acquireTimeout: 30000,
     },
-    outputDir: "./output",
+    outputDir: './output',
     headless: true,
     enableRotation: true,
     apiOnly: false,
   },
   timeline: {
     limit: 50,
-    scrapeMode: "graphql",
-    mode: "timeline",
+    scrapeMode: 'graphql',
+    mode: 'timeline',
     withReplies: false,
     enableDeepSearch: false,
     parallelChunks: 1,
@@ -213,10 +213,10 @@ export const DEFAULT_CONFIG: CompleteConfig = {
   thread: {
     tweetUrl: '',
     maxReplies: 100,
-    scrapeMode: "graphql",
+    scrapeMode: 'graphql',
   },
   session: {
-    cookieDir: "./cookies",
+    cookieDir: './cookies',
     management: {
       autoRotation: true,
       maxConsecutiveFailures: 3,
@@ -246,72 +246,55 @@ export function validateConfig(config: Partial<CompleteConfig>): void {
 
   const { general } = config;
 
-  if (general.outputDir && typeof general.outputDir !== "string") {
-    throw new Error("outputDir must be a string");
+  if (general.outputDir && typeof general.outputDir !== 'string') {
+    throw new Error('outputDir must be a string');
   }
 
-  if (general.headless !== undefined && typeof general.headless !== "boolean") {
-    throw new Error("headless must be a boolean");
+  if (general.headless !== undefined && typeof general.headless !== 'boolean') {
+    throw new Error('headless must be a boolean');
   }
 
-  if (
-    general.enableRotation !== undefined &&
-    typeof general.enableRotation !== "boolean"
-  ) {
-    throw new Error("enableRotation must be a boolean");
+  if (general.enableRotation !== undefined && typeof general.enableRotation !== 'boolean') {
+    throw new Error('enableRotation must be a boolean');
   }
 
-  if (general.apiOnly !== undefined && typeof general.apiOnly !== "boolean") {
-    throw new Error("apiOnly must be a boolean");
+  if (general.apiOnly !== undefined && typeof general.apiOnly !== 'boolean') {
+    throw new Error('apiOnly must be a boolean');
   }
 
   if (general.export) {
     const { export: exportOpts } = general;
-    if (
-      exportOpts.markdown !== undefined &&
-      typeof exportOpts.markdown !== "boolean"
-    ) {
-      throw new Error("export.markdown must be a boolean");
+    if (exportOpts.markdown !== undefined && typeof exportOpts.markdown !== 'boolean') {
+      throw new Error('export.markdown must be a boolean');
     }
-    if (exportOpts.csv !== undefined && typeof exportOpts.csv !== "boolean") {
-      throw new Error("export.csv must be a boolean");
+    if (exportOpts.csv !== undefined && typeof exportOpts.csv !== 'boolean') {
+      throw new Error('export.csv must be a boolean');
     }
-    if (exportOpts.json !== undefined && typeof exportOpts.json !== "boolean") {
-      throw new Error("export.json must be a boolean");
+    if (exportOpts.json !== undefined && typeof exportOpts.json !== 'boolean') {
+      throw new Error('export.json must be a boolean');
     }
-    if (
-      exportOpts.screenshots !== undefined &&
-      typeof exportOpts.screenshots !== "boolean"
-    ) {
-      throw new Error("export.screenshots must be a boolean");
+    if (exportOpts.screenshots !== undefined && typeof exportOpts.screenshots !== 'boolean') {
+      throw new Error('export.screenshots must be a boolean');
     }
   }
 
   if (config.timeline?.limit !== undefined) {
-    if (
-      typeof config.timeline.limit !== "number" ||
-      config.timeline.limit < 1
-    ) {
-      throw new Error("timeline.limit must be a positive number");
+    if (typeof config.timeline.limit !== 'number' || config.timeline.limit < 1) {
+      throw new Error('timeline.limit must be a positive number');
     }
     if (config.timeline.limit > 10000) {
-      throw new Error("timeline.limit must be <= 10000");
+      throw new Error('timeline.limit must be <= 10000');
     }
   }
 
   if (
     config.timeline?.scrapeMode &&
-    !["graphql", "puppeteer", "mixed"].includes(config.timeline.scrapeMode)
+    !['graphql', 'puppeteer', 'mixed'].includes(config.timeline.scrapeMode)
   ) {
-    throw new Error(
-      "timeline.scrapeMode must be 'graphql', 'puppeteer', or 'mixed'"
-    );
+    throw new Error("timeline.scrapeMode must be 'graphql', 'puppeteer', or 'mixed'");
   }
 
-  if (
-    config.thread?.scrapeMode &&
-    !["graphql", "puppeteer"].includes(config.thread.scrapeMode)
-  ) {
+  if (config.thread?.scrapeMode && !['graphql', 'puppeteer'].includes(config.thread.scrapeMode)) {
     throw new Error("thread.scrapeMode must be 'graphql' or 'puppeteer'");
   }
 }
@@ -321,21 +304,15 @@ export function validateConfig(config: Partial<CompleteConfig>): void {
  * @param userConfig User configuration
  * @returns Merged configuration
  */
-export function mergeConfig(
-  userConfig: Partial<CompleteConfig>
-): CompleteConfig {
+export function mergeConfig(userConfig: Partial<CompleteConfig>): CompleteConfig {
   const merged = JSON.parse(JSON.stringify(DEFAULT_CONFIG)) as CompleteConfig;
 
   // Deep merge function
   function deepMerge(target: any, source: any): any {
-    if (source && typeof source === "object") {
+    if (source && typeof source === 'object') {
       Object.keys(source).forEach((key) => {
-        if (
-          source[key] &&
-          typeof source[key] === "object" &&
-          !Array.isArray(source[key])
-        ) {
-          if (!target[key] || typeof target[key] !== "object") {
+        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+          if (!target[key] || typeof target[key] !== 'object') {
             target[key] = {};
           }
           deepMerge(target[key], source[key]);

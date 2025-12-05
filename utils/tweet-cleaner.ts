@@ -1,6 +1,6 @@
-import fs from 'fs';
-import path from 'path';
-import type { Tweet, RawTweetData } from '../types/tweet-definitions';
+import fs from 'node:fs';
+import path from 'node:path';
+import type { RawTweetData, Tweet } from '../types/tweet-definitions';
 import { normalizeRawTweet } from '../types/tweet-definitions';
 
 export interface CleanStats {
@@ -19,7 +19,11 @@ export interface CleanTweetsResult {
 }
 
 type CleanerModule = {
-  clean_and_merge: (existing: any, incoming: any, limit?: number | null) => {
+  clean_and_merge: (
+    existing: any,
+    incoming: any,
+    limit?: number | null,
+  ) => {
     tweets: Tweet[];
     stats: CleanStats;
   };
@@ -49,10 +53,7 @@ async function resolveWasmModule(): Promise<CleanerModule | null> {
         if (mod && typeof (mod as any).clean_and_merge === 'function') {
           return mod as CleanerModule;
         }
-      } catch (err) {
-        // Try next candidate
-        continue;
-      }
+      } catch (_err) {}
     }
     return null;
   })();
@@ -64,7 +65,11 @@ function coerceTweet(input: any): Tweet | null {
   if (!input || typeof input !== 'object') return null;
 
   // Already normalized Tweet-like
-  if (typeof input.id === 'string' && typeof input.url === 'string' && typeof input.text === 'string') {
+  if (
+    typeof input.id === 'string' &&
+    typeof input.url === 'string' &&
+    typeof input.text === 'string'
+  ) {
     return {
       id: String(input.id),
       url: String(input.url),
@@ -106,7 +111,11 @@ function sortTweetsByTime(tweets: Tweet[]): Tweet[] {
   });
 }
 
-function mergeTweetsFallback(existing: Tweet[], incoming: any[], limit?: number): CleanTweetsResult {
+function mergeTweetsFallback(
+  existing: Tweet[],
+  incoming: any[],
+  limit?: number,
+): CleanTweetsResult {
   const map = new Map<string, Tweet>();
   let dropped = 0;
   let deduped = 0;
@@ -159,7 +168,7 @@ function mergeTweetsFallback(existing: Tweet[], incoming: any[], limit?: number)
 export async function cleanTweetsFast(
   existing: Tweet[],
   incoming: any[],
-  options: { limit?: number } = {}
+  options: { limit?: number } = {},
 ): Promise<CleanTweetsResult> {
   const wasm = await resolveWasmModule();
   let wasmError: string | undefined;

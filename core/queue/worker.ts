@@ -4,19 +4,19 @@
  * Uses platform adapters to execute scraping tasks from the queue
  */
 
-import { Worker, Job, UnrecoverableError } from "bullmq";
-import { redisConnection, redisPublisher } from "./connection";
-import { JobLog, JobProgress, ScrapeJobData, ScrapeJobResult } from "./types";
-import { getConfigManager } from "../../utils/config-manager";
-import { createEnhancedLogger } from "../../utils/logger";
-import { AdapterJobContext } from "../platforms/types";
-import { getAdapter, registerAdapter } from "../platforms/registry";
-import { twitterAdapter } from "../platforms/twitter-adapter";
-import { redditAdapter } from "../platforms/reddit-adapter";
-import { ErrorClassifier } from "../errors";
-import { JobRepository } from "../db/job-repo";
+import { Job, UnrecoverableError, Worker } from 'bullmq';
+import { getConfigManager } from '../../utils/config-manager';
+import { createEnhancedLogger } from '../../utils/logger';
+import { JobRepository } from '../db/job-repo';
+import { ErrorClassifier } from '../errors';
+import { redditAdapter } from '../platforms/reddit-adapter';
+import { getAdapter, registerAdapter } from '../platforms/registry';
+import { twitterAdapter } from '../platforms/twitter-adapter';
+import { AdapterJobContext } from '../platforms/types';
+import { redisConnection, redisPublisher } from './connection';
+import { JobLog, JobProgress, ScrapeJobData, ScrapeJobResult } from './types';
 
-const logger = createEnhancedLogger("Worker");
+const logger = createEnhancedLogger('Worker');
 const config = getConfigManager();
 
 // Track cancelled jobs (job ID -> cancelled timestamp)
@@ -69,7 +69,7 @@ function serializeError(error: any): any {
 
   // Handle standard errors
   return {
-    name: error.name || "Error",
+    name: error.name || 'Error',
     message: error.message || String(error),
     code: error.code,
     stack: error.stack,
@@ -96,7 +96,7 @@ class JobContext implements AdapterJobContext {
 
     await redisPublisher.publish(
       `job:${this.job.id}:progress`,
-      JSON.stringify({ ...progress, percentage })
+      JSON.stringify({ ...progress, percentage }),
     );
   }
 
@@ -117,7 +117,7 @@ class JobContext implements AdapterJobContext {
   /**
    * Log helper
    */
-  async log(message: string, level: JobLog["level"] = "info") {
+  async log(message: string, level: JobLog['level'] = 'info') {
     return this.emitLog({
       level,
       message,
@@ -133,10 +133,10 @@ export function createScrapeWorker(concurrency?: number) {
   const queueConfig = config.getQueueConfig();
   const workerConcurrency = concurrency || queueConfig.concurrency;
 
-  logger.info("Creating scrape worker", { concurrency: workerConcurrency });
+  logger.info('Creating scrape worker', { concurrency: workerConcurrency });
 
   const worker = new Worker<ScrapeJobData, ScrapeJobResult>(
-    "scraper",
+    'scraper',
     async (job) => {
       const ctx = new JobContext(job);
       const { type, jobId } = job.data;
@@ -146,9 +146,9 @@ export function createScrapeWorker(concurrency?: number) {
       // Mark job as active in PostgreSQL
       if (jobId) {
         try {
-          await JobRepository.updateStatus(jobId, "active");
-        } catch (e) {
-          logger.debug("Could not update job status to active", { jobId });
+          await JobRepository.updateStatus(jobId, 'active');
+        } catch (_e) {
+          logger.debug('Could not update job status to active', { jobId });
         }
       }
 
@@ -162,9 +162,9 @@ export function createScrapeWorker(concurrency?: number) {
         // Mark job as completed in PostgreSQL
         if (jobId) {
           try {
-            await JobRepository.updateStatus(jobId, "completed");
-          } catch (e) {
-            logger.debug("Could not update job status to completed", { jobId });
+            await JobRepository.updateStatus(jobId, 'completed');
+          } catch (_e) {
+            logger.debug('Could not update job status to completed', { jobId });
           }
         }
 
@@ -176,17 +176,17 @@ export function createScrapeWorker(concurrency?: number) {
         // Log error and update status to failed in PostgreSQL
         if (job.data.jobId) {
           try {
-            await JobRepository.updateStatus(job.data.jobId, "failed", scraperError.message);
+            await JobRepository.updateStatus(job.data.jobId, 'failed', scraperError.message);
             await JobRepository.logError({
               jobId: job.data.jobId,
-              severity: "error",
-              category: scraperError.code || "UNKNOWN",
+              severity: 'error',
+              category: scraperError.code || 'UNKNOWN',
               message: scraperError.message,
               stack: scraperError.stack,
               context: serializedError, // Use serialized version
             });
           } catch (dbError) {
-            logger.error("Failed to log error to DB", dbError as Error);
+            logger.error('Failed to log error to DB', dbError as Error);
           }
         }
 
@@ -212,29 +212,29 @@ export function createScrapeWorker(concurrency?: number) {
         max: queueConfig.rateLimit.max,
         duration: queueConfig.rateLimit.duration,
       },
-    }
+    },
   );
 
   // Worker event handlers
-  worker.on("completed", (job) => {
+  worker.on('completed', (job) => {
     logger.info(`Job ${job.id} completed`, {
       type: job.data.type,
       stats: job.returnvalue?.stats,
     });
   });
 
-  worker.on("failed", (job, err) => {
+  worker.on('failed', (job, err) => {
     logger.error(`Job ${job?.id} failed`, err, {
       type: job?.data?.type,
       attempts: job?.attemptsMade,
     });
   });
 
-  worker.on("error", (err) => {
-    logger.error("Worker error", err);
+  worker.on('error', (err) => {
+    logger.error('Worker error', err);
   });
 
-  worker.on("active", (job) => {
+  worker.on('active', (job) => {
     logger.info(`Job ${job.id} started`, { type: job.data.type });
   });
 
@@ -245,7 +245,7 @@ export function createScrapeWorker(concurrency?: number) {
  * Graceful worker shutdown
  */
 export async function shutdownWorker(worker: Worker): Promise<void> {
-  logger.info("Shutting down worker...");
+  logger.info('Shutting down worker...');
   await worker.close();
-  logger.info("Worker shut down");
+  logger.info('Worker shut down');
 }

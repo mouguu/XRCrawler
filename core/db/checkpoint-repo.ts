@@ -1,5 +1,5 @@
-import { prisma } from './prisma';
 import { createEnhancedLogger } from '../../utils/logger';
+import { prisma } from './prisma';
 
 const logger = createEnhancedLogger('CheckpointRepo');
 
@@ -11,7 +11,7 @@ export class CheckpointRepository {
     jobId: string,
     key: string,
     value: string,
-    metadata?: any
+    metadata?: any,
   ): Promise<void> {
     try {
       await prisma.checkpoint.upsert({
@@ -40,10 +40,7 @@ export class CheckpointRepository {
   /**
    * Get a checkpoint value
    */
-  static async getCheckpoint(
-    jobId: string,
-    key: string
-  ): Promise<string | null> {
+  static async getCheckpoint(jobId: string, key: string): Promise<string | null> {
     const cp = await prisma.checkpoint.findUnique({
       where: {
         jobId_key: {
@@ -58,10 +55,7 @@ export class CheckpointRepository {
   /**
    * Get full checkpoint object
    */
-  static async getCheckpointFull(
-    jobId: string,
-    key: string
-  ) {
+  static async getCheckpointFull(jobId: string, key: string) {
     return prisma.checkpoint.findUnique({
       where: {
         jobId_key: {

@@ -1,7 +1,7 @@
 /**
  * Result helper utilities for consistent success/failure handling.
  * 提供统一的结果处理工具，用于处理成功/失败场景
- * 
+ *
  * 注意：当前代码库中实际使用的是特定结果类型（如 ScrapeTimelineResult, ScrapeThreadResult），
  * 而不是这个通用的 Result 类型。此文件保留为未来统一结果格式的备选方案。
  */
@@ -34,7 +34,10 @@ export function ok<T>(data: T, metadata: Record<string, unknown> = {}): Result<T
  * @param metadata 可选的元数据
  * @returns 失败结果对象
  */
-export function fail<E = string>(error: E, metadata: Record<string, unknown> = {}): Result<never, E> {
+export function fail<E = string>(
+  error: E,
+  metadata: Record<string, unknown> = {},
+): Result<never, E> {
   return { success: false, data: null, error, metadata };
 }
 
@@ -43,7 +46,9 @@ export function fail<E = string>(error: E, metadata: Record<string, unknown> = {
  * @param result 结果对象
  * @returns 是否为成功结果
  */
-export function isOk<T, E>(result: Result<T, E>): result is Result<T, E> & { success: true; data: T } {
+export function isOk<T, E>(
+  result: Result<T, E>,
+): result is Result<T, E> & { success: true; data: T } {
   return result.success;
 }
 
@@ -52,7 +57,9 @@ export function isOk<T, E>(result: Result<T, E>): result is Result<T, E> & { suc
  * @param result 结果对象
  * @returns 是否为失败结果
  */
-export function isFail<T, E>(result: Result<T, E>): result is Result<T, E> & { success: false; error: E } {
+export function isFail<T, E>(
+  result: Result<T, E>,
+): result is Result<T, E> & { success: false; error: E } {
   return !result.success;
 }
 
@@ -72,13 +79,13 @@ export function unwrapOr<T, E>(result: Result<T, E>, defaultValue: T): T {
  * @returns 包装后的函数，返回 Result 类型
  */
 export function wrap<T extends (...args: any[]) => any>(fn: T) {
-  return (...args: Parameters<T>): ReturnType<T> extends Promise<infer R>
-    ? Promise<Result<R>>
-    : Result<ReturnType<T>> => {
+  return (
+    ...args: Parameters<T>
+  ): ReturnType<T> extends Promise<infer R> ? Promise<Result<R>> : Result<ReturnType<T>> => {
     try {
       const maybePromise = fn(...args);
       if (maybePromise instanceof Promise) {
-        return (maybePromise.then(value => ok(value)).catch(err => fail(err))) as any;
+        return maybePromise.then((value) => ok(value)).catch((err) => fail(err)) as any;
       }
       return ok(maybePromise) as any;
     } catch (error: any) {

@@ -1,5 +1,5 @@
-import fs from 'fs';
-import path from 'path';
+import fs from 'node:fs';
+import path from 'node:path';
 
 export interface NormalizedRedditPost {
   id: string;
@@ -32,7 +32,10 @@ export interface RedditParseResult {
 }
 
 type WasmModule = {
-  parse_reddit_payload: (payload: any) => { posts: NormalizedRedditPost[]; stats: RedditParseStats };
+  parse_reddit_payload: (payload: any) => {
+    posts: NormalizedRedditPost[];
+    stats: RedditParseStats;
+  };
 };
 
 let wasmModulePromise: Promise<WasmModule | null> | null = null;
@@ -58,10 +61,7 @@ async function loadWasm(): Promise<WasmModule | null> {
         if (mod && typeof (mod as any).parse_reddit_payload === 'function') {
           return mod as WasmModule;
         }
-      } catch (e) {
-        // Try next candidate
-        continue;
-      }
+      } catch (_e) {}
     }
     return null;
   })();

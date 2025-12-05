@@ -11,10 +11,7 @@ declare global {
   }
 }
 
-const apiBase =
-  import.meta.env.VITE_API_BASE_URL ||
-  window.__APP_CONFIG__?.apiBase ||
-  '';
+const apiBase = import.meta.env.VITE_API_BASE_URL || window.__APP_CONFIG__?.apiBase || '';
 
 window.__APP_CONFIG__ = {
   ...window.__APP_CONFIG__,

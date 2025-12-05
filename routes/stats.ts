@@ -23,7 +23,7 @@ statsRoutes.get('/stats', async (c) => {
   try {
     // Check cache
     const now = Date.now();
-    if (cachedStats && (now - cacheTimestamp) < CACHE_TTL) {
+    if (cachedStats && now - cacheTimestamp < CACHE_TTL) {
       return c.json(cachedStats);
     }
 
@@ -37,40 +37,40 @@ statsRoutes.get('/stats', async (c) => {
       uniqueUsersToday,
       errorsToday,
       recentErrors,
-      runningJobs
+      runningJobs,
     ] = await Promise.all([
       prisma.job.count(),
       prisma.tweet.count(),
       prisma.errorLog.count(),
       prisma.job.count({ where: { status: 'active' } }),
-      
+
       // Today's stats
       prisma.tweet.count({
         where: {
           scrapedAt: {
-            gte: new Date(new Date().setHours(0, 0, 0, 0))
-          }
-        }
+            gte: new Date(new Date().setHours(0, 0, 0, 0)),
+          },
+        },
       }),
-      
+
       prisma.tweet.findMany({
         where: {
           scrapedAt: {
-            gte: new Date(new Date().setHours(0, 0, 0, 0))
-          }
+            gte: new Date(new Date().setHours(0, 0, 0, 0)),
+          },
         },
         select: { username: true },
-        distinct: ['username']
+        distinct: ['username'],
       }),
-      
+
       prisma.errorLog.count({
         where: {
           createdAt: {
-            gte: new Date(new Date().setHours(0, 0, 0, 0))
-          }
-        }
+            gte: new Date(new Date().setHours(0, 0, 0, 0)),
+          },
+        },
       }),
-      
+
       // Recent errors (last 10)
       prisma.errorLog.findMany({
         take: 10,
@@ -79,10 +79,10 @@ statsRoutes.get('/stats', async (c) => {
           category: true,
           message: true,
           createdAt: true,
-          severity: true
-        }
+          severity: true,
+        },
       }),
-      
+
       // Running jobs
       prisma.job.findMany({
         where: { status: 'active' },
@@ -92,10 +92,10 @@ statsRoutes.get('/stats', async (c) => {
           config: true,
           startedAt: true,
           _count: {
-            select: { tweets: true }
-          }
-        }
-      })
+            select: { tweets: true },
+          },
+        },
+      }),
     ]);
 
     const stats = {
@@ -103,26 +103,26 @@ statsRoutes.get('/stats', async (c) => {
         totalTweets,
         totalJobs,
         activeJobs,
-        totalErrors
+        totalErrors,
       },
       today: {
         tweetsScraped: todayTweets,
         uniqueUsers: uniqueUsersToday.length,
-        errors: errorsToday
+        errors: errorsToday,
       },
-      recentErrors: recentErrors.map(e => ({
+      recentErrors: recentErrors.map((e) => ({
         category: e.category,
         message: e.message,
         timestamp: e.createdAt,
-        severity: e.severity
+        severity: e.severity,
       })),
-      runningJobs: runningJobs.map(j => ({
+      runningJobs: runningJobs.map((j) => ({
         id: j.id,
         type: j.type,
         username: (j.config as any)?.username || 'N/A',
         runningSince: j.startedAt,
-        tweetsCollected: j._count.tweets
-      }))
+        tweetsCollected: j._count.tweets,
+      })),
     };
 
     // Update cache
@@ -132,10 +132,13 @@ statsRoutes.get('/stats', async (c) => {
     return c.json(stats);
   } catch (error: any) {
     logger.error('Stats API failed', error);
-    return c.json({
-      error: 'Failed to fetch stats',
-      message: error.message
-    }, 500);
+    return c.json(
+      {
+        error: 'Failed to fetch stats',
+        message: error.message,
+      },
+      500,
+    );
   }
 });
 

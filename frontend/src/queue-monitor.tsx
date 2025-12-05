@@ -1,7 +1,7 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import { QueueMonitor } from './components/QueueMonitor'
-import './index.css'
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { QueueMonitor } from './components/QueueMonitor';
+import './index.css';
 
 function QueueMonitorApp() {
   return (
@@ -17,7 +17,7 @@ function QueueMonitorApp() {
             <span className="text-muted-foreground">/</span>
             <h1 className="text-lg font-medium">Queue Monitor</h1>
           </div>
-          <a 
+          <a
             href="/"
             className="px-4 py-2 text-sm rounded-lg border border-border hover:bg-muted transition-colors"
           >
@@ -36,11 +36,11 @@ function QueueMonitorApp() {
         <p>XRCrawler Queue Monitor • Powered by BullMQ</p>
       </footer>
     </div>
-  )
+  );
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueueMonitorApp />
   </React.StrictMode>,
-)
+);
