@@ -170,7 +170,7 @@ export function ActiveJobsPanel({ onJobComplete }: ActiveJobsPanelProps) {
         // Fetch jobs in active, waiting, or delayed states
         const states = ['active', 'waiting', 'delayed'];
         const jobPromises = states.map(state =>
-          fetch(`/api/jobs?state=${state}&count=50`)
+          fetch(`/api/job?state=${state}&count=50`)
             .then(res => res.json())
             .catch(() => ({ jobs: [] }))
         );
