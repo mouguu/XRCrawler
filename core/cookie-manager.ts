@@ -7,6 +7,7 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import { Page, Protocol } from 'puppeteer';
 import * as validation from '../utils';
+import { safeJsonParse } from '../utils';
 import { ScraperErrors } from './errors';
 
 export interface CookieManagerOptions {
@@ -121,7 +122,7 @@ export class CookieManager {
   async loadFromFile(cookieFile: string): Promise<CookieLoadResult> {
     try {
       const cookiesString = await fs.readFile(cookieFile, 'utf-8');
-      const envData = JSON.parse(cookiesString);
+      const envData = safeJsonParse(cookiesString);
       return this.parseCookieData(envData, cookieFile);
     } catch (error: any) {
       throw ScraperErrors.cookieLoadFailed(`Failed to load cookies from ${cookieFile}: ${error.message}`, error);
@@ -222,7 +223,7 @@ export class CookieManager {
       const filename = path.basename(file);
       try {
         const content = await fs.readFile(file, 'utf-8');
-        const envData = JSON.parse(content);
+        const envData = safeJsonParse(content);
         const validationResult = validation.validateEnvCookieData(envData);
         
         sessions.push({

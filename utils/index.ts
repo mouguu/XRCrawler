@@ -81,3 +81,11 @@ export * from './convert-cookies';
 
 // URL Normalization
 export * from './url-normalizer';
+
+// Safe JSON Parsing (Prototype Pollution Protection)
+export {
+  safeJsonParse,
+  safeJsonParseSafe,
+  hasPollutionAttempt,
+  type SafeParseOptions
+} from './safe-json';

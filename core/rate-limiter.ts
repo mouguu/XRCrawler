@@ -2,7 +2,7 @@
  * Dynamic Rate Limiter based on Twitter API headers
  */
 
-import { createEnhancedLogger } from '../utils/logger';
+import { createEnhancedLogger, safeJsonParse } from '../utils';
 import { redisConnection } from './queue/connection';
 
 const logger = createEnhancedLogger('RateLimiter');
@@ -50,7 +50,7 @@ export class RateLimiter {
       const data = await redisConnection.get(key);
       
       if (data) {
-        return JSON.parse(data);
+        return safeJsonParse(data);
       }
     } catch (error: any) {
       logger.error('Failed to get rate limit info', error);

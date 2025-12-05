@@ -6,6 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ScraperError, ErrorCode } from '../core/errors';
+import { safeJsonParse } from './safe-json';
 
 export interface AppConfig {
   // 服务器配置
@@ -172,7 +173,7 @@ export class ConfigManager {
 
     try {
       const fileContent = fs.readFileSync(this.configFilePath, 'utf-8');
-      const fileConfig = JSON.parse(fileContent);
+      const fileConfig = safeJsonParse(fileContent);
       this.config = this.mergeConfig(this.config, fileConfig);
     } catch (error: any) {
       console.warn(`Failed to load config file ${this.configFilePath}: ${error.message}`);

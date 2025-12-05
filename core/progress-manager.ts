@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ScraperEventBus } from './event-bus';
 import { CheckpointRepository } from './db/checkpoint-repo';
+import { safeJsonParse } from '../utils';
 
 export interface ScrapingProgress {
     jobId?: string; // Link to DB job
@@ -53,7 +54,7 @@ export class ProgressManager {
             try {
                 const checkpoint = await CheckpointRepository.getCheckpoint(jobId, 'progress_state');
                 if (checkpoint) {
-                    const progress = JSON.parse(checkpoint) as ScrapingProgress;
+                    const progress = safeJsonParse(checkpoint) as ScrapingProgress;
                     this.log(`Loaded progress from DB for job ${jobId}: ${progress.totalScraped}/${progress.totalRequested}`);
                     return progress;
                 }
@@ -70,7 +71,7 @@ export class ProgressManager {
 
         try {
             const data = fs.readFileSync(filePath, 'utf-8');
-            const progress = JSON.parse(data) as ScrapingProgress;
+            const progress = safeJsonParse(data) as ScrapingProgress;
             this.log(`Loaded progress from file: ${progress.totalScraped}/${progress.totalRequested} tweets`);
             return progress;
         } catch (error: any) {

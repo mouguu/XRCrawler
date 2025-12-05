@@ -19,6 +19,7 @@ import {
   getOutputPathManager,
   getConfigManager,
   setLogLevel,
+  safeJsonParse,
 } from '../utils';
 import { apiKeyMiddleware } from '../middleware/api-key';
 import { JobRepository } from '../core/db/job-repo';
@@ -97,7 +98,7 @@ function getSafePathInfo(resolvedPath: string): {
     const dir = path.dirname(resolvedPath);
     const tweetsJsonPath = path.join(dir, 'tweets.json');
     if (fs.existsSync(tweetsJsonPath)) {
-      const data = JSON.parse(fs.readFileSync(tweetsJsonPath, 'utf-8'));
+      const data = safeJsonParse(fs.readFileSync(tweetsJsonPath, 'utf-8'));
       if (Array.isArray(data)) {
         return { identifier, runTimestamp, tweetCount: data.length };
       }

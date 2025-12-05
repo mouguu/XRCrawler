@@ -9,7 +9,7 @@ import { streamSSE } from 'hono/streaming';
 import { scrapeQueue } from '../../core/queue/scrape-queue';
 import { redisSubscriber } from '../../core/queue/connection';
 import { markJobAsCancelled } from '../../core/queue/worker';
-import { createEnhancedLogger } from '../../utils/logger';
+import { createEnhancedLogger, safeJsonParse } from '../../utils';
 
 const jobRoutes = new Hono();
 const logger = createEnhancedLogger('JobRoutes');
@@ -157,7 +157,7 @@ jobRoutes.get('/:jobId/stream', async (c) => {
       // Message handler for Redis Pub/Sub
       const messageHandler = (channel: string, message: string) => {
         try {
-          const data = JSON.parse(message);
+          const data = safeJsonParse(message);
 
           if (channel === progressChannel) {
             stream.writeSSE({ event: 'progress', data: JSON.stringify(data) });

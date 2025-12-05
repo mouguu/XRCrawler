@@ -4,6 +4,8 @@
  * Utility for interacting with the queue-based scraping API
  */
 
+import { safeJsonParse } from './safe-json';
+
 export interface JobInfo {
   jobId: string;
   statusUrl: string;
@@ -119,28 +121,28 @@ export function connectToJobStream(
   const eventSource = new EventSource(`/api/jobs/${jobId}/stream`);
 
   eventSource.addEventListener('connected', (e) => {
-    const data = JSON.parse(e.data);
+    const data = safeJsonParse(e.data);
     callbacks.onConnected?.(data);
   });
 
   eventSource.addEventListener('progress', (e) => {
-    const data = JSON.parse(e.data);
-    callbacks.onProgress?.(data);
+    const data = safeJsonParse(e.data);
+    callbacks.onProgress?.(data as JobProgressEvent);
   });
 
   eventSource.addEventListener('log', (e) => {
-    const data = JSON.parse(e.data);
-    callbacks.onLog?.(data);
+    const data = safeJsonParse(e.data);
+    callbacks.onLog?.(data as JobLogEvent);
   });
 
   eventSource.addEventListener('completed', (e) => {
-    const data = JSON.parse(e.data);
+    const data = safeJsonParse(e.data);
     callbacks.onCompleted?.(data);
     eventSource.close();
   });
 
   eventSource.addEventListener('failed', (e) => {
-    const data = JSON.parse(e.data);
+    const data = safeJsonParse(e.data) as { error: string };
     callbacks.onFailed?.(data.error);
     eventSource.close();
   });
