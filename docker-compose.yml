@@ -63,7 +63,7 @@ services:
       - "5555:5555"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/xrcrawler
-    command: ["/usr/local/bin/bunx", "prisma", "studio", "--port", "5555", "--browser", "none"]
+    command: ["/usr/local/bin/bunx", "prisma", "studio", "--port", "5555", "--browser", "none", "--url", "postgresql://postgres:postgres@postgres:5432/xrcrawler"]
     depends_on:
       - postgres
 
