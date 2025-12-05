@@ -3,7 +3,6 @@ import { describe, test, expect, beforeEach, afterEach, mock, spyOn } from 'bun:
  * XApiClient 单元测试
  */
 
-import { describe, it, expect, beforeEach, mock, spyOn } from "bun:test";
 import { XApiClient } from "../../core/x-api";
 import { Protocol } from "puppeteer";
 
