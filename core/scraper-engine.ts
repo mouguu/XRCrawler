@@ -6,7 +6,7 @@ import { CookieManager } from './cookie-manager';
 import { SessionManager, Session } from './session-manager';
 import { ProxyManager } from './proxy-manager';
 import { ErrorSnapshotter } from './error-snapshotter';
-import { FingerprintManager } from './fingerprint-manager';
+import { AntiDetection } from './anti-detection';
 import * as dataExtractor from './data-extractor';
 import { NavigationService } from './navigation-service';
 import { RateLimitManager } from './rate-limit-manager';
@@ -25,22 +25,20 @@ import { XApiClient } from './x-api';
 import { ScraperErrors, ScraperError, ErrorCode, ErrorClassifier } from './errors';
 import { runTimelineApi } from './timeline-api-runner';
 import { runTimelineDom } from './timeline-dom-runner';
-import { runTimelineDateChunks } from './timeline-date-chunker';
+// import { runTimelineDateChunks } from './timeline-date-chunker'; // Moved to dynamic import to avoid circular dependency
 import { TweetRepository } from './db/tweet-repo';
 // Legacy thread runners moved to archive/deprecated/
 // import { ThreadGraphqlRunner } from './thread-graphql-runner';
 // import { ThreadDomRunner } from './thread-dom-runner';
+import type { Tweet, ProfileInfo, TweetResult, TweetDetailResult } from '../types/tweet-definitions';
 import {
-    Tweet,
-    ProfileInfo,
-    RawTweetData,
     normalizeRawTweet,
     parseTweetFromApiResult,
     extractInstructionsFromResponse,
     parseTweetsFromInstructions,
     extractNextCursor,
     parseTweetDetailResponse
-} from '../types';
+} from '../types/tweet-definitions';
 export type {
     ScrapeTimelineConfig,
     ScrapeTimelineResult,
@@ -88,7 +86,7 @@ export class ScraperEngine {
     public get sessionManager() { return this.deps.sessionManager; }
     public get proxyManager() { return this.deps.proxyManager; }
     public get errorSnapshotter() { return this.deps.errorSnapshotter; }
-    public get fingerprintManager() { return this.deps.fingerprintManager; }
+    public get antiDetection() { return this.deps.antiDetection; }
     public get performanceMonitor() { return this.deps.performanceMonitor; }
     public get progressManager() { return this.deps.progressManager; }
     /** Get dependencies (shared for parallel processing) */
@@ -132,10 +130,12 @@ export class ScraperEngine {
         this.eventBus = options.eventBus || eventBusInstance;
         
         // Use dependency injection to decouple dependency creation
+        // antiDetectionLevel: 'high' is the recommended default for most use cases
         this.deps = options.dependencies || createDefaultDependencies(
             this.eventBus,
             './cookies',
-            './data/progress'
+            './data/progress',
+            options.antiDetectionLevel || 'high'
         );
         
         this.browserManager = null;
@@ -209,7 +209,9 @@ export class ScraperEngine {
 
         const sessionId = path.basename(session.filePath);
         if (options.refreshFingerprint !== false) {
-            await this.fingerprintManager.injectFingerprint(this.page, sessionId);
+            // 使用完整的反检测系统 (指纹伪装 + 高级指纹 + 人性化行为)
+            await this.antiDetection.prepare(this.page, sessionId);
+            this.eventBus.emitLog(`[AntiDetection] Applied ${this.antiDetection.getLevel()} level protection`);
         }
 
         await this.sessionManager.injectSession(this.page, session, options.clearExistingCookies !== false);
@@ -481,7 +483,7 @@ export class ScraperEngine {
         // 1. Has dateRange and is search mode
         // 2. Or enableDeepSearch is true and is search mode (will auto-generate dateRange)
         if (config.mode === 'search' && config.searchQuery && config.dateRange) {
-            // Date chunking mode: if parallel chunks configured, auto-enable browser pool (if not already enabled)
+            // Auto-enable browser pool to support parallel processing
             if (config.parallelChunks && config.parallelChunks > 1 && !this.browserPool) {
                 // Auto-enable browser pool to support parallel processing
                 const maxPoolSize = Math.min(config.parallelChunks, 3); // Max 3 concurrent to avoid rate limits
@@ -492,6 +494,7 @@ export class ScraperEngine {
                 });
                 this.eventBus.emitLog(`[BrowserPool] Auto-enabled browser pool (size: ${maxPoolSize}) for parallel chunk processing`, 'info');
             }
+            const { runTimelineDateChunks } = await import('./timeline-date-chunker');
             return runTimelineDateChunks(this, config);
         }
 

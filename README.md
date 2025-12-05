@@ -4,6 +4,7 @@
 
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)](https://www.typescriptlang.org/)
+[![Bun](https://img.shields.io/badge/Bun-1.2.8-f472b6)](https://bun.sh/)
 [![Docker](https://img.shields.io/badge/Docker-Enabled-blue)](https://www.docker.com/)
 [![Redis](https://img.shields.io/badge/Redis-Queue-red)](https://redis.io/)
 [![WASM](https://img.shields.io/badge/WASM-Rust-orange)](https://webassembly.org/)
@@ -32,13 +33,83 @@
 - **Modern Web UI**: Real-time SSE streaming, live progress/logs, one-click **Download .md**, with custom session naming.
 - **Queue-first architecture**: BullMQ on Redis; workers publish progress/logs via Pub/Sub, server streams to `/api/job/:id/stream`.
 - **Multi-platform**: Twitter/X + Reddit, all in TypeScript with plugin-style adapters.
+- **Advanced Anti-Detection**: Multi-layer protection with fingerprint spoofing, human behavior simulation, and smart proxy rotation.
+
+---
+
+## 🛡️ Anti-Detection System
+
+XRCrawler features a **comprehensive anti-detection system** with three layers of protection:
+
+### Layer 1: Fingerprint Spoofing 🎭
+
+| Feature                 | Description                                       |
+| ----------------------- | ------------------------------------------------- |
+| **Canvas Fingerprint**  | Noise injection to randomize canvas rendering     |
+| **WebGL Fingerprint**   | GPU vendor/renderer spoofing (NVIDIA, AMD, Intel) |
+| **Audio Fingerprint**   | Subtle noise added to AudioContext processing     |
+| **Hardware Spoofing**   | Device memory, CPU cores, touch points            |
+| **Timezone & Language** | Customizable timezone and language settings       |
+| **Webdriver Detection** | Hidden automation traces                          |
+
+### Layer 2: Human Behavior Simulation 🤖→🧑
+
+| Feature                   | Description                                          |
+| ------------------------- | ---------------------------------------------------- |
+| **Bezier Mouse Movement** | Natural curved mouse paths, not straight lines       |
+| **Typing Patterns**       | Variable speed, occasional typos, punctuation pauses |
+| **Scrolling Behavior**    | Gradual scrolling with random pauses (like reading)  |
+| **Random Delays**         | Gaussian-distributed delays between actions          |
+| **Rest Periods**          | Probability-based breaks during long sessions        |
+
+### Layer 3: Smart Proxy Management 🔄
+
+| Feature                   | Description                                         |
+| ------------------------- | --------------------------------------------------- |
+| **Intelligent Selection** | Prioritizes proxies by success rate + response time |
+| **Auto-Rotation**         | Switches on rate limits or consecutive failures     |
+| **Cooldown Mechanism**    | Failed proxies recover after cooling period         |
+| **Health Monitoring**     | Real-time stats and health reports                  |
+| **Session Affinity**      | Consistent proxy per session (preserves cookies)    |
+
+### Detection Levels
+
+Configure protection intensity based on your needs:
+
+```typescript
+import { AntiDetection } from "./core/anti-detection";
+
+const ad = new AntiDetection({ level: "high" }); // 'low' | 'medium' | 'high' | 'paranoid'
+await ad.prepare(page, "sessionId");
+```
+
+| Level      | Basic FP | Advanced FP | Human Behavior      | Use Case                 |
+| ---------- | -------- | ----------- | ------------------- | ------------------------ |
+| `low`      | ✓        | ✗           | ✗                   | Testing, trusted targets |
+| `medium`   | ✓        | ✓           | ✗                   | Normal scraping          |
+| `high`     | ✓        | ✓           | ✓ (fast)            | **Recommended**          |
+| `paranoid` | ✓        | ✓           | ✓ (slow, realistic) | High-security targets    |
+
+---
+
+## ⚡ Performance (Powered by Bun)
+
+Migrated from Node.js to Bun for **blazing fast performance**:
+
+| Metric              | Before (Node.js) | After (Bun)          | Improvement                  |
+| ------------------- | ---------------- | -------------------- | ---------------------------- |
+| **Package Install** | ~30s             | **5.59s**            | 🚀 **5.4x faster**           |
+| **Startup Time**    | ~3s              | **Instant**          | ⚡ **No compilation needed** |
+| **Memory Usage**    | 400MB            | **~120MB**           | 💾 **70% reduction**         |
+| **Dev Experience**  | Compile first    | **Run .ts directly** | 🎯 **Zero config**           |
+
+> **Why Bun?** Native TypeScript support, faster package manager, lower memory footprint, and full Node.js compatibility. Read our [migration journey](docs/dev/BUN_MIGRATION_ADVENTURE.md).
 
 ---
 
 ## 🧰 Requirements
 
-- **Node.js** 20+ (LTS recommended)
-- **pnpm** (enforced - no npm/yarn)
+- **Bun** 1.2+ (replaces Node.js + pnpm for blazing fast performance)
 - **Redis** on `localhost:6379` (for queue + SSE pub/sub)
 - **PostgreSQL** 14+ (for data persistence and resume capabilities)
 
@@ -62,10 +133,17 @@ mkdir -p data/cookies
 docker compose up -d --build
 ```
 
-Open **http://localhost:5001** — everything included (PostgreSQL, Redis, Server, Worker).
+Open **http://localhost:5001** — everything included (PostgreSQL, Redis, Server, Worker, Prisma Studio).
+
+**Access Points**:
+
+- 🌐 **Web UI**: http://localhost:5001
+- 📊 **Prisma Studio**: http://localhost:5555 (Database GUI)
+- 📈 **Queue Dashboard**: http://localhost:5001/admin/queues
 
 ```bash
 docker compose logs -f app worker  # View logs
+docker compose ps                   # Check status
 ```
 
 ---
@@ -73,14 +151,14 @@ docker compose logs -f app worker  # View logs
 ### Local Development (Alternative)
 
 ```bash
-pnpm install                # Installs deps + builds WASM
-pnpm run install:frontend   # Frontend deps
+bun install                 # Installs deps + builds WASM (5s!)
+bun run install:frontend    # Frontend deps
 
 # Requires: Redis + PostgreSQL running locally
 docker compose up -d postgres redis  # Or use your own
 
-npx prisma db push          # Push schema
-pnpm run dev                # Start all services
+bunx prisma db push         # Push schema
+bun run dev                 # Start all services
 ```
 
 Access at **http://localhost:5001** | Queue Dashboard: `/admin/queues`
@@ -89,20 +167,20 @@ Access at **http://localhost:5001** | Queue Dashboard: `/admin/queues`
 
 ## 🛠️ CLI Usage
 
-Build first: `pnpm run build`
+No build required - Bun runs TypeScript directly!
 
 ```bash
 # Twitter Profile
-node dist/cmd/cli.js twitter -u elonmusk -c 50
+bun run cmd/cli.ts twitter -u elonmusk -c 50
 
 # Twitter Thread
-node dist/cmd/cli.js twitter --thread https://x.com/user/status/123456
+bun run cmd/cli.ts twitter --thread https://x.com/user/status/123456
 
 # Twitter Search
-node dist/cmd/cli.js twitter --query "climate change" -c 100
+bun run cmd/cli.ts twitter --query "climate change" -c 100
 
 # Reddit
-node dist/cmd/cli.js reddit -r programming -c 500
+bun run cmd/cli.ts reddit -r programming -c 500
 ```
 
 ---
@@ -111,15 +189,17 @@ node dist/cmd/cli.js reddit -r programming -c 500
 
 We have comprehensive documentation for all aspects of the project:
 
-| Document                                      | Description                                          |
-| --------------------------------------------- | ---------------------------------------------------- |
-| [**DATABASE.md**](docs/DATABASE.md)           | PostgreSQL schema and Prisma repositories            |
-| [**OPERATIONS.md**](docs/OPERATIONS.md)       | Health checks, monitoring, and rate limiting         |
-| [**ARCHITECTURE.md**](docs/ARCHITECTURE.md)   | Technical architecture and component overview        |
-| [**API_REFERENCE.md**](docs/API_REFERENCE.md) | REST API endpoints documentation                     |
-| [**CONFIGURATION.md**](docs/CONFIGURATION.md) | Configuration system guide (ConfigManager, env vars) |
-| [**LOGGING.md**](docs/LOGGING.md)             | Structured logging standards with winston            |
-| [**CONTRIBUTING.md**](CONTRIBUTING.md)        | Contribution guidelines and code standards           |
+| Document                                                              | Description                                          |
+| --------------------------------------------------------------------- | ---------------------------------------------------- |
+| [**DATABASE.md**](docs/DATABASE.md)                                   | PostgreSQL schema and Prisma repositories            |
+| [**OPERATIONS.md**](docs/OPERATIONS.md)                               | Health checks, monitoring, and rate limiting         |
+| [**ARCHITECTURE.md**](docs/ARCHITECTURE.md)                           | Technical architecture and component overview        |
+| [**API_REFERENCE.md**](docs/API_REFERENCE.md)                         | REST API endpoints documentation                     |
+| [**CONFIGURATION.md**](docs/CONFIGURATION.md)                         | Configuration system guide (ConfigManager, env vars) |
+| [**LOGGING.md**](docs/LOGGING.md)                                     | Structured logging standards with winston            |
+| [**BUN_MIGRATION_PLAN.md**](docs/BUN_MIGRATION_PLAN.md)               | Bun migration roadmap and status                     |
+| [**BUN_MIGRATION_ADVENTURE.md**](docs/dev/BUN_MIGRATION_ADVENTURE.md) | Detailed migration journey and lessons learned       |
+| [**CONTRIBUTING.md**](CONTRIBUTING.md)                                | Contribution guidelines and code standards           |
 
 ---
 
@@ -186,26 +266,36 @@ output/
 ### Run Tests
 
 ```bash
-pnpm run test
+# Backend tests (bun:test)
+bun test                              # 389 tests across 39 files (~50s)
+
+# Frontend tests (vitest)
+cd frontend && bun run test           # 16 tests across 4 files
 ```
+
+| Suite                | Tests   | Coverage                               |
+| -------------------- | ------- | -------------------------------------- |
+| Backend (`bun:test`) | 389     | Core, utils, platforms, anti-detection |
+| Frontend (`vitest`)  | 16      | Components, integration                |
+| **Total**            | **405** | ✅ All passing                         |
 
 ### Lint & Type Check
 
 ```bash
-pnpm run lint
+bun run lint
 ```
 
 ### Format Code
 
 ```bash
-pnpm run format        # Auto-format all code
-pnpm run format:check  # Check formatting
+bun run format        # Auto-format all code
+bun run format:check  # Check formatting
 ```
 
 ### Build WASM (if editing Rust)
 
 ```bash
-pnpm run build:wasm:all
+bun run build:wasm:all
 ```
 
 ---
@@ -231,8 +321,7 @@ pnpm run build:wasm:all
 ### TypeScript compilation errors
 
 ```bash
-pnpm run lint  # Check for type errors
-pnpm run build # Rebuild
+bun run lint  # Check for type errors
 ```
 
 ### WASM build errors
@@ -243,7 +332,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 rustup target add wasm32-unknown-unknown
 
 # Rebuild WASM
-pnpm run build:wasm:all
+bun run build:wasm:all
 ```
 
 ---
@@ -289,7 +378,7 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
 
 | Technology                                            | Purpose                                                               |
 | ----------------------------------------------------- | --------------------------------------------------------------------- |
-| **[Node.js](https://nodejs.org/) 22**                 | Runtime environment                                                   |
+| **[Bun](https://bun.sh/) 1.2**                        | Ultra-fast JavaScript runtime with native TypeScript support          |
 | **[TypeScript](https://www.typescriptlang.org/) 5.x** | Type-safe JavaScript                                                  |
 | **[Express](https://expressjs.com/)**                 | HTTP server framework                                                 |
 | **[BullMQ](https://docs.bullmq.io/)**                 | Redis-backed job queue with retries, backoff, and concurrency control |
@@ -322,7 +411,7 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
 | **`reddit-cleaner`** | Reddit post/comment cleaning               |
 | **`url-normalizer`** | URL canonicalization for dedup             |
 
-> Built with Rust + `wasm-pack`, compiled to WebAssembly for near-native performance in Node.js.
+> Built with Rust + `wasm-pack`, compiled to WebAssembly for near-native performance in Bun runtime.
 
 ### DevOps
 
@@ -353,6 +442,7 @@ ISC - See [LICENSE](LICENSE) for details.
 
 Built with:
 
+- [Bun](https://bun.sh/) - Blazing fast JavaScript runtime
 - [BullMQ](https://github.com/taskforcesh/bullmq) - Robust queue system
 - [Puppeteer](https://pptr.dev/) - Browser automation
 - [Redis](https://redis.io/) - Fast data store
