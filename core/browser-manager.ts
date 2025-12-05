@@ -58,11 +58,20 @@ export class BrowserManager {
             delete process.env.https_proxy;
         }
 
+        // Determine Chrome executable path
+        // Priority: options.puppeteerOptions.executablePath > PUPPETEER_EXECUTABLE_PATH > CHROME_BIN > auto-detect
+        const executablePath = options.puppeteerOptions?.executablePath 
+            || process.env.PUPPETEER_EXECUTABLE_PATH 
+            || process.env.CHROME_BIN
+            || undefined; // Let puppeteer auto-detect if not specified
+
         const launchOptions: any = {
             headless: options.headless !== false,
             args: [...constants.BROWSER_ARGS], // 确保参数被正确传递
             defaultViewport: constants.BROWSER_VIEWPORT,
-            ...options.puppeteerOptions
+            ...options.puppeteerOptions,
+            // Ensure executablePath is set if provided
+            ...(executablePath ? { executablePath } : {})
         };
 
         // Add proxy server if provided
@@ -72,6 +81,9 @@ export class BrowserManager {
             console.log(`[BrowserManager] Launching with proxy: ${proxyUrl}`);
         }
 
+        if (executablePath) {
+            console.log(`[BrowserManager] Using Chrome at: ${executablePath}`);
+        }
         console.log('[BrowserManager] Launching with args:', launchOptions.args);
 
         try {
