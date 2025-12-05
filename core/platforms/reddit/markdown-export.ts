@@ -106,7 +106,7 @@ export function exportRedditToMarkdown(
     lines.push('');
 
     for (let i = 0; i < posts.length; i++) {
-      const { post, comments } = posts[i];
+      const { post } = posts[i];
 
       lines.push(`## ${i + 1}. ${post.title}`);
       lines.push('');

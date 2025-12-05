@@ -98,6 +98,10 @@ export async function getJobStatus(jobId: string): Promise<JobStatus> {
 export async function cancelJob(jobId: string): Promise<void> {
   const response = await fetch(`/api/jobs/${jobId}/cancel`, {
     method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({}),
   });
 
   if (!response.ok) {

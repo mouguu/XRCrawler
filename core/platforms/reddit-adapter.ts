@@ -21,14 +21,16 @@ export const redditAdapter: PlatformAdapter = {
     const isPostUrl = jobConfig.postUrl !== undefined;
 
     try {
-      let result;
+      // biome-ignore lint/suspicious/noExplicitAny: dynamic post structure
+      let result: any;
+      // biome-ignore lint/suspicious/noExplicitAny: dynamic post structure
       let posts: any[] = [];
-      let outputPath: string;
+      let outputPath: string | undefined;
 
-      if (isPostUrl) {
+      if (isPostUrl && jobConfig.postUrl) {
         // Single post scraping
         await ctx.log(`Scraping post: ${jobConfig.postUrl}`);
-        result = await scraper.scrapePost(jobConfig.postUrl!);
+        result = await scraper.scrapePost(jobConfig.postUrl);
 
         if (result.status === 'success' && result.post && result.comments) {
           posts = [
@@ -109,6 +111,11 @@ export const redditAdapter: PlatformAdapter = {
           });
 
           await ctx.log(`Progress: ${current}/${postUrls.length} posts processed`);
+
+          if (await ctx.getShouldStop()) {
+            await ctx.log('Job cancellation detected, stopping...');
+            throw new Error('Job cancelled by user');
+          }
         }
 
         // Save to files
@@ -153,12 +160,15 @@ export const redditAdapter: PlatformAdapter = {
 
       return {
         success: true,
-        downloadUrl: `/api/download?path=${encodeURIComponent(outputPath!)}`,
+        downloadUrl: outputPath
+          ? `/api/download?path=${encodeURIComponent(outputPath)}`
+          : undefined,
         stats: {
           count,
           duration,
         },
       };
+      // biome-ignore lint/suspicious/noExplicitAny: error handling
     } catch (error: any) {
       await ctx.log(`Error: ${error.message}`, 'error');
       logger.error('Reddit scraping failed', error);
@@ -166,6 +176,7 @@ export const redditAdapter: PlatformAdapter = {
     }
   },
 
+  // biome-ignore lint/suspicious/noExplicitAny: generic error
   classifyError(err: any) {
     if (err?.response?.status === 401) return 'auth';
     if (err?.response?.status === 404) return 'not_found';

@@ -82,8 +82,10 @@ export async function runTimelineDom(
     while (!navigationSuccess && navigationAttempts < maxNavigationAttempts) {
       try {
         engine.performanceMonitor.startPhase('navigation');
+        // biome-ignore lint/style/noNonNullAssertion: page ensured
         await engine.navigationService.navigateToUrl(engine.getPageInstance()!, targetUrl);
         const tweetsFound = await engine.navigationService.waitForTweets(
+          // biome-ignore lint/style/noNonNullAssertion: page ensured
           engine.getPageInstance()!,
           {
             timeout: 10000, // 减少超时时间
@@ -108,66 +110,53 @@ export async function runTimelineDom(
             performance: engine.performanceMonitor.getStats(),
           };
         }
+        // biome-ignore lint/suspicious/noExplicitAny: error handling
       } catch (navError: any) {
         engine.performanceMonitor.endPhase();
         navigationAttempts++;
+        engine.eventBus.emitLog(
+          `Page load failed (attempt ${navigationAttempts}/${maxNavigationAttempts}): ${navError.message}`,
+          'warning',
+        );
 
-        // 检查是否是找不到推文的错误（可能是session问题）
-        // Note: waitForTweets now returns false for valid empty states, so this catch block
-        // mainly handles timeouts (if neither tweets nor empty state found) or other errors.
-        const isNoTweetsError =
-          navError.message.includes('No tweets found') ||
-          navError.message.includes('Waiting for selector') ||
-          navError.message.includes('tweet') ||
-          navError.message.includes('Timeout waiting for tweets');
+        if (navigationAttempts >= maxNavigationAttempts) {
+          throw new Error(`Failed to load page after ${maxNavigationAttempts} attempts`);
+        }
 
-        if (isNoTweetsError && attemptedSessions.size < 4) {
-          engine.eventBus.emitLog(
-            `Navigation/waitForTweets failed. Attempting session rotation...`,
-            'warn',
-          );
-
-          const allActiveSessions = engine.sessionManager.getAllActiveSessions();
-          const untriedSessions = allActiveSessions.filter((s) => !attemptedSessions.has(s.id));
-
-          if (untriedSessions.length > 0) {
-            const nextSession = untriedSessions[0];
+        // 尝试切换 Session
+        if (config.enableRotation && navigationAttempts < maxNavigationAttempts) {
+          const nextSession = await engine.sessionManager.getNextSession();
+          if (nextSession) {
             try {
               // Use restartBrowserWithSession to ensure IP switch during navigation rotation
               await engine.restartBrowserWithSession(nextSession);
-              attemptedSessions.add(nextSession.id);
-              engine.performanceMonitor.recordSessionSwitch();
-              engine.eventBus.emitLog(
-                `Switched to session: ${nextSession.id} (${attemptedSessions.size} session(s) tried). Retrying navigation...`,
-                'info',
-              );
+              engine.eventBus.emitLog(`Rotated to session: ${nextSession.id}`, 'info');
 
               // 减少等待时间，加快切换（从2000ms减少到500ms）
               await throttle(500);
+              // biome-ignore lint/suspicious/noExplicitAny: error handling
             } catch (e: any) {
               engine.eventBus.emitLog(`Session rotation failed: ${e.message}`, 'error');
               attemptedSessions.add(nextSession.id);
             }
           } else {
-            // 所有session都尝试过了
-            throw navError; // 抛出原始错误
+            engine.eventBus.emitLog(`All sessions attempted. Stopping.`, 'error');
+            break;
           }
         } else {
-          // 不是session问题，或者所有session都试过了，抛出错误
-          throw navError;
+          // 临时错误，等待后重试
+          const waitTime = 2000 + Math.random() * 1000;
+          await throttle(waitTime);
         }
       }
     }
 
-    if (!navigationSuccess) {
-      throw ScraperErrors.navigationFailed(
-        'Failed to navigate and load tweets after trying all available sessions',
-      );
-    }
-
     // 提取资料信息（如果是用户页面）
     if (username && config.collectProfileInfo) {
-      profileInfo = await dataExtractor.extractProfileInfo(engine.getPageInstance()!);
+      const page = engine.getPageInstance();
+      if (page) {
+        profileInfo = await dataExtractor.extractProfileInfo(page);
+      }
     }
 
     // 滚动并提取推文
@@ -186,14 +175,23 @@ export async function runTimelineDom(
     let sessionsFailedCount = 0;
     const MAX_SESSIONS_FAILED = 2; // 如果连续2个session都无法加载新推文，可能是平台限制
 
+    // Deep Search 变量 (Placeholder for future use or removal if unused)
+    // const deepSearchMode = false;
+    // const deepSearchScrolls = 0;
+    // const MAX_DEEP_SEARCH_SCROLLS = 20;
+
+    engine.performanceMonitor.startPhase('main-loop');
+
     while (collectedTweets.length < limit && consecutiveNoNew < maxNoNew) {
-      if (engine.shouldStop()) {
-        engine.eventBus.emitLog('Manual stop signal received.');
+      if (await engine.shouldStop()) {
+        engine.eventBus.emitLog('Manual stop signal received', 'warning');
         break;
       }
 
+      // Extraction Phase
       try {
         engine.performanceMonitor.startPhase('extraction');
+        // biome-ignore lint/style/noNonNullAssertion: page existence checked by ensurePage
         let tweetsOnPage = await dataExtractor.extractTweetsFromPage(engine.getPageInstance()!);
         engine.performanceMonitor.endPhase();
 
@@ -201,7 +199,7 @@ export async function runTimelineDom(
         const pageText = await engine.getPageInstance()?.evaluate(() => document.body.innerText);
         const hasError =
           /rate limit|something went wrong|try again later|suspended|restricted|blocked/i.test(
-            pageText,
+            pageText || '',
           );
 
         if (hasError && tweetsOnPage.length === 0) {
@@ -211,6 +209,7 @@ export async function runTimelineDom(
             'warn',
           );
 
+          // biome-ignore lint/style/noNonNullAssertion: page exists
           const recovered = await dataExtractor.recoverFromErrorPage(engine.getPageInstance()!, 2);
 
           if (recovered) {
@@ -220,10 +219,12 @@ export async function runTimelineDom(
             );
             // 重新提取推文
             await throttle(2000); // 等待页面加载
+            // biome-ignore lint/style/noNonNullAssertion: page exists
             tweetsOnPage = await dataExtractor.extractTweetsFromPage(engine.getPageInstance()!);
             if (tweetsOnPage.length > 0) {
               engine.eventBus.emitLog(
                 `Recovery successful: found ${tweetsOnPage.length} tweets after retry.`,
+                'info',
               );
             } else {
               // 恢复后仍然没有推文，可能是真的没有内容
@@ -299,7 +300,7 @@ export async function runTimelineDom(
         }
 
         // 检查停止信号（可能包含全局限制检查）
-        if (engine.shouldStop()) {
+        if (await engine.shouldStop()) {
           engine.eventBus.emitLog(
             'Stop signal received (may be global limit reached). Stopping extraction.',
             'info',
@@ -409,6 +410,7 @@ export async function runTimelineDom(
 
                 // waitForTweets 失败时快速重试一次，减少超时时间
                 try {
+                  // biome-ignore lint/style/noNonNullAssertion: page exists
                   await engine.navigationService.waitForTweets(engine.getPageInstance()!, {
                     timeout: 10000, // Increase from 3s to 10s to prevent flakes
                     maxRetries: 1, // Allow 1 retry
@@ -435,7 +437,7 @@ export async function runTimelineDom(
 
                 while (scrollCount < maxScrollAttempts) {
                   // 检查 stop 信号（在每次循环开始和关键操作前）
-                  if (engine.shouldStop()) {
+                  if (await engine.shouldStop()) {
                     engine.eventBus.emitLog(
                       'Manual stop signal received during deep scroll. Stopping...',
                       'info',
@@ -450,23 +452,24 @@ export async function runTimelineDom(
                     i++
                   ) {
                     // 在每次滚动前也检查 stop 信号
-                    if (engine.shouldStop()) {
+                    if (await engine.shouldStop()) {
                       break;
                     }
                     // 使用人性化滚动（antiDetection.humanScroll）
+                    // biome-ignore lint/style/noNonNullAssertion: page exists
                     const page = engine.getPageInstance()!;
                     await engine.antiDetection.humanScroll(page, 800, 'down');
                     await engine.antiDetection.betweenActions('fast');
                     scrollCount++;
 
                     // 在等待后再次检查
-                    if (engine.shouldStop()) {
+                    if (await engine.shouldStop()) {
                       break;
                     }
                   }
 
                   // 在提取前再次检查 stop 信号
-                  if (engine.shouldStop()) {
+                  if (await engine.shouldStop()) {
                     engine.eventBus.emitLog(
                       'Manual stop signal received. Stopping extraction...',
                       'info',
@@ -476,6 +479,7 @@ export async function runTimelineDom(
 
                   // 每滚动 scrollsPerExtraction 次后，提取一次推文
                   const tweetsOnPage = await dataExtractor.extractTweetsFromPage(
+                    // biome-ignore lint/style/noNonNullAssertion: page exists
                     engine.getPageInstance()!,
                   );
                   const cleaned = await cleanTweetsFast([], tweetsOnPage, { limit });
@@ -523,11 +527,10 @@ export async function runTimelineDom(
                     // Continue scrolling to find more tweets
                   } else {
                     // 没有新推文，检查是否到达边界
-                    const tweetCountOnPage = await engine
-                      .getPageInstance()
-                      ?.evaluate((selector) => {
+                    const tweetCountOnPage =
+                      (await engine.getPageInstance()?.evaluate((selector) => {
                         return document.querySelectorAll(selector).length;
-                      }, 'article[data-testid="tweet"]');
+                      }, 'article[data-testid="tweet"]')) || 0;
 
                     // 每20次滚动报告一次
                     if (scrollCount % 20 === 0) {
@@ -591,6 +594,7 @@ export async function runTimelineDom(
 
                 // 继续循环，尝试提取新内容
                 continue;
+                // biome-ignore lint/suspicious/noExplicitAny: error handling
               } catch (e: any) {
                 engine.eventBus.emitLog(`Session rotation failed: ${e.message}`, 'error');
                 attemptedSessions.add(nextSession.id); // 标记为已尝试
@@ -610,7 +614,7 @@ export async function runTimelineDom(
             );
 
             // 在长时间等待前检查 stop 信号
-            if (engine.shouldStop()) {
+            if (await engine.shouldStop()) {
               engine.eventBus.emitLog(
                 'Manual stop signal received during delay. Stopping...',
                 'info',
@@ -621,7 +625,7 @@ export async function runTimelineDom(
             await throttle(extraDelay);
 
             // 等待后再次检查
-            if (engine.shouldStop()) {
+            if (await engine.shouldStop()) {
               engine.eventBus.emitLog(
                 'Manual stop signal received after delay. Stopping...',
                 'info',
@@ -634,7 +638,7 @@ export async function runTimelineDom(
         }
 
         // 检查 stop 信号
-        if (engine.shouldStop()) {
+        if (await engine.shouldStop()) {
           engine.eventBus.emitLog('Manual stop signal received.');
           break;
         }
@@ -669,7 +673,7 @@ export async function runTimelineDom(
 
           for (let i = 0; i < scrollCount; i++) {
             // 在每次滚动前检查 stop 信号
-            if (engine.shouldStop()) {
+            if (await engine.shouldStop()) {
               engine.eventBus.emitLog(
                 'Manual stop signal received during scroll. Stopping...',
                 'info',
@@ -678,6 +682,7 @@ export async function runTimelineDom(
             }
 
             await dataExtractor.scrollToBottomSmart(
+              // biome-ignore lint/style/noNonNullAssertion: page exists
               engine.getPageInstance()!,
               constants.WAIT_FOR_NEW_TWEETS_TIMEOUT,
             );
@@ -686,7 +691,7 @@ export async function runTimelineDom(
             await new Promise((r) => setTimeout(r, scrollDelay));
 
             // 在等待后也检查 stop 信号
-            if (engine.shouldStop()) {
+            if (await engine.shouldStop()) {
               engine.eventBus.emitLog('Manual stop signal received. Stopping scroll...', 'info');
               break;
             }
@@ -701,6 +706,7 @@ export async function runTimelineDom(
 
           engine.performanceMonitor.endPhase();
         }
+        // biome-ignore lint/suspicious/noExplicitAny: error handling
       } catch (error: any) {
         engine.performanceMonitor.endPhase();
         consecutiveErrors++;
@@ -735,7 +741,9 @@ export async function runTimelineDom(
 
               // 重新导航到目标URL
               engine.performanceMonitor.startPhase('navigation');
+              // biome-ignore lint/style/noNonNullAssertion: page exists
               await engine.navigationService.navigateToUrl(engine.getPageInstance()!, targetUrl);
+              // biome-ignore lint/style/noNonNullAssertion: page exists
               await engine.navigationService.waitForTweets(engine.getPageInstance()!, {
                 timeout: 8000, // 减少超时时间，加快切换
                 maxRetries: 0, // 不重试，快速切换
@@ -746,6 +754,7 @@ export async function runTimelineDom(
                 `Switched to session: ${nextSession.id} (${attemptedSessions.size} session(s) tried). Retrying...`,
                 'info',
               );
+              // biome-ignore lint/suspicious/noExplicitAny: error handling
             } catch (e: any) {
               engine.eventBus.emitLog(`Session rotation failed: ${e.message}`, 'error');
               attemptedSessions.add(nextSession.id);
@@ -791,6 +800,7 @@ export async function runTimelineDom(
       profile: profileInfo,
       performance: engine.performanceMonitor.getStats(),
     };
+    // biome-ignore lint/suspicious/noExplicitAny: error handling
   } catch (error: any) {
     engine.performanceMonitor.stop();
     engine.eventBus.emitError(new Error(`DOM scraping failed: ${error.message}`));

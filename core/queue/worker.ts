@@ -19,28 +19,26 @@ import { JobLog, JobProgress, ScrapeJobData, ScrapeJobResult } from './types';
 const logger = createEnhancedLogger('Worker');
 const config = getConfigManager();
 
-// Track cancelled jobs (job ID -> cancelled timestamp)
-const cancelledJobs = new Map<string, number>();
+const CANCELLATION_PREFIX = 'job:cancelled:';
+const CANCELLATION_EXPIRY = 3600; // 1 hour
 
 /**
  * Mark a job as cancelled
  * Called from the cancel API endpoint
  */
-export function markJobAsCancelled(jobId: string): void {
-  cancelledJobs.set(jobId, Date.now());
-  logger.info(`Job ${jobId} marked for cancellation`);
-
-  // Clean up old entries after 1 hour
-  setTimeout(() => {
-    cancelledJobs.delete(jobId);
-  }, 3600000);
+export async function markJobAsCancelled(jobId: string): Promise<void> {
+  const key = `${CANCELLATION_PREFIX}${jobId}`;
+  await redisConnection.set(key, Date.now(), 'EX', CANCELLATION_EXPIRY);
+  logger.info(`Job ${jobId} marked for cancellation in Redis`);
 }
 
 /**
  * Check if a job has been cancelled
  */
-export function isJobCancelled(jobId: string): boolean {
-  return cancelledJobs.has(jobId);
+export async function isJobCancelled(jobId: string): Promise<boolean> {
+  const key = `${CANCELLATION_PREFIX}${jobId}`;
+  const exists = await redisConnection.exists(key);
+  return exists === 1;
 }
 
 // Register built-in adapters at startup
@@ -50,6 +48,7 @@ registerAdapter(redditAdapter);
 /**
  * Safely serialize error objects (handles Axios circular references)
  */
+// biome-ignore lint/suspicious/noExplicitAny: error handling
 function serializeError(error: any): any {
   if (!error) return null;
 
@@ -110,7 +109,7 @@ class JobContext implements AdapterJobContext {
   /**
    * Check if job should stop (cancelled by user)
    */
-  getShouldStop(): boolean {
+  async getShouldStop(): Promise<boolean> {
     return isJobCancelled(this.job.id || '');
   }
 
@@ -169,6 +168,7 @@ export function createScrapeWorker(concurrency?: number) {
         }
 
         return result;
+        // biome-ignore lint/suspicious/noExplicitAny: error handling
       } catch (error: any) {
         const scraperError = ErrorClassifier.classify(error);
         const serializedError = serializeError(error);
@@ -193,8 +193,10 @@ export function createScrapeWorker(concurrency?: number) {
         logger.error(`Job ${job.id} failed: ${scraperError.message}`, {
           errorCode: scraperError.code,
           retryable: scraperError.retryable,
+          errorMessage: scraperError.message,
           errorContext: scraperError.context,
           originalError: serializedError, // Use serialized version
+          // biome-ignore lint/suspicious/noExplicitAny: error serialization
         } as any);
 
         if (!scraperError.retryable) {

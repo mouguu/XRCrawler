@@ -201,16 +201,24 @@ function App() {
   //     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
   // }, [logs]);
 
-  const appendApiKey = (url: string | null): string | null => {
-    if (!url) return null;
-    let finalUrl = url;
-    if (apiKey) {
-      const hasQuery = url.includes('?');
-      const separator = hasQuery ? '&' : '?';
-      finalUrl = `${url}${separator}api_key=${encodeURIComponent(apiKey)}`;
-    }
-    return withBase(finalUrl);
-  };
+  const appendApiKey = useCallback(
+    (url: string | null): string | null => {
+      if (!url) return null;
+      let finalUrl = url;
+      if (apiKey) {
+        const hasQuery = url.includes('?');
+        const separator = hasQuery ? '&' : '?';
+        finalUrl = `${url}${separator}api_key=${encodeURIComponent(apiKey)}`;
+      }
+      return withBase(finalUrl);
+    },
+    [apiKey, withBase],
+  );
+
+  const handleJobComplete = useCallback((jobId: string, downloadUrl?: string) => {
+    console.log(`Job ${jobId} completed`, downloadUrl);
+    setLatestJobId((prev) => (prev === jobId ? null : prev));
+  }, []);
 
   // On mount, if server 还有在跑的任务，让 UI 显示停止按钮
   const applyApiKey = () => {
@@ -337,10 +345,7 @@ function App() {
         {/* Dashboard & Sessions */}
         <div className="max-w-6xl mx-auto px-6 pb-24 space-y-16">
           <DashboardPanel
-            onJobComplete={(jobId, downloadUrl) => {
-              console.log(`Job ${jobId} completed`, downloadUrl);
-              setLatestJobId((prev) => (prev === jobId ? null : prev));
-            }}
+            onJobComplete={handleJobComplete}
             appendApiKey={appendApiKey}
           />
 

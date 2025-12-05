@@ -38,7 +38,7 @@ async function scrapeChunkWithRetry(
   }
 
   while (retryCount <= CHUNK_RETRY_CONFIG.maxChunkRetries) {
-    if (engine.shouldStop()) {
+    if (await engine.shouldStop()) {
       return { success: false, tweets: [], error: 'Manual stop signal received' };
     }
 
@@ -78,6 +78,7 @@ async function scrapeChunkWithRetry(
                   Math.random() * CHUNK_RETRY_CONFIG.chunkRetryDelayJitter,
               );
               continue; // Retry the same chunk
+              // biome-ignore lint/suspicious/noExplicitAny: error handling
             } catch (sessionError: any) {
               engine.eventBus.emitLog(
                 `[Chunk Retry] Session rotation failed: ${sessionError.message}`,
@@ -102,6 +103,7 @@ async function scrapeChunkWithRetry(
       }
 
       return { success: true, tweets: result.tweets || [] };
+      // biome-ignore lint/suspicious/noExplicitAny: error handling
     } catch (error: any) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       engine.eventBus.emitLog(
@@ -132,6 +134,7 @@ async function scrapeChunkWithRetry(
               CHUNK_RETRY_CONFIG.chunkRetryDelayBase +
                 Math.random() * CHUNK_RETRY_CONFIG.chunkRetryDelayJitter,
             );
+            // biome-ignore lint/suspicious/noExplicitAny: error handling
           } catch (sessionError: any) {
             engine.eventBus.emitLog(
               `[Chunk Retry] Session rotation failed: ${sessionError.message}`,
@@ -252,7 +255,7 @@ export async function runTimelineDateChunks(
           break;
         }
 
-        if (engine.shouldStop()) {
+        if (await engine.shouldStop()) {
           engine.eventBus.emitLog('Manual stop signal received. Stopping chunk processing.');
           break;
         }
@@ -313,6 +316,7 @@ export async function runTimelineDateChunks(
           const wrappedEventBus = Object.create(engine.eventBus);
 
           // 拦截进度更新 - 使用增量更新机制，避免覆盖其他chunk的进度
+          // biome-ignore lint/suspicious/noExplicitAny: generic event data
           wrappedEventBus.emitProgress = (data: any) => {
             // data.current 是chunk内部的计数（基于progressBase），需要转换为chunk内部的绝对计数
             const chunkCurrent = data.current - (chunkConfig.progressBase || 0);
@@ -363,8 +367,8 @@ export async function runTimelineDateChunks(
 
           // 为每个chunk创建独立的engine实例（共享依赖和浏览器池）
           // 创建一个shouldStop函数，检查全局限制和原始停止信号
-          const chunkShouldStop = () => {
-            return engine.shouldStop() || sharedProgress.isLimitReached();
+          const chunkShouldStop = async () => {
+            return (await engine.shouldStop()) || sharedProgress.isLimitReached();
           };
 
           const chunkEngine = new ScraperEngine(chunkShouldStop, {
@@ -391,6 +395,7 @@ export async function runTimelineDateChunks(
             );
             await chunkEngine.close();
             return { index: i, result };
+            // biome-ignore lint/suspicious/noExplicitAny: error handling
           } catch (error: any) {
             await chunkEngine.close();
             return {
@@ -467,7 +472,7 @@ export async function runTimelineDateChunks(
         break;
       }
 
-      if (engine.shouldStop()) {
+      if (await engine.shouldStop()) {
         engine.eventBus.emitLog('Manual stop signal received. Stopping chunk processing.');
         break;
       }
@@ -546,7 +551,7 @@ export async function runTimelineDateChunks(
       globalRetryPass < CHUNK_RETRY_CONFIG.maxGlobalRetries;
       globalRetryPass++
     ) {
-      if (engine.shouldStop()) {
+      if (await engine.shouldStop()) {
         break;
       }
 
@@ -579,6 +584,7 @@ export async function runTimelineDateChunks(
             `[Global Retry] Switched to session ${nextSession.id} for retry pass ${globalRetryPass + 1} (${sessionIndex + 1}/${allActiveSessions.length})`,
             'info',
           );
+          // biome-ignore lint/suspicious/noExplicitAny: error handling
         } catch (sessionError: any) {
           engine.eventBus.emitLog(
             `[Global Retry] Failed to switch session: ${sessionError.message}`,
@@ -597,6 +603,7 @@ export async function runTimelineDateChunks(
                 `[Global Retry] Fallback: Switched to session ${fallbackSession.id}`,
                 'info',
               );
+              // biome-ignore lint/suspicious/noExplicitAny: error handling
             } catch (fallbackError: any) {
               engine.eventBus.emitLog(
                 `[Global Retry] Fallback session also failed: ${fallbackError.message}`,
@@ -608,7 +615,7 @@ export async function runTimelineDateChunks(
       }
 
       for (const failedChunk of chunksToRetry) {
-        if (engine.shouldStop() || totalCollected >= globalLimit) {
+        if ((await engine.shouldStop()) || totalCollected >= globalLimit) {
           break;
         }
 

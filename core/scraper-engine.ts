@@ -50,7 +50,7 @@ export class ScraperEngine {
   private browserManager: BrowserManager | null;
   private page: Page | null;
   private stopSignal: boolean;
-  private shouldStopFunction?: () => boolean;
+  private shouldStopFunction?: () => boolean | Promise<boolean>;
   private browserOptions: BrowserLaunchOptions;
   private preferredSessionId?: string;
   /** Whether to use API-only mode (no browser launch) */
@@ -123,7 +123,10 @@ export class ScraperEngine {
     return await this.ensurePage();
   }
 
-  constructor(shouldStopFunction?: () => boolean, options: ScraperEngineOptions = {}) {
+  constructor(
+    shouldStopFunction?: () => boolean | Promise<boolean>,
+    options: ScraperEngineOptions = {},
+  ) {
     this.eventBus = options.eventBus || eventBusInstance;
 
     // Use dependency injection to decouple dependency creation
@@ -174,8 +177,9 @@ export class ScraperEngine {
     return this.currentSession;
   }
 
-  shouldStop(): boolean {
-    return this.stopSignal || this.shouldStopFunction?.() || false;
+  async shouldStop(): Promise<boolean> {
+    const fnResult = this.shouldStopFunction ? await this.shouldStopFunction() : false;
+    return this.stopSignal || fnResult;
   }
 
   isRotationEnabled(): boolean {
@@ -638,6 +642,7 @@ export class ScraperEngine {
           jobId: this.jobId,
         });
         this.eventBus.emitLog(`Saved ${savedCount} tweets to database.`);
+        // biome-ignore lint/suspicious/noExplicitAny: error handling
       } catch (error: any) {
         this.eventBus.emitLog(`Failed to save tweets to DB: ${error.message}`, 'error');
       }
@@ -785,7 +790,7 @@ export class ScraperEngine {
       const MAX_CONSECUTIVE_EMPTY_FETCHES = 3;
 
       while (replies.length < maxReplies && cursor) {
-        if (this.shouldStop()) {
+        if (await this.shouldStop()) {
           this.eventBus.emitLog('Manual stop signal received.');
           break;
         }
@@ -858,6 +863,7 @@ export class ScraperEngine {
             jobId: this.jobId,
           });
           this.eventBus.emitLog(`Saved ${savedCount} tweets to database.`);
+          // biome-ignore lint/suspicious/noExplicitAny: error handling
         } catch (error: any) {
           this.eventBus.emitLog(`Failed to save tweets to DB: ${error.message}`, 'error');
         }
@@ -999,7 +1005,7 @@ export class ScraperEngine {
         scrollAttempts < maxScrollAttempts &&
         consecutiveNoNew < maxNoNew
       ) {
-        if (this.shouldStop()) {
+        if (await this.shouldStop()) {
           this.eventBus.emitLog('Manual stop signal received.');
           break;
         }
@@ -1037,6 +1043,7 @@ export class ScraperEngine {
             jobId: this.jobId,
           });
           this.eventBus.emitLog(`Saved ${savedCount} tweets to database.`);
+          // biome-ignore lint/suspicious/noExplicitAny: error handling
         } catch (error: any) {
           this.eventBus.emitLog(`Failed to save tweets to DB: ${error.message}`, 'error');
         }

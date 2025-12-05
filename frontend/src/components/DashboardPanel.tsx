@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download, X, CheckCircle2, XCircle, Loader2, Clock, Zap } from 'lucide-react';
 import { connectToJobStream, cancelJob, type JobProgressEvent } from '../utils/queueClient';
@@ -34,20 +34,21 @@ export function DashboardPanel({
   const [activeJobs, setActiveJobs] = useState<Map<string, ActiveJob>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
 
-  const updateJob = (jobId: string, updates: Partial<ActiveJob>) => {
+  const updateJob = useCallback((jobId: string, updatesOrFn: Partial<ActiveJob> | ((job: ActiveJob) => Partial<ActiveJob>)) => {
     setActiveJobs((prev) => {
       const updated = new Map(prev);
       const existing = updated.get(jobId);
       if (existing) {
+        const updates = typeof updatesOrFn === 'function' ? updatesOrFn(existing) : updatesOrFn;
         updated.set(jobId, { ...existing, ...updates });
       }
       return updated;
     });
-  };
+  }, []);
 
-  const fetchJobStatus =
-    fetchJobStatusProp ||
-    (async (jobId: string): Promise<ActiveJob['result'] | undefined> => {
+  const fetchJobStatus = useCallback(
+    async (jobId: string): Promise<ActiveJob['result'] | undefined> => {
+      if (fetchJobStatusProp) return fetchJobStatusProp(jobId);
       try {
         const res = await fetch(`/api/jobs/${jobId}`);
         if (!res.ok) return undefined;
@@ -56,104 +57,111 @@ export function DashboardPanel({
       } catch {
         return undefined;
       }
-    });
+    },
+    [fetchJobStatusProp],
+  );
 
-  const addJob = (jobId: string, type: 'twitter' | 'reddit') => {
-    const job: ActiveJob = {
-      jobId,
-      type,
-      state: 'connecting',
-      logs: [`Connecting to job ${jobId}...`],
-    };
+  const addJob = useCallback(
+    (jobId: string, type: 'twitter' | 'reddit') => {
+      // Check if job already exists to avoid duplicate connections
+      setActiveJobs((prev) => {
+        if (prev.has(jobId)) return prev;
+        
+        const job: ActiveJob = {
+          jobId,
+          type,
+          state: 'connecting',
+          logs: [`Connecting to job ${jobId}...`],
+        };
 
-    const eventSource = connectToJobStream(jobId, {
-      onConnected: (data) => {
-        updateJob(jobId, {
-          state: data.state,
-          logs: [`Connected! Job state: ${data.state}`],
-        });
-      },
-      onProgress: (progress) => {
-        const job = activeJobs.get(jobId);
-        updateJob(jobId, {
-          progress,
-          logs: [
-            ...(job?.logs || []),
-            `Progress: ${progress.current}/${progress.target} - ${progress.action}`,
-          ].slice(-50),
-        });
-      },
-      onLog: (log) => {
-        const job = activeJobs.get(jobId);
-        updateJob(jobId, {
-          logs: [...(job?.logs || []), `[${log.level}] ${log.message}`].slice(-50),
-        });
-      },
-      onCompleted: (result) => {
-        const updateWithResult = async () => {
-          const latestResult =
-            (result.result && result.result.downloadUrl ? result.result : undefined) ||
-            (await fetchJobStatus(jobId)) ||
-            result.result;
-          setActiveJobs((prev) => {
-            const updated = new Map(prev);
-            const existing = updated.get(jobId);
-            if (existing) {
-              updated.set(jobId, {
-                ...existing,
+        const eventSource = connectToJobStream(jobId, {
+          onConnected: (data) => {
+            updateJob(jobId, {
+              state: data.state,
+              logs: [`Connected! Job state: ${data.state}`],
+            });
+          },
+          onProgress: (progress) => {
+            updateJob(jobId, (currentJob: ActiveJob) => ({
+              progress,
+              logs: [
+                ...(currentJob.logs || []),
+                `Progress: ${progress.current}/${progress.target} - ${progress.action}`,
+              ].slice(-50),
+            }));
+          },
+          onLog: (log) => {
+            updateJob(jobId, (currentJob: ActiveJob) => ({
+              logs: [...(currentJob.logs || []), `[${log.level}] ${log.message}`].slice(-50),
+            }));
+          },
+          onCompleted: (result) => {
+            const updateWithResult = async () => {
+              const latestResult =
+                (result.result && result.result.downloadUrl ? result.result : undefined) ||
+                (await fetchJobStatus(jobId)) ||
+                result.result;
+              
+              updateJob(jobId, (currentJob: ActiveJob) => ({
                 state: 'completed',
                 result: latestResult,
-                logs: [...(existing.logs || []), '✅ Job completed!'],
-              });
-            }
-            return updated;
-          });
-          onJobComplete?.(jobId, latestResult?.downloadUrl);
-        };
-        updateWithResult();
-      },
-      onFailed: (error) => {
-        const job = activeJobs.get(jobId);
-        updateJob(jobId, {
-          state: 'failed',
-          logs: [...(job?.logs || []), `❌ Job failed: ${error}`],
+                logs: [...(currentJob.logs || []), '✅ Job completed!'],
+              }));
+              
+              onJobComplete?.(jobId, latestResult?.downloadUrl);
+            };
+            updateWithResult();
+          },
+          onFailed: (error) => {
+            updateJob(jobId, (currentJob: ActiveJob) => ({
+              state: 'failed',
+              logs: [...(currentJob.logs || []), `❌ Job failed: ${error}`],
+            }));
+          },
         });
-      },
-    });
 
-    job.eventSource = eventSource;
-    setActiveJobs((prev) => new Map(prev).set(jobId, job));
-  };
+        job.eventSource = eventSource;
+        const updated = new Map(prev);
+        updated.set(jobId, job);
+        return updated;
+      });
+    },
+    [updateJob, fetchJobStatus, onJobComplete],
+  );
 
-  const removeJob = (jobId: string) => {
-    const job = activeJobs.get(jobId);
-    if (job?.eventSource) {
-      job.eventSource.close();
-    }
+  const removeJob = useCallback((jobId: string) => {
     setActiveJobs((prev) => {
       const updated = new Map(prev);
+      const job = updated.get(jobId);
+      if (job?.eventSource) {
+        job.eventSource.close();
+      }
       updated.delete(jobId);
       return updated;
     });
-  };
+  }, []);
 
-  const handleCancel = async (jobId: string) => {
-    try {
-      await cancelJob(jobId);
-      const job = activeJobs.get(jobId);
-      updateJob(jobId, {
-        state: 'cancelled',
-        logs: [...(job?.logs || []), '🛑 Job cancelled by user'],
-      });
-      setTimeout(() => removeJob(jobId), 2000);
-    } catch (error) {
-      console.error('Failed to cancel job:', error);
-    }
-  };
+  const handleCancel = useCallback(
+    async (jobId: string) => {
+      try {
+        await cancelJob(jobId);
+        updateJob(jobId, (currentJob: ActiveJob) => ({
+          state: 'cancelled',
+          logs: [...(currentJob.logs || []), '🛑 Job cancelled by user'],
+        }));
+        setTimeout(() => removeJob(jobId), 2000);
+      } catch (error) {
+        console.error('Failed to cancel job:', error);
+      }
+    },
+    [updateJob, removeJob],
+  );
 
   // Fetch active jobs on mount and restore them
   useEffect(() => {
+    let mounted = true;
     const fetchActiveJobs = async () => {
+      if (!mounted) return;
       console.log('🔄 [DashboardPanel] Fetching active jobs on mount...');
       try {
         const states = ['active', 'waiting', 'delayed'];
@@ -170,27 +178,17 @@ export function DashboardPanel({
         );
 
         const results = await Promise.all(jobPromises);
+        if (!mounted) return;
+
         const allJobs = results.flatMap((r) => r.jobs || []);
 
         console.log(`📦 [DashboardPanel] Fetched ${allJobs.length} jobs from API:`, allJobs);
 
         // Add each job to the panel and reconnect to its stream
         allJobs.forEach((job) => {
-          console.log(`🔍 [DashboardPanel] Processing job:`, {
-            id: job.id,
-            type: job.type,
-            state: job.state,
-            hasId: !!job.id,
-            hasType: !!job.type,
-          });
-
           if (job.id && job.type) {
-            console.log(`➕ [DashboardPanel] Adding job ${job.id} (${job.type})`);
+            // Only add if not already present (handled inside addJob, but we can verify here too)
             addJob(job.id, job.type);
-          } else {
-            console.warn(
-              `⚠️ [DashboardPanel] Skipping job ${job.id}: missing ${!job.id ? 'id' : 'type'}`,
-            );
           }
         });
 
@@ -202,11 +200,15 @@ export function DashboardPanel({
       } catch (error) {
         console.error('❌ [DashboardPanel] Failed to fetch active jobs:', error);
       } finally {
-        setIsLoading(false);
+        if (mounted) setIsLoading(false);
       }
     };
 
     fetchActiveJobs();
+    
+    return () => {
+      mounted = false;
+    };
   }, [addJob]);
 
   useEffect(() => {

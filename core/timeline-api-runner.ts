@@ -63,7 +63,7 @@ async function runTimelineRestApi(
   let lastError: string | undefined;
 
   while (collectedTweets.length < limit) {
-    if (engine.shouldStop()) {
+    if (await engine.shouldStop()) {
       engine.eventBus.emitLog('Manual stop signal received.');
       break;
     }
@@ -152,6 +152,7 @@ async function runTimelineRestApi(
 
       const delay = 120 + Math.random() * 220;
       await sleep(delay);
+      // biome-ignore lint/suspicious/noExplicitAny: error handling
     } catch (error: any) {
       lastError = error instanceof Error ? error.message : String(error);
       engine.eventBus.emitLog(`REST timeline error: ${lastError}`, 'error');
@@ -172,7 +173,7 @@ export async function runTimelineApi(
   engine: ScraperEngine,
   config: ScrapeTimelineConfig,
 ): Promise<ScrapeTimelineResult> {
-  const { username, limit = 50, mode = 'timeline', searchQuery, scrapeMode = 'graphql' } = config;
+  const { username, limit = 50, mode = 'timeline', searchQuery } = config;
   const _totalTarget = limit;
   const apiVariant = config.apiVariant || 'graphql';
 
@@ -213,6 +214,7 @@ export async function runTimelineApi(
         throw ScraperErrors.userNotFound(username);
       }
       engine.eventBus.emitLog(`Resolved user ID: ${userId}`);
+      // biome-ignore lint/suspicious/noExplicitAny: error handling
     } catch (error: any) {
       const errorMessage =
         error instanceof ScraperError ? error.message : `Failed to resolve user: ${error.message}`;
@@ -235,13 +237,14 @@ export async function runTimelineApi(
   const emptyCursorSessions = new Map<string, Set<string>>();
 
   while (collectedTweets.length < limit) {
-    if (engine.shouldStop()) {
+    if (await engine.shouldStop()) {
       engine.eventBus.emitLog('Manual stop signal received.');
       break;
     }
 
     try {
       const apiClient = engine.ensureApiClient();
+      // biome-ignore lint/suspicious/noExplicitAny: unknown api response
       let response: any;
 
       const apiStartTime = Date.now();
@@ -352,6 +355,7 @@ export async function runTimelineApi(
       const baseDelay = consecutiveErrors > 0 ? 2000 : 100;
       const delay = baseDelay + Math.random() * 400;
       await sleep(delay);
+      // biome-ignore lint/suspicious/noExplicitAny: error handling
     } catch (error: any) {
       const handled = await handleApiError({
         engine,
@@ -381,6 +385,7 @@ export async function runTimelineApi(
   };
 }
 
+// biome-ignore lint/suspicious/noExplicitAny: complex response structure
 function parseApiResponse(response: any, fallbackUsername?: string) {
   const instructions = extractInstructionsFromResponse(response);
   const tweets = parseTweetsFromInstructions(instructions, fallbackUsername);
@@ -579,6 +584,7 @@ async function handleEmptyCursor({
           updatedCursor: cursor,
           updatedConsecutiveEmpty: 0,
         };
+        // biome-ignore lint/suspicious/noExplicitAny: error handling
       } catch (e: any) {
         engine.eventBus.emitLog(`Session rotation failed: ${e.message}`, 'error');
         attemptedSessions.add(nextSession.id);
@@ -651,6 +657,7 @@ interface ErrorHandlingResult {
 
 interface ApiErrorParams {
   engine: ScraperEngine;
+  // biome-ignore lint/suspicious/noExplicitAny: generic error
   error: any;
   mode: string;
   cursor?: string;
@@ -758,6 +765,7 @@ async function handleApiError({
           search404Retried: false,
           shouldBreak: false,
         };
+        // biome-ignore lint/suspicious/noExplicitAny: error handling
       } catch (e: any) {
         engine.eventBus.emitLog(`Session rotation failed: ${e.message}`, 'error');
         attemptedSessions.add(nextSession.id);

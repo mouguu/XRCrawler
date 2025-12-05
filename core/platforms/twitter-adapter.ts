@@ -14,6 +14,7 @@ export const twitterAdapter: PlatformAdapter = {
     const startTime = Date.now();
 
     const jobEventBus = createEventBus();
+    // biome-ignore lint/suspicious/noExplicitAny: dynamic progress events
     jobEventBus.on(jobEventBus.events.SCRAPE_PROGRESS, (progress: any) => {
       ctx.emitProgress({
         current: progress.current ?? 0,
@@ -21,8 +22,10 @@ export const twitterAdapter: PlatformAdapter = {
         action: progress.action || 'scraping',
       });
     });
+    // biome-ignore lint/suspicious/noExplicitAny: dynamic log events
     jobEventBus.on(jobEventBus.events.LOG_MESSAGE, (log: any) => {
       ctx.emitLog({
+        // biome-ignore lint/suspicious/noExplicitAny: log level type casting
         level: (log.level || 'info') as any,
         message: log.message,
         timestamp: log.timestamp ? new Date(log.timestamp).getTime() : Date.now(),
@@ -33,13 +36,14 @@ export const twitterAdapter: PlatformAdapter = {
       `Starting Twitter scrape: ${jobConfig.username || jobConfig.tweetUrl || jobConfig.searchQuery}`,
     );
 
-    const engine = new ScraperEngine(() => ctx.getShouldStop(), {
+    const engine = new ScraperEngine(async () => await ctx.getShouldStop(), {
       apiOnly: jobConfig.mode === 'graphql',
       eventBus: jobEventBus,
       jobId: data.jobId, // Pass BullMQ Job ID
       antiDetectionLevel: jobConfig.antiDetectionLevel,
     });
 
+    // biome-ignore lint/suspicious/noExplicitAny: dynamic result type
     let result: any;
 
     try {
@@ -54,6 +58,7 @@ export const twitterAdapter: PlatformAdapter = {
       if (jobConfig.username) {
         await ctx.log(`Scraping @${jobConfig.username}'s ${jobConfig.tab || 'posts'}...`);
 
+        // biome-ignore lint/suspicious/noExplicitAny: complex config type
         const timelineConfig: any = {
           username: jobConfig.username,
           limit: jobConfig.limit || 50,
@@ -88,6 +93,7 @@ export const twitterAdapter: PlatformAdapter = {
           });
 
           if (likesResult.success && likesResult.tweets) {
+            // biome-ignore lint/suspicious/noExplicitAny: tweet structure
             const likedTweets = likesResult.tweets.map((t: any) => ({
               ...t,
               isLiked: true,
@@ -137,6 +143,7 @@ export const twitterAdapter: PlatformAdapter = {
           'Invalid Twitter job configuration: missing username, tweetUrl, or searchQuery',
         );
       }
+      // biome-ignore lint/suspicious/noExplicitAny: error handling
     } catch (error: any) {
       await ctx.log(`Error: ${error.message}`, 'error');
       logger.error('Twitter scraping failed', error);
@@ -163,6 +170,7 @@ export const twitterAdapter: PlatformAdapter = {
     throw new Error(result?.error || 'Scraping failed with unknown error');
   },
 
+  // biome-ignore lint/suspicious/noExplicitAny: error handling
   classifyError(err: any) {
     if (err?.response?.status === 401) return 'auth';
     if (err?.response?.status === 404) return 'not_found';
