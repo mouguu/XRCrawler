@@ -7,13 +7,80 @@
 import express, { Request, Response } from 'express';
 import { scrapeQueue } from '../../core/queue/scrape-queue';
 import { redisSubscriber } from '../../core/queue/connection';
+import { markJobAsCancelled } from '../../core/queue/worker';
 import { createEnhancedLogger } from '../../utils/logger';
 
 const router = express.Router();
 const logger = createEnhancedLogger('JobRoutes');
 
 /**
- * GET /api/job/:jobId
+ * GET /api/jobs
+ * List all jobs (with pagination and filtering)
+ * IMPORTANT: This must come BEFORE /:jobId routes to avoid matching conflicts
+ */
+router.get('/', async (req: Request, res: Response) => {
+  console.log('DEBUG: GET / handler called!');
+  console.log('DEBUG: Query params:', req.query);
+  try {
+    const { state, type, start = '0', count = '10' } = req.query;
+
+    const startIdx = parseInt(start as string, 10);
+    const countNum = Math.min(parseInt(count as string, 10), 100); // Max 100
+
+    let jobs;
+
+    // Filter by state
+    if (state === 'completed') {
+      jobs = await scrapeQueue.getCompleted(startIdx, startIdx + countNum - 1);
+    } else if (state === 'failed') {
+      jobs = await scrapeQueue.getFailed(startIdx, startIdx + countNum - 1);
+    } else if (state === 'active') {
+      jobs = await scrapeQueue.getActive(startIdx, startIdx + countNum - 1);
+    } else if (state === 'waiting') {
+      jobs = await scrapeQueue.getWaiting(startIdx, startIdx + countNum - 1);
+    } else if (state === 'delayed') {
+      jobs = await scrapeQueue.getDelayed(startIdx, startIdx + countNum - 1);
+    } else {
+      // Get all jobs (this can be expensive, use with caution)
+      const [waiting, active, completed, failed] = await Promise.all([
+        scrapeQueue.getWaiting(0, 9),
+        scrapeQueue.getActive(0, 9),
+        scrapeQueue.getCompleted(0, 9),
+        scrapeQueue.getFailed(0, 9),
+      ]);
+      jobs = [...waiting, ...active, ...completed, ...failed];
+    }
+
+    // Filter by type if specified
+    if (type) {
+      jobs = jobs.filter((job) => job.data.type === type);
+    }
+
+    // Map to response format
+    const jobList = await Promise.all(
+      jobs.map(async (job) => ({
+        id: job.id,
+        type: job.data.type,
+        state: await job.getState(),
+        progress: job.progress,
+        createdAt: job.timestamp,
+        processedAt: job.processedOn,
+        finishedAt: job.finishedOn,
+      }))
+    );
+
+    res.json({
+      jobs: jobList,
+      total: jobList.length,
+    });
+  } catch (error: any) {
+    logger.error('Failed to list jobs', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/jobs/:jobId
  * Get job status and result
  */
 router.get('/:jobId', async (req: Request, res: Response) => {
@@ -49,7 +116,7 @@ router.get('/:jobId', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/job/:jobId/stream
+ * GET /api/jobs/:jobId/stream
  * Server-Sent Events stream for job progress and logs
  */
 router.get('/:jobId/stream', async (req: Request, res: Response) => {
@@ -143,7 +210,7 @@ router.get('/:jobId/stream', async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/job/:jobId/cancel
+ * POST /api/jobs/:jobId/cancel
  * Cancel a job
  */
 router.post('/:jobId/cancel', async (req: Request, res: Response) => {
@@ -164,10 +231,23 @@ router.post('/:jobId/cancel', async (req: Request, res: Response) => {
       });
     }
 
-    // Remove the job from queue
-    await job.remove();
+    // For active jobs, mark them for cancellation
+    // The worker will check this flag and stop gracefully
+    if (state === 'active') {
+      markJobAsCancelled(jobId);
+      logger.info('Active job marked for cancellation', { jobId });
+      
+      res.json({
+        success: true,
+        message: 'Job cancellation requested. The job will stop shortly.',
+        note: 'Active jobs are stopped gracefully and may take a few seconds to complete cancellation.',
+      });
+      return;
+    }
 
-    logger.info('Job cancelled', { jobId });
+    // For waiting/delayed jobs, remove directly from queue
+    await job.remove();
+    logger.info('Job cancelled', { jobId, state });
 
     res.json({
       success: true,
@@ -180,7 +260,7 @@ router.post('/:jobId/cancel', async (req: Request, res: Response) => {
 });
 
 /**
- * DELETE /api/job/:jobId
+ * DELETE /api/jobs/:jobId
  * Delete a completed/failed job
  */
 router.delete('/:jobId', async (req: Request, res: Response) => {
@@ -201,69 +281,6 @@ router.delete('/:jobId', async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     logger.error('Failed to delete job', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * GET /api/jobs
- * List all jobs (with pagination and filtering)
- */
-router.get('/', async (req: Request, res: Response) => {
-  try {
-    const { state, type, start = '0', count = '10' } = req.query;
-
-    const startIdx = parseInt(start as string, 10);
-    const countNum = Math.min(parseInt(count as string, 10), 100); // Max 100
-
-    let jobs;
-
-    // Filter by state
-    if (state === 'completed') {
-      jobs = await scrapeQueue.getCompleted(startIdx, startIdx + countNum - 1);
-    } else if (state === 'failed') {
-      jobs = await scrapeQueue.getFailed(startIdx, startIdx + countNum - 1);
-    } else if (state === 'active') {
-      jobs = await scrapeQueue.getActive(startIdx, startIdx + countNum - 1);
-    } else if (state === 'waiting') {
-      jobs = await scrapeQueue.getWaiting(startIdx, startIdx + countNum - 1);
-    } else if (state === 'delayed') {
-      jobs = await scrapeQueue.getDelayed(startIdx, startIdx + countNum - 1);
-    } else {
-      // Get all jobs (this can be expensive, use with caution)
-      const [waiting, active, completed, failed] = await Promise.all([
-        scrapeQueue.getWaiting(0, 9),
-        scrapeQueue.getActive(0, 9),
-        scrapeQueue.getCompleted(0, 9),
-        scrapeQueue.getFailed(0, 9),
-      ]);
-      jobs = [...waiting, ...active, ...completed, ...failed];
-    }
-
-    // Filter by type if specified
-    if (type) {
-      jobs = jobs.filter((job) => job.data.type === type);
-    }
-
-    // Map to response format
-    const jobList = await Promise.all(
-      jobs.map(async (job) => ({
-        id: job.id,
-        type: job.data.type,
-        state: await job.getState(),
-        progress: job.progress,
-        createdAt: job.timestamp,
-        processedAt: job.processedOn,
-        finishedAt: job.finishedOn,
-      }))
-    );
-
-    res.json({
-      jobs: jobList,
-      total: jobList.length,
-    });
-  } catch (error: any) {
-    logger.error('Failed to list jobs', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -81,7 +81,7 @@ export async function submitJob(params: {
  * Get job status
  */
 export async function getJobStatus(jobId: string): Promise<JobStatus> {
-  const response = await fetch(`/api/job/${jobId}`);
+  const response = await fetch(`/api/jobs/${jobId}`);
   
   if (!response.ok) {
     throw new Error('Failed to get job status');
@@ -94,7 +94,7 @@ export async function getJobStatus(jobId: string): Promise<JobStatus> {
  * Cancel a job
  */
 export async function cancelJob(jobId: string): Promise<void> {
-  const response = await fetch(`/api/job/${jobId}/cancel`, {
+  const response = await fetch(`/api/jobs/${jobId}/cancel`, {
     method: 'POST',
   });
 
@@ -116,7 +116,7 @@ export function connectToJobStream(
     onConnected?: (data: any) => void;
   }
 ): EventSource {
-  const eventSource = new EventSource(`/api/job/${jobId}/stream`);
+  const eventSource = new EventSource(`/api/jobs/${jobId}/stream`);
 
   eventSource.addEventListener('connected', (e) => {
     const data = JSON.parse(e.data);

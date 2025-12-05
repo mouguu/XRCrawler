@@ -130,6 +130,10 @@ function rejectIfShuttingDown(res: Response): boolean {
 }
 
 // Middleware
+app.use((req, res, next) => {
+  console.log(`DEBUG: Incoming request: ${req.method} ${req.url}`);
+  next();
+});
 app.use(express.json());
 app.use(express.static(STATIC_DIR));
 app.use("/api", apiKeyMiddleware);
@@ -146,7 +150,11 @@ createBullBoard({
 app.use('/admin/queues', serverAdapter.getRouter());
 
 // Job Management Routes
-app.use('/api/job', jobRoutes);
+console.log('DEBUG: Registering job routes...');
+console.log('DEBUG: jobRoutes type:', typeof jobRoutes);
+console.log('DEBUG: jobRoutes:', jobRoutes);
+app.use('/api/jobs', jobRoutes);
+console.log('DEBUG: Job routes registered at /api/jobs');
 
 // Health Check Routes
 app.use('/api', healthRoutes);
@@ -277,8 +285,8 @@ app.post(
         jobId: bullJob.id,
         dbJobId: dbJob.id,  // Also return DB job ID for reference
         message: 'Task queued successfully',
-        statusUrl: `/api/job/${bullJob.id}`,
-        progressUrl: `/api/job/${bullJob.id}/stream`,
+        statusUrl: `/api/jobs/${bullJob.id}`,
+        progressUrl: `/api/jobs/${bullJob.id}/stream`,
       });
 
     } catch (error: any) {

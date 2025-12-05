@@ -61,7 +61,7 @@ export { createCookieManager } from './cookie-manager';
 
 // Queue System
 export { scrapeQueue, scrapeQueueEvents, closeScrapeQueue } from './queue/scrape-queue';
-export { createScrapeWorker, shutdownWorker } from './queue/worker';
+export { createScrapeWorker, shutdownWorker, markJobAsCancelled, isJobCancelled } from './queue/worker';
 export { redisConnection, redisPublisher, redisSubscriber, closeRedisConnections } from './queue/connection';
 export type { ScrapeJobData, ScrapeJobResult, JobProgress, JobLog } from './queue/types';
 

@@ -19,6 +19,30 @@ import { JobRepository } from "../db/job-repo";
 const logger = createEnhancedLogger("Worker");
 const config = getConfigManager();
 
+// Track cancelled jobs (job ID -> cancelled timestamp)
+const cancelledJobs = new Map<string, number>();
+
+/**
+ * Mark a job as cancelled
+ * Called from the cancel API endpoint
+ */
+export function markJobAsCancelled(jobId: string): void {
+  cancelledJobs.set(jobId, Date.now());
+  logger.info(`Job ${jobId} marked for cancellation`);
+
+  // Clean up old entries after 1 hour
+  setTimeout(() => {
+    cancelledJobs.delete(jobId);
+  }, 3600000);
+}
+
+/**
+ * Check if a job has been cancelled
+ */
+export function isJobCancelled(jobId: string): boolean {
+  return cancelledJobs.has(jobId);
+}
+
 // Register built-in adapters at startup
 registerAdapter(twitterAdapter);
 registerAdapter(redditAdapter);
@@ -87,7 +111,7 @@ class JobContext implements AdapterJobContext {
    * Check if job should stop (cancelled by user)
    */
   getShouldStop(): boolean {
-    return false; // TODO: Implement cancellation mechanism
+    return isJobCancelled(this.job.id || '');
   }
 
   /**
@@ -148,21 +172,21 @@ export function createScrapeWorker(concurrency?: number) {
       } catch (error: any) {
         const scraperError = ErrorClassifier.classify(error);
         const serializedError = serializeError(error);
-        
+
         // Log error and update status to failed in PostgreSQL
         if (job.data.jobId) {
           try {
-            await JobRepository.updateStatus(job.data.jobId, 'failed', scraperError.message);
+            await JobRepository.updateStatus(job.data.jobId, "failed", scraperError.message);
             await JobRepository.logError({
               jobId: job.data.jobId,
-              severity: 'error',
-              category: scraperError.code || 'UNKNOWN',
+              severity: "error",
+              category: scraperError.code || "UNKNOWN",
               message: scraperError.message,
               stack: scraperError.stack,
-              context: serializedError // Use serialized version
+              context: serializedError, // Use serialized version
             });
           } catch (dbError) {
-            logger.error('Failed to log error to DB', dbError as Error);
+            logger.error("Failed to log error to DB", dbError as Error);
           }
         }
 
@@ -170,7 +194,7 @@ export function createScrapeWorker(concurrency?: number) {
           errorCode: scraperError.code,
           retryable: scraperError.retryable,
           errorContext: scraperError.context,
-          originalError: serializedError // Use serialized version
+          originalError: serializedError, // Use serialized version
         } as any);
 
         if (!scraperError.retryable) {

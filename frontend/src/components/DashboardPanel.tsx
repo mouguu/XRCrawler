@@ -23,10 +23,14 @@ interface ActiveJob {
 interface DashboardPanelProps {
   onJobComplete?: (jobId: string, downloadUrl?: string) => void;
   appendApiKey?: (url: string | null) => string | null;
-  fetchJobStatus?: (jobId: string) => Promise<ActiveJob['result'] | undefined>;
+  fetchJobStatus?: (jobId: string) => Promise<ActiveJob["result"] | undefined>;
 }
 
-export function DashboardPanel({ onJobComplete, appendApiKey, fetchJobStatus: fetchJobStatusProp }: DashboardPanelProps) {
+export function DashboardPanel({
+  onJobComplete,
+  appendApiKey,
+  fetchJobStatus: fetchJobStatusProp,
+}: DashboardPanelProps) {
   const [activeJobs, setActiveJobs] = useState<Map<string, ActiveJob>>(new Map());
 
   const updateJob = (jobId: string, updates: Partial<ActiveJob>) => {
@@ -40,16 +44,18 @@ export function DashboardPanel({ onJobComplete, appendApiKey, fetchJobStatus: fe
     });
   };
 
-  const fetchJobStatus = fetchJobStatusProp || (async (jobId: string): Promise<ActiveJob['result'] | undefined> => {
-    try {
-      const res = await fetch(`/api/job/${jobId}`);
-      if (!res.ok) return undefined;
-      const data = await res.json();
-      return data?.result;
-    } catch {
-      return undefined;
-    }
-  });
+  const fetchJobStatus =
+    fetchJobStatusProp ||
+    (async (jobId: string): Promise<ActiveJob["result"] | undefined> => {
+      try {
+        const res = await fetch(`/api/jobs/${jobId}`);
+        if (!res.ok) return undefined;
+        const data = await res.json();
+        return data?.result;
+      } catch {
+        return undefined;
+      }
+    });
 
   const addJob = (jobId: string, type: "twitter" | "reddit") => {
     const job: ActiveJob = {
@@ -79,10 +85,7 @@ export function DashboardPanel({ onJobComplete, appendApiKey, fetchJobStatus: fe
       onLog: (log) => {
         const job = activeJobs.get(jobId);
         updateJob(jobId, {
-          logs: [
-            ...(job?.logs || []),
-            `[${log.level}] ${log.message}`,
-          ].slice(-50),
+          logs: [...(job?.logs || []), `[${log.level}] ${log.message}`].slice(-50),
         });
       },
       onCompleted: (result) => {
@@ -147,6 +150,62 @@ export function DashboardPanel({ onJobComplete, appendApiKey, fetchJobStatus: fe
     }
   };
 
+  // Fetch active jobs on mount and restore them
+  useEffect(() => {
+    const fetchActiveJobs = async () => {
+      console.log("🔄 [DashboardPanel] Fetching active jobs on mount...");
+      try {
+        const states = ["active", "waiting", "delayed"];
+        const jobPromises = states.map((state) =>
+          fetch(`/api/jobs?state=${state}&count=50`)
+            .then((res) => {
+              console.log(`📡 [API] GET /api/jobs?state=${state} - Status: ${res.status}`);
+              return res.json();
+            })
+            .catch((err) => {
+              console.error(`❌ [API] Failed to fetch ${state} jobs:`, err);
+              return { jobs: [] };
+            })
+        );
+
+        const results = await Promise.all(jobPromises);
+        const allJobs = results.flatMap((r) => r.jobs || []);
+
+        console.log(`📦 [DashboardPanel] Fetched ${allJobs.length} jobs from API:`, allJobs);
+
+        // Add each job to the panel and reconnect to its stream
+        allJobs.forEach((job) => {
+          console.log(`🔍 [DashboardPanel] Processing job:`, {
+            id: job.id,
+            type: job.type,
+            state: job.state,
+            hasId: !!job.id,
+            hasType: !!job.type,
+          });
+
+          if (job.id && job.type) {
+            console.log(`➕ [DashboardPanel] Adding job ${job.id} (${job.type})`);
+            addJob(job.id, job.type);
+          } else {
+            console.warn(
+              `⚠️ [DashboardPanel] Skipping job ${job.id}: missing ${!job.id ? "id" : "type"}`
+            );
+          }
+        });
+
+        if (allJobs.length > 0) {
+          console.log(`✅ [DashboardPanel] Restored ${allJobs.length} active jobs from server`);
+        } else {
+          console.log("ℹ️ [DashboardPanel] No active jobs found");
+        }
+      } catch (error) {
+        console.error("❌ [DashboardPanel] Failed to fetch active jobs:", error);
+      }
+    };
+
+    fetchActiveJobs();
+  }, [addJob]);
+
   useEffect(() => {
     return () => {
       activeJobs.forEach((job) => {
@@ -165,8 +224,8 @@ export function DashboardPanel({ onJobComplete, appendApiKey, fetchJobStatus: fe
   }, [activeJobs]);
 
   const jobsArray = Array.from(activeJobs.values());
-  const activeCount = jobsArray.filter(j => j.state === 'active').length;
-  const completedCount = jobsArray.filter(j => j.state === 'completed').length;
+  const activeCount = jobsArray.filter((j) => j.state === "active").length;
+  const completedCount = jobsArray.filter((j) => j.state === "completed").length;
 
   return (
     <section id="dashboard" className="py-12">
@@ -179,7 +238,7 @@ export function DashboardPanel({ onJobComplete, appendApiKey, fetchJobStatus: fe
               Monitor your extraction tasks in real-time
             </p>
           </div>
-          
+
           {/* Stats */}
           <div className="flex items-center gap-6">
             <div className="text-right">
@@ -189,7 +248,9 @@ export function DashboardPanel({ onJobComplete, appendApiKey, fetchJobStatus: fe
             <div className="w-px h-8 bg-border" />
             <div className="text-right">
               <div className="text-2xl font-semibold">{completedCount}</div>
-              <div className="text-xs text-muted-foreground uppercase tracking-wider">Completed</div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wider">
+                Completed
+              </div>
             </div>
           </div>
         </div>
@@ -206,8 +267,8 @@ export function DashboardPanel({ onJobComplete, appendApiKey, fetchJobStatus: fe
             </div>
             <h3 className="text-lg font-medium mb-2">No active jobs</h3>
             <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-              Start an extraction task above to see your jobs here. 
-              Jobs will appear in real-time as they process.
+              Start an extraction task above to see your jobs here. Jobs will appear in real-time as
+              they process.
             </p>
           </motion.div>
         ) : (
@@ -242,14 +303,14 @@ function JobCard({
   onCancel: () => void;
   onRemove: () => void;
   appendApiKey?: (url: string | null) => string | null;
-  fetchJobStatus: (jobId: string) => Promise<ActiveJob['result'] | undefined>;
+  fetchJobStatus: (jobId: string) => Promise<ActiveJob["result"] | undefined>;
 }) {
   const progressPercent = job.progress?.percentage || 0;
   const isCompleted = job.state === "completed";
   const isFailed = job.state === "failed";
   const isCancelled = job.state === "cancelled";
   const isActive = job.state === "active";
-  
+
   const [resolvedDownload, setResolvedDownload] = useState<string | null>(
     job.result?.downloadUrl
       ? appendApiKey?.(job.result.downloadUrl) || job.result.downloadUrl
@@ -303,14 +364,14 @@ function JobCard({
             <Badge variant="secondary" className="uppercase text-2xs">
               {job.type}
             </Badge>
-            <Badge 
+            <Badge
               variant={isCompleted ? "success" : isFailed ? "destructive" : "outline"}
               className="uppercase text-2xs"
             >
               {job.state}
             </Badge>
           </div>
-          
+
           {/* Progress Bar */}
           {isActive && (
             <div className="mt-3 flex items-center gap-3">
@@ -350,24 +411,31 @@ function JobCard({
                 Download
               </a>
             </Button>
-          ) : isCompleted && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleResolveDownload}
-              disabled={resolving}
-            >
-              {resolving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Get Link"}
-            </Button>
+          ) : (
+            isCompleted && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleResolveDownload}
+                disabled={resolving}
+              >
+                {resolving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Get Link"}
+              </Button>
+            )
           )}
 
           {/* Cancel/Remove */}
-          {(isCompleted || isFailed || isCancelled) ? (
+          {isCompleted || isFailed || isCancelled ? (
             <Button variant="ghost" size="icon" onClick={onRemove}>
               <X className="w-4 h-4" />
             </Button>
           ) : (
-            <Button variant="ghost" size="sm" onClick={onCancel} className="text-red-600 hover:text-red-700 hover:bg-red-50">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onCancel}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
               Cancel
             </Button>
           )}
@@ -388,7 +456,10 @@ function JobCard({
                 <p className="text-muted-foreground italic">Waiting for logs...</p>
               ) : (
                 job.logs.map((log, i) => (
-                  <div key={i} className="text-muted-foreground hover:text-foreground transition-colors">
+                  <div
+                    key={i}
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                  >
                     {log}
                   </div>
                 ))
