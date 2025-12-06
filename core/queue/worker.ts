@@ -7,7 +7,7 @@
 import { Job, UnrecoverableError, Worker } from 'bullmq';
 import { getConfigManager } from '../../utils/config-manager';
 import { createEnhancedLogger } from '../../utils/logger';
-import { JobRepository } from '../db/job-repo';
+import { JobRepository } from '../db/repositories';
 import { ErrorClassifier } from '../errors';
 import { redditAdapter } from '../platforms/reddit-adapter';
 // import { getAdapter, registerAdapter } from '../platforms/registry'; // Removed

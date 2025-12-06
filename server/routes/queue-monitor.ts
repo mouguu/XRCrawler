@@ -5,8 +5,8 @@
  */
 
 import { Hono } from 'hono';
-import { scrapeQueue } from '../core/queue/scrape-queue';
-import { createEnhancedLogger } from '../utils/logger';
+import { scrapeQueue } from '../../core/queue/scrape-queue';
+import { createEnhancedLogger } from '../../utils/logger';
 
 const logger = createEnhancedLogger('QueueMonitor');
 

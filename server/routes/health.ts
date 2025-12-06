@@ -3,7 +3,7 @@
  */
 
 import { Hono } from 'hono';
-import { prisma } from '../../core/db/prisma';
+import { prisma } from '../../core/db/repositories';
 import { redisConnection } from '../../core/queue/connection';
 import { createEnhancedLogger } from '../../utils';
 

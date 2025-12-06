@@ -3,8 +3,8 @@
  */
 
 import { Hono } from 'hono';
-import { prisma } from '../core/db/prisma';
-import { createEnhancedLogger } from '../utils/logger';
+import { prisma } from '../../core/db/repositories';
+import { createEnhancedLogger } from '../../utils/logger';
 
 const logger = createEnhancedLogger('StatsAPI');
 

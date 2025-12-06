@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Page, Protocol } from 'puppeteer';
-import { prisma } from './db/prisma';
+import { prisma } from './db/repositories';
 
 export interface Session {
   id: string; // ID from DB (UUID)

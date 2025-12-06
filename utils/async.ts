@@ -1,13 +1,64 @@
 /**
- * 重试工具模块
- * 提供指数退避重试功能，用于处理网络请求和其他可能失败的操作
+ * Async Utilities (Consolidated)
+ * Merges functionality from retry.ts and concurrency.ts.
  */
 
 import { GoToOptions, Page, WaitForSelectorOptions } from 'puppeteer';
 
-/**
- * 延迟函数
- */
+// ==========================================
+// Part 1: Concurrency & Cancellation (from concurrency.ts)
+// ==========================================
+
+export async function waitOrCancel<T>(
+  promise: Promise<T>,
+  shouldStop: () => Promise<boolean> | boolean,
+  checkIntervalMs: number = 200,
+): Promise<T> {
+  let interval: ReturnType<typeof setInterval> | undefined;
+
+  const cancelCheck = new Promise<never>((_, reject) => {
+    interval = setInterval(async () => {
+      try {
+        const stopped = await shouldStop();
+        if (stopped) {
+          clearInterval(interval);
+          reject(new Error('Job cancelled by user'));
+        }
+      } catch (error) {
+        // Ignore errors in shouldStop check
+      }
+    }, checkIntervalMs);
+  });
+
+  try {
+    return await Promise.race([promise, cancelCheck]);
+  } finally {
+    if (interval) clearInterval(interval);
+  }
+}
+
+export async function sleepOrCancel(
+  ms: number,
+  shouldStop: () => Promise<boolean> | boolean,
+  checkIntervalMs: number = 200,
+): Promise<void> {
+  if (ms <= 0) return;
+  const start = Date.now();
+  while (Date.now() - start < ms) {
+    if (await shouldStop()) {
+      throw new Error('Job cancelled by user');
+    }
+    const remaining = ms - (Date.now() - start);
+    if (remaining <= 0) break;
+    const waitTime = Math.max(0, Math.min(remaining, checkIntervalMs));
+    await new Promise((resolve) => setTimeout(resolve, waitTime));
+  }
+}
+
+// ==========================================
+// Part 2: Retry Logic (from retry.ts)
+// ==========================================
+
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -21,9 +72,6 @@ export interface RetryOptions {
   shouldRetry?: (error: any) => boolean;
 }
 
-/**
- * 使用指数退避策略重试异步函数
- */
 export async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   options: RetryOptions = {},
@@ -40,49 +88,27 @@ export async function retryWithBackoff<T>(
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      // 执行函数
       return await fn();
     } catch (error: any) {
       lastError = error;
+      if (shouldRetry && !shouldRetry(error)) throw error;
+      if (attempt === maxRetries) throw error;
 
-      // 检查是否应该重试
-      if (shouldRetry && !shouldRetry(error)) {
-        throw error;
-      }
-
-      // 如果是最后一次尝试，直接抛出错误
-      if (attempt === maxRetries) {
-        throw error;
-      }
-
-      // 计算延迟时间（指数退避）
       const delay = Math.min(baseDelay * 2 ** attempt, maxDelay);
-
-      // 调用重试回调
-      if (onRetry) {
-        onRetry(error, attempt + 1);
-      }
-
+      if (onRetry) onRetry(error, attempt + 1);
+      
       console.log(`Retrying ${attempt + 1}/${maxRetries}, retrying after ${delay}ms...`);
-
-      // 等待后重试
       await sleep(delay);
     }
   }
-
-  // 理论上不会到这里，但为了类型安全
   throw lastError;
 }
 
-/**
- * 使用线性退避策略重试异步函数
- */
 export async function retryWithLinearBackoff<T>(
   fn: () => Promise<T>,
   options: RetryOptions = {},
 ): Promise<T> {
   const { maxRetries = 3, delay = 1000, onRetry = null, shouldRetry = null } = options;
-
   let lastError: any;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -90,67 +116,30 @@ export async function retryWithLinearBackoff<T>(
       return await fn();
     } catch (error: any) {
       lastError = error;
+      if (shouldRetry && !shouldRetry(error)) throw error;
+      if (attempt === maxRetries) throw error;
 
-      if (shouldRetry && !shouldRetry(error)) {
-        throw error;
-      }
-
-      if (attempt === maxRetries) {
-        throw error;
-      }
-
-      if (onRetry) {
-        onRetry(error, attempt + 1);
-      }
-
+      if (onRetry) onRetry(error, attempt + 1);
       console.log(`Retrying ${attempt + 1}/${maxRetries}, retrying after ${delay}ms...`);
       await sleep(delay);
     }
   }
-
   throw lastError;
 }
 
-/**
- * 判断错误是否可以重试的辅助函数
- */
 export function isRetryableError(error: any): boolean {
-  const message = error.message.toLowerCase();
-
-  // 网络相关的错误
+  const message = (error.message || '').toLowerCase();
   const networkErrors = [
-    'timeout',
-    'econnreset',
-    'econnrefused',
-    'enetunreach',
-    'enotfound',
-    'network',
-    'navigation timeout',
-    'net::err',
-    'waiting for selector',
+    'timeout', 'econnreset', 'econnrefused', 'enetunreach', 'enotfound',
+    'network', 'navigation timeout', 'net::err', 'waiting for selector',
   ];
-
-  // 临时性错误
   const temporaryErrors = [
-    '503',
-    '502',
-    '504',
-    '429', // 速率限制
-    'service unavailable',
-    'gateway timeout',
+    '503', '502', '504', '429', 'service unavailable', 'gateway timeout',
   ];
 
-  // 检查是否包含可重试的错误信息
-  const hasRetryableMessage =
-    networkErrors.some((err) => message.includes(err)) ||
-    temporaryErrors.some((err) => message.includes(err));
-
-  return hasRetryableMessage;
+  return [...networkErrors, ...temporaryErrors].some(err => message.includes(err));
 }
 
-/**
- * 包装 Puppeteer 页面导航的重试函数
- */
 export async function retryPageGoto(
   page: Page,
   url: string,
@@ -168,9 +157,6 @@ export async function retryPageGoto(
   });
 }
 
-/**
- * 包装 Puppeteer 等待选择器的重试函数
- */
 export async function retryWaitForSelector(
   page: Page,
   selector: string,

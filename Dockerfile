@@ -61,8 +61,7 @@ COPY --from=builder /app/utils ./utils
 COPY --from=builder /app/types ./types
 COPY --from=builder /app/config ./config
 COPY --from=builder /app/server ./server
-COPY --from=builder /app/middleware ./middleware
-COPY --from=builder /app/routes ./routes
+
 COPY --from=builder /app/proxy ./proxy
 
 # 5. 复制 WASM 模块

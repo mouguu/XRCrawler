@@ -4,7 +4,7 @@ import * as fileUtils from '../utils';
 import * as markdownUtils from '../utils';
 import * as exportUtils from '../utils';
 import * as screenshotUtils from '../utils';
-import { cleanTweetsFast, sleepOrCancel, waitOrCancel } from '../utils';
+import { processTweets, sleepOrCancel, waitOrCancel } from '../utils';
 import * as dataExtractor from './data-extractor';
 import { ScraperErrors } from './errors';
 import type { ScraperEngine } from './scraper-engine';
@@ -272,7 +272,7 @@ export async function runTimelineDom(
           }
         }
 
-        const cleaned = await cleanTweetsFast([], tweetsOnPage, { limit });
+      const cleaned = await processTweets([], tweetsOnPage, limit);
         if (cleaned.usedWasm && !wasmCleanerLogged) {
           engine.eventBus.emitLog('Using Rust/WASM tweet cleaner for normalization/dedup.', 'info');
           wasmCleanerLogged = true;
@@ -521,7 +521,7 @@ export async function runTimelineDom(
                     ),
                     shouldStop,
                   );
-                  const cleaned = await cleanTweetsFast([], tweetsOnPage, { limit });
+                  const cleaned = await processTweets([], tweetsOnPage, limit);
                   if (cleaned.usedWasm && !wasmCleanerLogged) {
                     engine.eventBus.emitLog(
                       'Using Rust/WASM tweet cleaner for normalization/dedup.',

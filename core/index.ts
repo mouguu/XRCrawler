@@ -3,18 +3,13 @@
  * 统一导出核心模块，建立清晰的模块边界
  */
 
-export { AntiDetection } from './anti-detection';
+export * from './scraper-engine.types';
 // Managers
 export { type BrowserLaunchOptions, BrowserManager, type ProxyConfig } from './browser-manager';
 // Cookie Manager Factory
-export {
-  type CookieLoadResult,
-  CookieManager,
-  type CookieManagerOptions,
-  createCookieManager,
-} from './cookie-manager';
+
 export * from './data-extractor';
-export { ErrorSnapshotter } from './error-snapshotter';
+export { ErrorSnapshotter } from './errors';
 // Errors
 export {
   ErrorClassifier,
@@ -28,8 +23,8 @@ export {
   type SuccessResult,
   successResult,
 } from './errors';
-export { FingerprintManager } from './fingerprint-manager';
-export { HumanBehavior } from './human-behavior';
+
+
 
 // Services
 export { NavigationService } from './navigation-service';
@@ -61,15 +56,16 @@ export {
   markJobAsCancelled,
   shutdownWorker,
 } from './queue/worker';
-export { RateLimitManager } from './rate-limit-manager';
+export { createDefaultDependencies } from './scraper-engine';
+export type { ScraperDependencies } from './scraper-engine';
+export { RateLimitManager } from './rate-limit';
+export { AntiDetection, FingerprintManager, CookieManager, HumanBehavior, createCookieManager } from './evasion';
 export * from './scrape-unified';
-export { createDefaultDependencies, type ScraperDependencies } from './scraper-dependencies';
 // Engine
 export {
   ScraperEngine,
   type ScraperEngineOptions,
   type ScrapeThreadOptions,
-  type ScrapeThreadResult,
   type ScrapeTimelineConfig,
   type ScrapeTimelineResult,
 } from './scraper-engine';

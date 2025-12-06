@@ -6,7 +6,7 @@ import {
   parseTweetsFromInstructions,
 } from '../types/tweet-definitions';
 import * as fileUtils from '../utils';
-import { cleanTweetsFast, sleepOrCancel, waitOrCancel } from '../utils';
+import { processTweets, sleepOrCancel, waitOrCancel } from '../utils';
 import { ScraperError, ScraperErrors } from './errors';
 import type { ScraperEngine } from './scraper-engine';
 import type { ScrapeTimelineConfig, ScrapeTimelineResult } from './scraper-engine.types';
@@ -304,7 +304,7 @@ export async function runTimelineApi(
         continue;
       }
 
-      const cleaned = await cleanTweetsFast([], tweets, { limit });
+      const cleaned = await processTweets([], tweets, limit);
       if (cleaned.usedWasm && !wasmCleanerLogged) {
         engine.eventBus.emitLog('Using Rust/WASM tweet cleaner for normalization/dedup.', 'info');
         wasmCleanerLogged = true;

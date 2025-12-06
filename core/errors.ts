@@ -1,62 +1,57 @@
 /**
- * Error handling module for XRCrawler
- * Defines error types, codes, and classification logic
+ * Error Handling Module (Consolidated)
+ * Contains Error Codes, ScraperError, Classifier, Utils, and Snapshotter.
  */
 
-/**
- * Standard error codes for the scraper
- */
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { Page } from 'puppeteer';
+
+// ==========================================
+// Part 1: Error Codes & Types
+// ==========================================
+
 export enum ErrorCode {
   // Network Errors
   NETWORK_ERROR = 'NETWORK_ERROR',
   CONNECTION_REFUSED = 'CONNECTION_REFUSED',
   TIMEOUT = 'TIMEOUT',
   DNS_ERROR = 'DNS_ERROR',
-
   // Authentication Errors
   AUTH_FAILED = 'AUTH_FAILED',
   LOGIN_REQUIRED = 'LOGIN_REQUIRED',
   SESSION_EXPIRED = 'SESSION_EXPIRED',
   ACCOUNT_LOCKED = 'ACCOUNT_LOCKED',
   ACCOUNT_SUSPENDED = 'ACCOUNT_SUSPENDED',
-
   // Rate Limiting
   RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
   THROTTLED = 'THROTTLED',
-
   // API Errors
   API_ERROR = 'API_ERROR',
   INVALID_RESPONSE = 'INVALID_RESPONSE',
   BAD_REQUEST = 'BAD_REQUEST',
   NOT_FOUND = 'NOT_FOUND',
   SERVER_ERROR = 'SERVER_ERROR',
-
   // Browser/Puppeteer Errors
   BROWSER_CRASHED = 'BROWSER_CRASHED',
-  BROWSER_ERROR = 'BROWSER_CRASHED', // Alias for BROWSER_CRASHED
+  BROWSER_ERROR = 'BROWSER_CRASHED',
   NAVIGATION_FAILED = 'NAVIGATION_FAILED',
   SELECTOR_TIMEOUT = 'SELECTOR_TIMEOUT',
   ELEMENT_NOT_FOUND = 'ELEMENT_NOT_FOUND',
-
   // Data Extraction Errors
   DATA_EXTRACTION_FAILED = 'DATA_EXTRACTION_FAILED',
   PARSING_ERROR = 'PARSING_ERROR',
   VALIDATION_ERROR = 'VALIDATION_ERROR',
-
   // System Errors
   UNKNOWN_ERROR = 'UNKNOWN_ERROR',
   INTERNAL_ERROR = 'INTERNAL_ERROR',
   CONFIG_ERROR = 'CONFIG_ERROR',
   FILE_SYSTEM_ERROR = 'FILE_SYSTEM_ERROR',
-
-  // Backward compatibility aliases
-  RATE_LIMIT = 'RATE_LIMIT_EXCEEDED', // Alias for RATE_LIMIT_EXCEEDED
-  INVALID_CONFIG = 'CONFIG_ERROR', // Alias for CONFIG_ERROR
+  // Aliases
+  RATE_LIMIT = 'RATE_LIMIT_EXCEEDED',
+  INVALID_CONFIG = 'CONFIG_ERROR',
 }
 
-/**
- * Context information for errors
- */
 export interface ErrorContext {
   url?: string;
   username?: string;
@@ -67,9 +62,29 @@ export interface ErrorContext {
   [key: string]: any;
 }
 
-/**
- * Custom error class for scraper errors
- */
+export enum ErrorType {
+  NETWORK = 'network',
+  RATE_LIMIT = 'rate_limit',
+  AUTH = 'auth',
+  TIMEOUT = 'timeout',
+  NOT_FOUND = 'not_found',
+  FORBIDDEN = 'forbidden',
+  PROXY = 'proxy',
+  UNKNOWN = 'unknown',
+}
+
+export interface ClassifiedError {
+  type: ErrorType;
+  message: string;
+  retryable: boolean;
+  retryAfter?: number;
+  shouldSwitchProxy?: boolean;
+}
+
+// ==========================================
+// Part 2: ScraperError Class
+// ==========================================
+
 export class ScraperError extends Error {
   public readonly code: ErrorCode;
   public readonly retryable: boolean;
@@ -97,22 +112,15 @@ export class ScraperError extends Error {
     this.originalError = options.originalError;
     this.statusCode = options.statusCode;
 
-    // Capture stack trace
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, ScraperError);
     }
   }
 
-  /**
-   * Check if the error is recoverable
-   */
   public isRecoverable(): boolean {
     return this.retryable;
   }
 
-  /**
-   * Get a user-friendly error message
-   */
   public getUserMessage(): string {
     switch (this.code) {
       case ErrorCode.RATE_LIMIT_EXCEEDED:
@@ -131,9 +139,6 @@ export class ScraperError extends Error {
     }
   }
 
-  /**
-   * Convert error to JSON object
-   */
   public toJSON(): Record<string, any> {
     return {
       name: this.name,
@@ -153,10 +158,7 @@ export class ScraperError extends Error {
     };
   }
 
-  /**
-   * Create ScraperError from HTTP response (backward compatibility)
-   */
-  public static fromHttpResponse(
+  static fromHttpResponse(
     response: { status: number; statusText?: string },
     context?: ErrorContext,
   ): ScraperError {
@@ -171,7 +173,6 @@ export class ScraperError extends Error {
         context: ctx,
       });
     }
-
     if (statusCode === 401 || statusCode === 403) {
       return new ScraperError(ErrorCode.AUTH_FAILED, `Authentication failed: ${statusText}`, {
         retryable: false,
@@ -179,7 +180,6 @@ export class ScraperError extends Error {
         context: ctx,
       });
     }
-
     if (statusCode >= 500) {
       return new ScraperError(ErrorCode.API_ERROR, `Server error: ${statusText}`, {
         retryable: true,
@@ -187,7 +187,6 @@ export class ScraperError extends Error {
         context: ctx,
       });
     }
-
     return new ScraperError(ErrorCode.API_ERROR, `HTTP ${statusCode}: ${statusText}`, {
       retryable: false,
       statusCode,
@@ -195,10 +194,7 @@ export class ScraperError extends Error {
     });
   }
 
-  /**
-   * Create ScraperError from native Error (backward compatibility)
-   */
-  public static fromError(
+  static fromError(
     error: Error,
     code: ErrorCode = ErrorCode.UNKNOWN_ERROR,
     retryable: boolean = false,
@@ -211,23 +207,13 @@ export class ScraperError extends Error {
     });
   }
 
-  /**
-   * Check if error is a rate limit error
-   */
-  public static isRateLimitError(error: unknown): boolean {
-    if (error instanceof ScraperError) {
-      return error.code === ErrorCode.RATE_LIMIT_EXCEEDED;
-    }
-    if (error instanceof Error) {
-      return ErrorClassifier.isRateLimit(error);
-    }
+  static isRateLimitError(error: unknown): boolean {
+    if (error instanceof ScraperError) return error.code === ErrorCode.RATE_LIMIT_EXCEEDED;
+    if (error instanceof Error) return ErrorClassifier.isRateLimit(error);
     return false;
   }
 
-  /**
-   * Check if error is an auth error
-   */
-  public static isAuthError(error: unknown): boolean {
+  static isAuthError(error: unknown): boolean {
     if (error instanceof ScraperError) {
       return (
         error.code === ErrorCode.AUTH_FAILED ||
@@ -250,10 +236,7 @@ export class ScraperError extends Error {
     return false;
   }
 
-  /**
-   * Check if error is a network error
-   */
-  public static isNetworkError(error: unknown): boolean {
+  static isNetworkError(error: unknown): boolean {
     if (error instanceof ScraperError) {
       return (
         error.code === ErrorCode.NETWORK_ERROR ||
@@ -262,16 +245,224 @@ export class ScraperError extends Error {
         error.code === ErrorCode.DNS_ERROR
       );
     }
-    if (error instanceof Error) {
-      return ErrorClassifier.isNetworkError(error);
-    }
+    if (error instanceof Error) return ErrorClassifier.isNetworkError(error);
     return false;
   }
 }
 
-/**
- * Result types for backward compatibility
- */
+// ==========================================
+// Part 3: Error Classifier
+// ==========================================
+
+export class ErrorClassifier {
+  static classify(error: unknown, context?: ErrorContext): ScraperError {
+    if (error instanceof ScraperError) {
+      if (context) Object.assign(error.context, context);
+      return error;
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    const originalError = error instanceof Error ? error : undefined;
+    const lowerMessage = message.toLowerCase();
+
+    // Rate Limiting
+    if (
+      lowerMessage.includes('rate limit') ||
+      lowerMessage.includes('too many requests') ||
+      lowerMessage.includes('429')
+    ) {
+      return new ScraperError(ErrorCode.RATE_LIMIT_EXCEEDED, message, {
+        retryable: true,
+        context,
+        originalError,
+      });
+    }
+
+    // Network Errors
+    if (
+      lowerMessage.includes('network') ||
+      lowerMessage.includes('connection refused') ||
+      lowerMessage.includes('econnrefused') ||
+      lowerMessage.includes('socket hang up') ||
+      lowerMessage.includes('fetch failed')
+    ) {
+      return new ScraperError(ErrorCode.NETWORK_ERROR, message, {
+        retryable: true,
+        context,
+        originalError,
+      });
+    }
+
+    // Timeouts
+    if (lowerMessage.includes('timeout') || lowerMessage.includes('timed out')) {
+      return new ScraperError(ErrorCode.TIMEOUT, message, {
+        retryable: true,
+        context,
+        originalError,
+      });
+    }
+
+    // Authentication
+    if (
+      lowerMessage.includes('auth') ||
+      lowerMessage.includes('login') ||
+      lowerMessage.includes('unauthorized') ||
+      lowerMessage.includes('401') ||
+      lowerMessage.includes('403')
+    ) {
+      return new ScraperError(ErrorCode.AUTH_FAILED, message, {
+        retryable: false,
+        context,
+        originalError,
+      });
+    }
+
+    // Browser/Puppeteer
+    if (
+      lowerMessage.includes('puppeteer') ||
+      lowerMessage.includes('chromium') ||
+      lowerMessage.includes('browser') ||
+      lowerMessage.includes('target closed') ||
+      lowerMessage.includes('session closed')
+    ) {
+      return new ScraperError(ErrorCode.BROWSER_CRASHED, message, {
+        retryable: true,
+        context,
+        originalError,
+      });
+    }
+
+    // Navigation
+    if (lowerMessage.includes('navigation') || lowerMessage.includes('navigating')) {
+      return new ScraperError(ErrorCode.NAVIGATION_FAILED, message, {
+        retryable: true,
+        context,
+        originalError,
+      });
+    }
+
+    // Selectors
+    if (lowerMessage.includes('selector') || lowerMessage.includes('element')) {
+      return new ScraperError(ErrorCode.ELEMENT_NOT_FOUND, message, {
+        retryable: true,
+        context,
+        originalError,
+      });
+    }
+
+    return new ScraperError(ErrorCode.UNKNOWN_ERROR, message, {
+      retryable: false,
+      context,
+      originalError,
+    });
+  }
+
+  static isRateLimit(error: unknown): boolean {
+    const classified = ErrorClassifier.classify(error);
+    return classified.code === ErrorCode.RATE_LIMIT_EXCEEDED;
+  }
+
+  static isNetworkError(error: unknown): boolean {
+    const classified = ErrorClassifier.classify(error);
+    return (
+      classified.code === ErrorCode.NETWORK_ERROR ||
+      classified.code === ErrorCode.TIMEOUT ||
+      classified.code === ErrorCode.DNS_ERROR ||
+      classified.code === ErrorCode.CONNECTION_REFUSED
+    );
+  }
+}
+
+// Deprecated function alias for backward compatibility
+export function classifyError(error: any): ClassifiedError {
+  const se = ErrorClassifier.classify(error);
+  // Map ScraperError back to ClassifiedError
+  let type = ErrorType.UNKNOWN;
+  if (se.code === ErrorCode.NETWORK_ERROR) type = ErrorType.NETWORK;
+  if (se.code === ErrorCode.RATE_LIMIT_EXCEEDED) type = ErrorType.RATE_LIMIT;
+  if (se.code === ErrorCode.AUTH_FAILED) type = ErrorType.AUTH;
+  if (se.code === ErrorCode.TIMEOUT) type = ErrorType.TIMEOUT;
+  if (se.code === ErrorCode.NOT_FOUND) type = ErrorType.NOT_FOUND;
+  
+  return {
+    type,
+    message: se.message,
+    retryable: se.retryable,
+    shouldSwitchProxy: type === ErrorType.NETWORK || type === ErrorType.TIMEOUT || type === ErrorType.PROXY,
+  };
+}
+
+// ==========================================
+// Part 4: Error Utilities
+// ==========================================
+
+export function handleError(error: unknown, context?: Record<string, any>): ScraperError {
+  if (error instanceof ScraperError) {
+    if (context && Object.keys(context).length > 0) Object.assign(error.context, context);
+    return error;
+  }
+  const scraperError = ErrorClassifier.classify(error);
+  if (context && Object.keys(context).length > 0) Object.assign(scraperError.context, context);
+  return scraperError;
+}
+
+export async function withErrorHandling<T>(
+  fn: () => Promise<T>,
+  errorMessage: string,
+  errorCode?: ErrorCode,
+  context?: Record<string, any>,
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (error: unknown) {
+    const classifiedError = handleError(error, context);
+    if (errorMessage && !(error instanceof ScraperError)) {
+      throw new ScraperError(
+        errorCode || classifiedError.code,
+        `${errorMessage}: ${classifiedError.message}`,
+        {
+          retryable: classifiedError.retryable,
+          originalError: classifiedError.originalError || (error instanceof Error ? error : undefined),
+          context: { ...classifiedError.context, ...context },
+        },
+      );
+    }
+    throw classifiedError;
+  }
+}
+
+export function createErrorResult(
+  error: unknown,
+  operation?: string,
+): { success: false; error: string; code?: ErrorCode; retryable?: boolean } {
+  const scraperError = handleError(error, operation ? { operation } : undefined);
+  return {
+    success: false,
+    error: scraperError.getUserMessage(),
+    code: scraperError.code,
+    retryable: scraperError.retryable,
+  };
+}
+
+export function isRecoverableError(error: unknown): boolean {
+  const scraperError = handleError(error);
+  return scraperError.isRecoverable();
+}
+
+export function logError(
+  error: unknown,
+  logger: (message: string, level?: string) => void = console.error,
+): void {
+  const scraperError = handleError(error);
+  logger(`[${scraperError.code}] ${scraperError.message}`, 'error');
+  if (scraperError.originalError) {
+    logger(`Original error: ${scraperError.originalError.message}`, 'debug');
+  }
+  if (Object.keys(scraperError.context).length > 0) {
+    logger(`Context: ${JSON.stringify(scraperError.context, null, 2)}`, 'debug');
+  }
+}
+
 export interface SuccessResult<T> {
   success: true;
   data: T;
@@ -286,29 +477,18 @@ export interface ErrorResult {
 
 export type Result<T> = SuccessResult<T> | ErrorResult;
 
-/**
- * Helper to create success result
- */
 export function successResult<T>(data: T): SuccessResult<T> {
   return { success: true, data };
 }
 
-/**
- * Helper to create error result from error
- */
 export function errorToResult(error: unknown): ErrorResult {
-  const scraperError = ErrorClassifier.classify(error);
-  return {
-    success: false,
-    error: scraperError.getUserMessage(),
-    code: scraperError.code,
-    retryable: scraperError.retryable,
-  };
+  return createErrorResult(error);
 }
 
-/**
- * Factory for creating common errors
- */
+// ==========================================
+// Part 5: ScraperErrors Factory
+// ==========================================
+
 export const ScraperErrors = {
   NetworkError: (message: string, context?: ErrorContext, originalError?: Error) =>
     new ScraperError(ErrorCode.NETWORK_ERROR, message, {
@@ -427,137 +607,67 @@ export const ScraperErrors = {
     }),
 };
 
-/**
- * Utility to classify unknown errors
- */
-export class ErrorClassifier {
-  /**
-   * Classify an unknown error into a ScraperError
-   */
-  public static classify(error: unknown, context?: ErrorContext): ScraperError {
-    if (error instanceof ScraperError) {
-      if (context) {
-        // Merge context if provided
-        Object.assign(error.context, context);
+// ==========================================
+// Part 6: Error Snapshotter
+// ==========================================
+
+export class ErrorSnapshotter {
+  private snapshotDir: string;
+
+  constructor(baseDir: string = 'output/errors') {
+    this.snapshotDir = path.isAbsolute(baseDir) ? baseDir : path.join(process.cwd(), baseDir);
+    this.ensureDirExists();
+  }
+
+  private ensureDirExists() {
+    if (!fs.existsSync(this.snapshotDir)) {
+      fs.mkdirSync(this.snapshotDir, { recursive: true });
+    }
+  }
+
+  async capture(page: Page, error: Error, contextLabel: string = 'unknown'): Promise<string[]> {
+    try {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const sanitizedLabel = contextLabel.replace(/[^a-z0-9-]/gi, '_');
+      const errorName = error.name || 'Error';
+      const baseFilename = `${timestamp}_${sanitizedLabel}_${errorName}`;
+
+      const screenshotPath = path.join(this.snapshotDir, `${baseFilename}.jpg`);
+      const htmlPath = path.join(this.snapshotDir, `${baseFilename}.html`);
+      const savedFiles: string[] = [];
+
+      try {
+        await page.screenshot({
+          path: screenshotPath,
+          type: 'jpeg',
+          quality: 60,
+          fullPage: true,
+        });
+        savedFiles.push(screenshotPath);
+      } catch (e) {
+        // ignore
       }
-      return error;
+
+      try {
+        const htmlContent = await page.content();
+        fs.writeFileSync(htmlPath, htmlContent, 'utf-8');
+        savedFiles.push(htmlPath);
+      } catch (e) {
+        // ignore
+      }
+
+      try {
+        const errorLogPath = path.join(this.snapshotDir, `${baseFilename}.log`);
+        const errorLog = `Error: ${error.message}\nStack: ${error.stack}\nContext: ${contextLabel}\nTime: ${new Date().toISOString()}`;
+        fs.writeFileSync(errorLogPath, errorLog, 'utf-8');
+        savedFiles.push(errorLogPath);
+      } catch (e) {
+        // ignore
+      }
+
+      return savedFiles;
+    } catch (criticalError) {
+      return [];
     }
-
-    const message = error instanceof Error ? error.message : String(error);
-    const originalError = error instanceof Error ? error : undefined;
-    const lowerMessage = message.toLowerCase();
-
-    // Rate Limiting
-    if (
-      lowerMessage.includes('rate limit') ||
-      lowerMessage.includes('too many requests') ||
-      lowerMessage.includes('429')
-    ) {
-      return new ScraperError(ErrorCode.RATE_LIMIT_EXCEEDED, message, {
-        retryable: true,
-        context,
-        originalError,
-      });
-    }
-
-    // Network Errors
-    if (
-      lowerMessage.includes('network') ||
-      lowerMessage.includes('connection refused') ||
-      lowerMessage.includes('econnrefused') ||
-      lowerMessage.includes('socket hang up') ||
-      lowerMessage.includes('fetch failed')
-    ) {
-      return new ScraperError(ErrorCode.NETWORK_ERROR, message, {
-        retryable: true,
-        context,
-        originalError,
-      });
-    }
-
-    // Timeouts
-    if (lowerMessage.includes('timeout') || lowerMessage.includes('timed out')) {
-      return new ScraperError(ErrorCode.TIMEOUT, message, {
-        retryable: true,
-        context,
-        originalError,
-      });
-    }
-
-    // Authentication
-    if (
-      lowerMessage.includes('auth') ||
-      lowerMessage.includes('login') ||
-      lowerMessage.includes('unauthorized') ||
-      lowerMessage.includes('401') ||
-      lowerMessage.includes('403')
-    ) {
-      return new ScraperError(ErrorCode.AUTH_FAILED, message, {
-        retryable: false,
-        context,
-        originalError,
-      });
-    }
-
-    // Browser/Puppeteer
-    if (
-      lowerMessage.includes('puppeteer') ||
-      lowerMessage.includes('chromium') ||
-      lowerMessage.includes('browser') ||
-      lowerMessage.includes('target closed') ||
-      lowerMessage.includes('session closed')
-    ) {
-      return new ScraperError(ErrorCode.BROWSER_CRASHED, message, {
-        retryable: true,
-        context,
-        originalError,
-      });
-    }
-
-    // Navigation
-    if (lowerMessage.includes('navigation') || lowerMessage.includes('navigating')) {
-      return new ScraperError(ErrorCode.NAVIGATION_FAILED, message, {
-        retryable: true,
-        context,
-        originalError,
-      });
-    }
-
-    // Selectors
-    if (lowerMessage.includes('selector') || lowerMessage.includes('element')) {
-      return new ScraperError(ErrorCode.ELEMENT_NOT_FOUND, message, {
-        retryable: true,
-        context,
-        originalError,
-      });
-    }
-
-    // Default to Unknown Error
-    return new ScraperError(ErrorCode.UNKNOWN_ERROR, message, {
-      retryable: false,
-      context,
-      originalError,
-    });
-  }
-
-  /**
-   * Check if an error represents a rate limit
-   */
-  public static isRateLimit(error: unknown): boolean {
-    const classified = ErrorClassifier.classify(error);
-    return classified.code === ErrorCode.RATE_LIMIT_EXCEEDED;
-  }
-
-  /**
-   * Check if an error represents a network issue
-   */
-  public static isNetworkError(error: unknown): boolean {
-    const classified = ErrorClassifier.classify(error);
-    return (
-      classified.code === ErrorCode.NETWORK_ERROR ||
-      classified.code === ErrorCode.TIMEOUT ||
-      classified.code === ErrorCode.DNS_ERROR ||
-      classified.code === ErrorCode.CONNECTION_REFUSED
-    );
   }
 }

@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { safeJsonParse } from '../utils';
-import { CheckpointRepository } from './db/checkpoint-repo';
+import { CheckpointRepository } from './db/repositories';
 import { ScraperEventBus } from './scraper-engine.types';
 
 export interface ScrapingProgress {

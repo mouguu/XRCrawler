@@ -2,11 +2,14 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   CheckCircle,
   Cookie,
+  Edit2,
   FileJson,
   FileUp,
   RefreshCw,
+  Save,
   Upload,
   User,
+  X,
   XCircle,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -29,6 +32,8 @@ interface SessionInfo {
   isValid: boolean;
   error?: string;
   cookieCount: number;
+  displayName?: string;
+  dbId?: string;
 }
 
 export function SessionManager() {
@@ -42,6 +47,11 @@ export function SessionManager() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [cookieName, setCookieName] = useState('');
+
+  // Rename state
+  const [editingSession, setEditingSession] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [renaming, setRenaming] = useState(false);
 
   const fetchSessions = async () => {
     setLoading(true);
@@ -127,6 +137,46 @@ export function SessionManager() {
     setIsModalOpen(false);
     setSelectedFile(null);
     setCookieName('');
+  };
+
+  const handleStartRename = (session: SessionInfo) => {
+    setEditingSession(session.filename);
+    setEditName(session.displayName || session.filename.replace(/\.json$/i, ''));
+  };
+
+  const handleCancelRename = () => {
+    setEditingSession(null);
+    setEditName('');
+  };
+
+  const handleSaveRename = async (session: SessionInfo) => {
+    if (!editName.trim()) {
+      setError('Name cannot be empty');
+      return;
+    }
+
+    setRenaming(true);
+    try {
+      const response = await fetch(`/api/sessions/${session.filename}/rename`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ displayName: editName.trim() }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        await fetchSessions();
+        setEditingSession(null);
+        setEditName('');
+        setError(null);
+      } else {
+        setError(data.error || 'Failed to rename session');
+      }
+    } catch {
+      setError('Network error while renaming');
+    } finally {
+      setRenaming(false);
+    }
   };
 
   return (
@@ -303,24 +353,77 @@ export function SessionManager() {
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-medium truncate group-hover:text-foreground transition-colors">
-                      {session.username
-                        ? `@${session.username}`
-                        : session.filename.replace(/\.json$/i, '')}
-                    </h4>
+                    {editingSession === session.filename ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                handleSaveRename(session);
+                              } else if (e.key === 'Escape') {
+                                handleCancelRename();
+                              }
+                            }}
+                            className="h-8 text-sm font-medium"
+                            autoFocus
+                          />
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={() => handleSaveRename(session)}
+                            disabled={renaming}
+                          >
+                            {renaming ? (
+                              <RefreshCw className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <Save className="w-3 h-3" />
+                            )}
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={handleCancelRename}
+                            disabled={renaming}
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2 group/item">
+                          <h4 className="font-medium truncate group-hover:text-foreground transition-colors">
+                            {session.displayName ||
+                              session.username ||
+                              session.filename.replace(/\.json$/i, '')}
+                          </h4>
+                          <button
+                            onClick={() => handleStartRename(session)}
+                            className="opacity-0 group-hover/item:opacity-100 transition-opacity p-1 hover:bg-muted rounded"
+                            title="Rename session"
+                          >
+                            <Edit2 className="w-3 h-3 text-muted-foreground" />
+                          </button>
+                        </div>
 
-                    <div className="flex items-center gap-2 mt-2">
-                      <Badge variant="secondary" className="font-mono text-2xs">
-                        {session.filename}
-                      </Badge>
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Cookie className="w-3 h-3" />
-                        {session.cookieCount}
-                      </span>
-                    </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          <Badge variant="secondary" className="font-mono text-2xs">
+                            {session.filename}
+                          </Badge>
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Cookie className="w-3 h-3" />
+                            {session.cookieCount}
+                          </span>
+                        </div>
 
-                    {!session.isValid && session.error && (
-                      <p className="text-xs text-red-600 mt-3 line-clamp-2">{session.error}</p>
+                        {!session.isValid && session.error && (
+                          <p className="text-xs text-red-600 mt-3 line-clamp-2">{session.error}</p>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>

@@ -4,7 +4,7 @@
 
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
-import { ensureBaseStructure, getDefaultOutputRoot, getMarkdownFiles } from './fileutils';
+import { ensureBaseStructure, getDefaultOutputRoot, getMarkdownFiles, RunContext } from './filesystem';
 
 const DEFAULT_CONVERGENCE_DIR = path.join(getDefaultOutputRoot(), 'convergence');
 const COOKIE_FILE = path.join(__dirname, '..', 'env.json');
@@ -273,4 +273,38 @@ export async function mergeAllPlatforms(
   }
 }
 
-export { DEFAULT_CONVERGENCE_DIR };
+export async function exportToJson<T>(data: T[], filePathOrContext: string | RunContext): Promise<void> {
+  const filePath = typeof filePathOrContext === 'string' ? filePathOrContext : filePathOrContext.jsonPath;
+  await ensureBaseStructure();
+  const dir = path.dirname(filePath);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+export async function exportToCsv<T extends Record<string, any>>(data: T[], filePathOrContext: string | RunContext): Promise<void> {
+  if (!data || data.length === 0) return;
+  const filePath = typeof filePathOrContext === 'string' ? filePathOrContext : filePathOrContext.csvPath;
+  await ensureBaseStructure();
+  const dir = path.dirname(filePath);
+  await fs.mkdir(dir, { recursive: true });
+
+  const headers = Object.keys(data[0]);
+  const csvContent = [
+    headers.join(','),
+    ...data.map(row => 
+      headers.map(header => {
+        const value = row[header];
+        if (value === null || value === undefined) return '';
+        if (typeof value === 'object') return `"${JSON.stringify(value).replace(/"/g, '""')}"`;
+        const stringValue = String(value);
+        if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+          return `"${stringValue.replace(/"/g, '""')}"`;
+        }
+        return stringValue;
+      }).join(',')
+    )
+  ].join('\n');
+
+  await fs.writeFile(filePath, csvContent, 'utf-8');
+}
+

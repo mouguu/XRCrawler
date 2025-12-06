@@ -6,7 +6,7 @@
 import * as path from 'node:path';
 import { Page } from 'puppeteer';
 import type { Tweet } from '../types/tweet-definitions';
-import * as fileUtils from './fileutils';
+import * as fileUtils from './filesystem';
 import { RunContext } from './fileutils';
 
 export interface ScreenshotOptions {

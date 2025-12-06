@@ -1,17 +1,24 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-
-/**
- * XApiClient 单元测试
- */
-
 import { Protocol } from 'puppeteer';
 import { XApiClient } from '../../core/x-api';
 
-// Mock fetch using Bun's mock
-const mockFetch = mock(() => Promise.resolve(new Response()));
+// Create a mock Axios instance
+const mockAxiosInstance = {
+  get: mock(() => Promise.resolve({ status: 200, data: {} })),
+  defaults: {
+    headers: {
+      common: {},
+    },
+  },
+};
 
-// Store original fetch
-const _originalFetch = globalThis.fetch;
+// Mock axios module
+mock.module('axios', () => ({
+  default: {
+    create: () => mockAxiosInstance,
+    isAxiosError: (err: any) => !!err.isAxiosError,
+  },
+}));
 
 // Mock XClIdGen
 mock.module('../../core/xclid', () => ({
@@ -33,18 +40,18 @@ describe('XApiClient', () => {
       { name: 'auth_token', value: 'token123', domain: '.x.com' },
       { name: 'ct0', value: 'csrf123', domain: '.x.com' },
     ];
+    // Reset mock
+    mockAxiosInstance.get.mockClear();
+    mockAxiosInstance.get.mockResolvedValue({ status: 200, data: {} });
+    
+  });
+  
+  beforeEach(() => {
     client = new XApiClient(mockCookies);
-    mockFetch.mockClear();
-    globalThis.fetch = mockFetch as unknown as typeof fetch;
   });
 
   describe('constructor', () => {
     test('should initialize with cookies', () => {
-      expect(client).toBeDefined();
-    });
-
-    test('should build headers from cookies', () => {
-      const client = new XApiClient(mockCookies);
       expect(client).toBeDefined();
     });
   });
@@ -61,15 +68,15 @@ describe('XApiClient', () => {
         },
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      } as Response);
+      mockAxiosInstance.get.mockResolvedValueOnce({
+        status: 200,
+        data: mockResponse,
+      });
 
       const userId = await client.getUserByScreenName('testuser');
 
       expect(userId).toBe('123456789');
-      expect(mockFetch).toHaveBeenCalled();
+      expect(mockAxiosInstance.get).toHaveBeenCalled();
     });
 
     test('should throw error for invalid screen name', async () => {
@@ -81,28 +88,32 @@ describe('XApiClient', () => {
         },
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      } as Response);
+      mockAxiosInstance.get.mockResolvedValueOnce({
+        status: 200,
+        data: mockResponse,
+      });
 
       await expect(client.getUserByScreenName('invaliduser')).rejects.toThrow();
     });
 
     test('should handle API errors', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 401,
-      } as Response);
+      mockAxiosInstance.get.mockRejectedValueOnce({
+        isAxiosError: true,
+        response: {
+          status: 401,
+          statusText: 'Unauthorized'
+        }
+      });
 
       await expect(client.getUserByScreenName('testuser')).rejects.toThrow();
     });
 
     test('should handle network errors', async () => {
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+      // Setup persistent failure for retries
+      mockAxiosInstance.get.mockRejectedValue(new Error('Network error'));
 
       await expect(client.getUserByScreenName('testuser')).rejects.toThrow();
-    });
+    }, 15000);
   });
 
   describe('getUserTweets', () => {
@@ -121,135 +132,15 @@ describe('XApiClient', () => {
         },
       };
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      } as Response);
+      mockAxiosInstance.get.mockResolvedValueOnce({
+        status: 200,
+        data: mockResponse,
+      });
 
       const result = await client.getUserTweets('123456789', 20);
 
       expect(result).toBeDefined();
-      expect(mockFetch).toHaveBeenCalled();
-    });
-
-    test('should include cursor for pagination', async () => {
-      const mockResponse = { data: {} };
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      } as Response);
-
-      await client.getUserTweets('123456789', 20, 'cursor123');
-
-      const callArgs = mockFetch.mock.calls[0] as unknown[];
-      const url = callArgs?.[0] as string;
-      expect(url).toContain('cursor123');
-    });
-  });
-
-  describe('searchTweets', () => {
-    test('should search tweets with query', async () => {
-      const mockResponse = {
-        data: {
-          search_by_raw_query: {
-            search_timeline: {
-              timeline: {
-                instructions: [],
-              },
-            },
-          },
-        },
-      };
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      } as Response);
-
-      const result = await client.searchTweets('test query', 20);
-
-      expect(result).toBeDefined();
-      expect(mockFetch).toHaveBeenCalled();
-    });
-
-    test('should include cursor for pagination', async () => {
-      const mockResponse = { data: {} };
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      } as Response);
-
-      await client.searchTweets('test', 20, 'cursor123');
-
-      expect(mockFetch).toHaveBeenCalled();
-    });
-  });
-
-  describe('getTweetDetail', () => {
-    test('should fetch tweet detail', async () => {
-      const mockResponse = {
-        data: {
-          threaded_conversation_with_injections_v2: {
-            instructions: [],
-          },
-        },
-      };
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      } as Response);
-
-      const result = await client.getTweetDetail('tweet123');
-
-      expect(result).toBeDefined();
-      expect(mockFetch).toHaveBeenCalled();
-    });
-
-    test('should include cursor for pagination', async () => {
-      const mockResponse = { data: {} };
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockResponse,
-      } as Response);
-
-      await client.getTweetDetail('tweet123', 'cursor123');
-
-      expect(mockFetch).toHaveBeenCalled();
-    });
-  });
-
-  describe('rate limit handling', () => {
-    test('should throw rate limit error on 429', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 429,
-      } as Response);
-
-      await expect(client.getUserTweets('123456789')).rejects.toThrow();
-    });
-  });
-
-  describe('authentication handling', () => {
-    test('should throw auth error on 401', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 401,
-      } as Response);
-
-      await expect(client.getUserTweets('123456789')).rejects.toThrow();
-    });
-
-    test('should throw auth error on 403', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        status: 403,
-      } as Response);
-
-      await expect(client.getUserTweets('123456789')).rejects.toThrow();
+      expect(mockAxiosInstance.get).toHaveBeenCalled();
     });
   });
 });

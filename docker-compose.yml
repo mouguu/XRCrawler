@@ -34,6 +34,7 @@ services:
       - ./data:/app/data
       - ./data/output:/app/output
       - ./data/cookies:/app/cookies
+      - ./cookies:/app/cookies-local  # Also mount local cookies directory
     ports:
       - "5001:5001"
     restart: unless-stopped
@@ -53,6 +54,7 @@ services:
       - ./data:/app/data
       - ./data/output:/app/output
       - ./data/cookies:/app/cookies
+      - ./cookies:/app/cookies-local  # Also mount local cookies directory
     command: ["/usr/local/bin/bun", "run", "cmd/start-worker.ts"]
     restart: unless-stopped
 

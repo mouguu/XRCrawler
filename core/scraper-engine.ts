@@ -1,22 +1,28 @@
-import * as path from 'node:path';
 import { Page } from 'puppeteer';
+import * as path from 'node:path';
 import * as constants from '../config/constants';
 import { getThreadDetailWaitTime, validateScrapeConfig } from '../config/constants';
 import { parseTweetDetailResponse, Tweet } from '../types/tweet-definitions';
 import * as fileUtils from '../utils';
 import * as markdownUtils from '../utils';
 import * as exportUtils from '../utils';
-import { cleanTweetsFast, waitOrCancel } from '../utils';
+import { waitOrCancel } from '../utils';
 import {
   BrowserLaunchOptions,
   BrowserManager,
   ProxyConfig as BrowserProxyConfig,
 } from './browser-manager';
-import { CookieManager } from './cookie-manager';
+import { CookieManager } from './evasion';
+import { AntiDetection, antiDetection as defaultAntiDetection, AntiDetectionLevel } from './evasion';
 import * as dataExtractor from './data-extractor';
-import { TweetRepository } from './db/tweet-repo';
-import { ErrorClassifier, ScraperErrors } from './errors';
-import { createDefaultDependencies, ScraperDependencies } from './scraper-dependencies';
+import { TweetRepository } from './db/repositories';
+import { ErrorClassifier, ScraperErrors, ErrorSnapshotter } from './errors';
+import { NavigationService } from './navigation-service';
+import { PerformanceMonitor } from './performance-monitor';
+import { ProgressManager } from './progress-manager';
+import { ProxyManager } from './proxy-manager';
+import { RateLimitManager } from './rate-limit';
+import { SessionManager, Session } from './session-manager';
 import {
   ScraperEngineOptions,
   ScraperEventBus,
@@ -26,7 +32,6 @@ import {
   ScrapeTimelineConfig,
   ScrapeTimelineResult,
 } from './scraper-engine.types';
-import { Session } from './session-manager';
 import { runTimelineApi } from './timeline-api-runner';
 import { runTimelineDom } from './timeline-dom-runner';
 import { XApiClient } from './x-api';
@@ -40,6 +45,37 @@ export type {
 } from './scraper-engine.types';
 
 const throttle = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+export interface ScraperDependencies {
+  navigationService: NavigationService;
+  rateLimitManager: RateLimitManager;
+  errorSnapshotter: ErrorSnapshotter;
+  antiDetection: AntiDetection;
+  performanceMonitor: PerformanceMonitor;
+  progressManager: ProgressManager;
+  sessionManager: SessionManager;
+  proxyManager: ProxyManager;
+}
+
+export function createDefaultDependencies(
+  eventBus: ScraperEventBus,
+  cookieDir: string = './cookies',
+  progressDir: string = './data/progress',
+  antiDetectionLevel: AntiDetectionLevel = 'high',
+): ScraperDependencies {
+  const sessionManager = new SessionManager(cookieDir, 3, eventBus);
+
+  return {
+    navigationService: new NavigationService(eventBus),
+    rateLimitManager: new RateLimitManager(sessionManager, eventBus),
+    errorSnapshotter: new ErrorSnapshotter(),
+    antiDetection: new AntiDetection({ level: antiDetectionLevel }),
+    performanceMonitor: new PerformanceMonitor(),
+    progressManager: new ProgressManager(progressDir, eventBus),
+    sessionManager,
+    proxyManager: new ProxyManager(),
+  };
+}
 
 export class ScraperEngine {
   private deps: ScraperDependencies;

@@ -2,7 +2,7 @@ import type { ProfileInfo, Tweet } from '../types/tweet-definitions';
 import type { RunContext } from '../utils';
 import type { BrowserLaunchOptions } from './browser-manager';
 import type { PerformanceStats } from './performance-monitor';
-import type { ScraperDependencies } from './scraper-dependencies';
+import type { ScraperDependencies } from './scraper-engine';
 
 export interface ScraperLogger {
   info(message: string, ...args: any[]): void;
