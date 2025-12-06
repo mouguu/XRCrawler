@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ErrorNotification } from './components/ErrorNotification';
-import { SessionManager } from './features/sessions/SessionManager';
 import { HeaderBar } from './components/HeaderBar';
 import { TaskForm } from './features/crawler/TaskForm';
-import { DashboardPanel } from './features/dashboard/DashboardPanel';
 import { useCrawlerStore } from './features/crawler/useCrawlerStore';
-import { submitJob, cancelJob } from './utils/queueClient';
+import { DashboardPanel } from './features/dashboard/DashboardPanel';
+import { SessionManager } from './features/sessions/SessionManager';
+import { cancelJob, submitJob } from './utils/queueClient';
 
 // Error types
 export enum ErrorType {
@@ -197,10 +197,13 @@ function App() {
     [apiKey, withBase],
   );
 
-  const handleJobComplete = useCallback((jobId: string, downloadUrl?: string) => {
-    console.log(`Job ${jobId} completed`, downloadUrl);
-    setLatestJobId(null);
-  }, [setLatestJobId]);
+  const handleJobComplete = useCallback(
+    (jobId: string, downloadUrl?: string) => {
+      console.log(`Job ${jobId} completed`, downloadUrl);
+      setLatestJobId(null);
+    },
+    [setLatestJobId],
+  );
 
   const applyApiKey = () => {
     setApiKey(apiKeyInput.trim());
@@ -275,17 +278,11 @@ function App() {
       />
 
       <main className="relative">
-        <TaskForm
-          onSubmit={handleScrape}
-          onStop={handleStop}
-        />
+        <TaskForm onSubmit={handleScrape} onStop={handleStop} />
 
         {/* Dashboard & Sessions */}
         <div className="max-w-6xl mx-auto px-6 pb-24 space-y-16">
-          <DashboardPanel
-            onJobComplete={handleJobComplete}
-            appendApiKey={appendApiKey}
-          />
+          <DashboardPanel onJobComplete={handleJobComplete} appendApiKey={appendApiKey} />
 
           {/* Session Management - Twitter only */}
           {activeTab !== 'reddit' && (

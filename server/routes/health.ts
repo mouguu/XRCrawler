@@ -3,8 +3,8 @@
  */
 
 import { Hono } from 'hono';
-import { redisConnection } from '../../core/queue/connection';
 import { prisma } from '../../core/db/prisma';
+import { redisConnection } from '../../core/queue/connection';
 import { createEnhancedLogger } from '../../utils';
 
 const healthRoutes = new Hono();
@@ -44,11 +44,7 @@ async function checkProxy(): Promise<boolean> {
 }
 
 healthRoutes.get('/health', async (c) => {
-  const [redis, postgres, proxy] = await Promise.all([
-    checkRedis(),
-    checkPostgres(),
-    checkProxy(),
-  ]);
+  const [redis, postgres, proxy] = await Promise.all([checkRedis(), checkPostgres(), checkProxy()]);
 
   const checks = {
     redis,
@@ -71,14 +67,10 @@ healthRoutes.get('/health/live', async (c) => {
 
 healthRoutes.get('/health/ready', async (c) => {
   // Readiness probe - check if dependencies are ready
-  const [redis, postgres] = await Promise.all([
-    checkRedis(),
-    checkPostgres(),
-  ]);
+  const [redis, postgres] = await Promise.all([checkRedis(), checkPostgres()]);
 
   const ready = redis && postgres;
   return c.json({ ready }, ready ? 200 : 503);
 });
 
 export default healthRoutes;
-

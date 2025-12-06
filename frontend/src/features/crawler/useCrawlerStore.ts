@@ -10,14 +10,14 @@ interface CrawlerState {
   activeTab: TabType;
   input: string;
   limit: number;
-  
+
   // Twitter options
   scrapeLikes: boolean;
   scrapeMode: ScrapeMode;
   autoRotateSessions: boolean;
   enableProxy: boolean;
   antiDetectionLevel: AntiDetectionLevel;
-  
+
   // Search options
   enableDeepSearch: boolean;
   parallelChunks: number;
@@ -25,14 +25,14 @@ interface CrawlerState {
   endDate: string;
   lookbackHours: number;
   keywords: string;
-  
+
   // Reddit options
   redditStrategy: string;
-  
+
   // UI state
   isScraping: boolean;
   latestJobId: string | null;
-  
+
   // Actions
   setActiveTab: (tab: TabType) => void;
   setInput: (input: string) => void;
@@ -51,7 +51,7 @@ interface CrawlerState {
   setRedditStrategy: (strategy: string) => void;
   setIsScraping: (value: boolean) => void;
   setLatestJobId: (id: string | null) => void;
-  
+
   // Computed
   canSubmit: () => boolean;
   resetForm: () => void;
@@ -64,14 +64,14 @@ export const useCrawlerStore = create<CrawlerState>()(
       activeTab: 'profile' as TabType,
       input: '',
       limit: 50,
-      
+
       // Twitter options
       scrapeLikes: false,
       scrapeMode: 'puppeteer' as ScrapeMode,
       autoRotateSessions: true,
       enableProxy: false,
       antiDetectionLevel: 'high' as AntiDetectionLevel,
-      
+
       // Search options
       enableDeepSearch: false,
       parallelChunks: 1,
@@ -79,14 +79,14 @@ export const useCrawlerStore = create<CrawlerState>()(
       endDate: '',
       lookbackHours: 24,
       keywords: '',
-      
+
       // Reddit options
       redditStrategy: 'auto',
-      
+
       // UI state
       isScraping: false,
       latestJobId: null,
-      
+
       // Actions
       setActiveTab: (tab) => set({ activeTab: tab, input: '' }),
       setInput: (input) => set({ input }),
@@ -105,15 +105,16 @@ export const useCrawlerStore = create<CrawlerState>()(
       setRedditStrategy: (strategy) => set({ redditStrategy: strategy }),
       setIsScraping: (value) => set({ isScraping: value }),
       setLatestJobId: (id) => set({ latestJobId: id }),
-      
+
       // Computed
       canSubmit: () => get().input.trim().length > 0,
-      resetForm: () => set({ 
-        input: '', 
-        limit: 50,
-        startDate: '',
-        endDate: '',
-      }),
+      resetForm: () =>
+        set({
+          input: '',
+          limit: 50,
+          startDate: '',
+          endDate: '',
+        }),
     }),
     {
       name: 'crawler-storage',
@@ -128,6 +129,6 @@ export const useCrawlerStore = create<CrawlerState>()(
         enableDeepSearch: state.enableDeepSearch,
         parallelChunks: state.parallelChunks,
       }),
-    }
-  )
+    },
+  ),
 );

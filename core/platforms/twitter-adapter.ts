@@ -151,7 +151,7 @@ export const twitterAdapter: PlatformAdapter = {
           scrapeMode: (jobConfig.mode === 'mixed' ? 'puppeteer' : jobConfig.mode || 'puppeteer') as
             | 'puppeteer'
             | 'graphql',
-          dateRange: 
+          dateRange:
             jobConfig.dateRange?.start && jobConfig.dateRange?.end
               ? { start: jobConfig.dateRange.start, end: jobConfig.dateRange.end }
               : undefined,

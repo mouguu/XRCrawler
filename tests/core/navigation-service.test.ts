@@ -5,8 +5,8 @@
 
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { Page } from 'puppeteer';
-import { ScraperEventBus } from '../../core/scraper-engine.types';
 import { NavigationService } from '../../core/navigation-service';
+import { ScraperEventBus } from '../../core/scraper-engine.types';
 
 describe('NavigationService', () => {
   let service: NavigationService;

@@ -1,16 +1,18 @@
-
 import { EventEmitter } from 'events';
-import { ScraperEngine } from './scraper-engine';
-import { ScrapeTimelineConfig } from './scraper-engine.types';
 import { Tweet } from '../types/tweet-definitions';
 import { RunContext } from '../utils';
+import { ScraperEngine } from './scraper-engine';
+import { ScrapeTimelineConfig } from './scraper-engine.types';
 
 // Re-export common types for CLI
-export type TwitterUserIdentifier = string | {
-  username?: string;
-  url?: string;
-  searchQuery?: string;
-} | null;
+export type TwitterUserIdentifier =
+  | string
+  | {
+      username?: string;
+      url?: string;
+      searchQuery?: string;
+    }
+  | null;
 
 export interface LogMessageData {
   level: 'info' | 'warn' | 'error' | 'debug';
@@ -39,10 +41,10 @@ export const eventBusInstance = new CliEventBus();
 
 export async function scrapeTwitterUsers(
   identifiers: (string | TwitterUserIdentifier)[],
-  options: any
+  options: any,
 ) {
   const results: any[] = [];
-  
+
   const engineOptions = {
     apiOnly: options.apiVariant === 'graphql' || options.scrapeMode === 'graphql',
     logger: {
@@ -56,7 +58,7 @@ export async function scrapeTwitterUsers(
         current: progress.current || 0,
         target: progress.total || 100,
         action: progress.phase || 'Scraping',
-        total: progress.total || 100
+        total: progress.total || 100,
       });
     },
   };
@@ -70,7 +72,7 @@ export async function scrapeTwitterUsers(
     for (const id of identifiers) {
       let username: string | undefined;
       let query: string | undefined;
-      
+
       if (typeof id === 'string') {
         username = id;
       } else if (id && typeof id === 'object') {
@@ -84,38 +86,50 @@ export async function scrapeTwitterUsers(
       const mode = options.scrapeMode === 'puppeteer' ? 'puppeteer' : 'graphql';
 
       if (query) {
-         eventBusInstance.emitLog(`Starting search: ${query}`, 'info');
-         const config: ScrapeTimelineConfig = {
-           searchQuery: query,
-           limit: options.tweetCount || 50,
-           scrapeMode: mode,
-         } as any; 
+        eventBusInstance.emitLog(`Starting search: ${query}`, 'info');
+        const config: ScrapeTimelineConfig = {
+          searchQuery: query,
+          limit: options.tweetCount || 50,
+          scrapeMode: mode,
+        } as any;
 
-         const result = await engine.scrapeTimeline(config);
-         if (result.success) {
-             results.push({ username: query, tweets: result.tweets, tweetCount: result.tweets.length, profile: result.profile, runContext: result.runContext });
-         } else {
-             eventBusInstance.emitLog(`Search failed: ${result.error}`, 'error');
-         }
+        const result = await engine.scrapeTimeline(config);
+        if (result.success) {
+          results.push({
+            username: query,
+            tweets: result.tweets,
+            tweetCount: result.tweets.length,
+            profile: result.profile,
+            runContext: result.runContext,
+          });
+        } else {
+          eventBusInstance.emitLog(`Search failed: ${result.error}`, 'error');
+        }
       } else if (username || id === null) {
-          const target = username || 'Home Timeline';
-          eventBusInstance.emitLog(`Starting user scrape: ${target}`, 'info');
-          
-          const searchQ = username ? `from:${username}` : ''; 
-          
-          const config: ScrapeTimelineConfig = {
-            searchQuery: searchQ,
-            limit: options.tweetCount || 50,
-            scrapeMode: mode,
-            username: username,
-          } as any;
+        const target = username || 'Home Timeline';
+        eventBusInstance.emitLog(`Starting user scrape: ${target}`, 'info');
 
-          const result = await engine.scrapeTimeline(config);
-          if (result.success) {
-              results.push({ username: username || 'home', tweets: result.tweets, tweetCount: result.tweets.length, profile: result.profile, runContext: result.runContext });
-          } else {
-              eventBusInstance.emitLog(`Scrape failed for ${target}: ${result.error}`, 'error');
-          }
+        const searchQ = username ? `from:${username}` : '';
+
+        const config: ScrapeTimelineConfig = {
+          searchQuery: searchQ,
+          limit: options.tweetCount || 50,
+          scrapeMode: mode,
+          username: username,
+        } as any;
+
+        const result = await engine.scrapeTimeline(config);
+        if (result.success) {
+          results.push({
+            username: username || 'home',
+            tweets: result.tweets,
+            tweetCount: result.tweets.length,
+            profile: result.profile,
+            runContext: result.runContext,
+          });
+        } else {
+          eventBusInstance.emitLog(`Scrape failed for ${target}: ${result.error}`, 'error');
+        }
       }
     }
   } catch (err: any) {
@@ -128,21 +142,24 @@ export async function scrapeTwitterUsers(
 }
 
 export async function scrapeThread(options: any) {
-    eventBusInstance.emitLog('Thread scraping not fully reimplemented in simplified CLI bridge.', 'warn');
-    const result: {
-        success: boolean;
-        error: string;
-        tweets: Tweet[];
-        originalTweet: Tweet | null;
-        replies: Tweet[];
-        runContext: RunContext | null;
-    } = { 
-      success: false, 
-      error: 'Not implemented', 
-      tweets: [], 
-      originalTweet: null, 
-      replies: [], 
-      runContext: null 
-    };
-    return result;
+  eventBusInstance.emitLog(
+    'Thread scraping not fully reimplemented in simplified CLI bridge.',
+    'warn',
+  );
+  const result: {
+    success: boolean;
+    error: string;
+    tweets: Tweet[];
+    originalTweet: Tweet | null;
+    replies: Tweet[];
+    runContext: RunContext | null;
+  } = {
+    success: false,
+    error: 'Not implemented',
+    tweets: [],
+    originalTweet: null,
+    replies: [],
+    runContext: null,
+  };
+  return result;
 }

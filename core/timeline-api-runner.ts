@@ -74,12 +74,15 @@ async function runTimelineRestApi(
       const apiClient = engine.ensureApiClient();
       const pageSize = Math.min(200, limit - collectedTweets.length);
 
-      const response = await waitOrCancel(apiClient.getUserTimelineRest(username, {
-        count: pageSize,
-        maxId,
-        includeRts: true,
-        excludeReplies: config.withReplies ? false : undefined,
-      }), shouldStop);
+      const response = await waitOrCancel(
+        apiClient.getUserTimelineRest(username, {
+          count: pageSize,
+          maxId,
+          includeRts: true,
+          excludeReplies: config.withReplies ? false : undefined,
+        }),
+        shouldStop,
+      );
 
       if (!Array.isArray(response) || response.length === 0) {
         consecutiveEmpty += 1;

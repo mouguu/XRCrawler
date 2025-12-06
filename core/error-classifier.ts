@@ -97,7 +97,11 @@ export function classifyError(error: any): ClassifiedError {
   }
 
   // Cancelled/Aborted
-  if (error.name === 'AbortError' || error.name === 'CanceledError' || error.code === 'ERR_CANCELED') {
+  if (
+    error.name === 'AbortError' ||
+    error.name === 'CanceledError' ||
+    error.code === 'ERR_CANCELED'
+  ) {
     return {
       type: ErrorType.UNKNOWN,
       message: `Request cancelled: ${error.message}`,
@@ -114,5 +118,3 @@ export function classifyError(error: any): ClassifiedError {
     shouldSwitchProxy: false,
   };
 }
-
-

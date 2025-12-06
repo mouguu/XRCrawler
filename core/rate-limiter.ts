@@ -40,13 +40,13 @@ export class GlobalRateLimiter {
         return count <= max
       `;
 
-      const result = await this.redis.eval(
+      const result = (await this.redis.eval(
         script,
         1,
         key,
         maxRequests.toString(),
-        windowMs.toString()
-      ) as number;
+        windowMs.toString(),
+      )) as number;
 
       const allowed = result === 1;
 
@@ -85,7 +85,7 @@ export class GlobalRateLimiter {
       // Wait before retrying
       const ttl = await this.redis.pttl(config.key);
       const waitTime = Math.min(ttl || 1000, 1000);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
     }
 
     logger.warn(`Rate limit wait timeout for ${config.key}`, {

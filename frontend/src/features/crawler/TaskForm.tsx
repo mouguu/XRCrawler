@@ -1,12 +1,12 @@
 import { motion } from 'framer-motion';
-import { ArrowRight, Square, Zap, Globe, MessageSquare, MessageCircle } from 'lucide-react';
-
-import { useCrawlerStore } from './useCrawlerStore';
+import { ArrowRight, Globe, MessageCircle, MessageSquare, Square, Zap } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -14,8 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { DatePicker } from '@/components/ui/date-picker';
+import { useCrawlerStore } from './useCrawlerStore';
 
 const tabs = [
   { id: 'profile' as const, label: 'Profile', icon: Globe, description: 'Scrape user tweets' },
@@ -436,7 +435,9 @@ export function TaskForm({ onSubmit, onStop }: TaskFormProps) {
                         <Label className="text-sm font-medium">Anti-Detection Level</Label>
                         <Select
                           value={antiDetectionLevel}
-                          onValueChange={(v) => setAntiDetectionLevel(v as typeof antiDetectionLevel)}
+                          onValueChange={(v) =>
+                            setAntiDetectionLevel(v as typeof antiDetectionLevel)
+                          }
                         >
                           <SelectTrigger>
                             <SelectValue>

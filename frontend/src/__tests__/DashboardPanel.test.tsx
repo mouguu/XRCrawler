@@ -1,5 +1,5 @@
-import { render, screen, waitFor, act } from '@testing-library/react';
-import { vi, describe, it, beforeEach, afterEach, expect } from 'vitest';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DashboardPanel } from '../features/dashboard/DashboardPanel';
 
 // Mock the queueClient module at the top level

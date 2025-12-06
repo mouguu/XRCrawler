@@ -3,9 +3,9 @@
  * 统一导出核心模块，建立清晰的模块边界
  */
 
+export { AntiDetection } from './anti-detection';
 // Managers
 export { type BrowserLaunchOptions, BrowserManager, type ProxyConfig } from './browser-manager';
-export { AntiDetection } from './anti-detection';
 // Cookie Manager Factory
 export {
   type CookieLoadResult,
@@ -62,6 +62,7 @@ export {
   shutdownWorker,
 } from './queue/worker';
 export { RateLimitManager } from './rate-limit-manager';
+export * from './scrape-unified';
 export { createDefaultDependencies, type ScraperDependencies } from './scraper-dependencies';
 // Engine
 export {
@@ -80,4 +81,3 @@ export {
   setShouldStopScraping,
 } from './stop-signal';
 export { XApiClient } from './x-api';
-export * from './scrape-unified';

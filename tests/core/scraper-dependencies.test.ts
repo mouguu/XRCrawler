@@ -3,8 +3,8 @@
  */
 
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import { ScraperEventBus } from '../../core/scraper-engine.types';
 import { createDefaultDependencies, ScraperDependencies } from '../../core/scraper-dependencies';
+import { ScraperEventBus } from '../../core/scraper-engine.types';
 
 describe('ScraperDependencies', () => {
   let mockEventBus: Partial<ScraperEventBus>;

@@ -35,14 +35,19 @@ export const redditAdapter: PlatformAdapter = {
       await proxyManager.init();
 
       const stats = proxyManager.getStats();
-      await ctx.log(`📊 Proxy manager initialized: ${stats.total} proxies available | Details: ${JSON.stringify({
-        totalProxies: stats.total,
-        healthyProxies: stats.healthy,
-        unhealthyProxies: stats.unhealthy,
-        activeProxies: stats.active,
-        avgSuccessRate: stats.avgSuccessRate,
-        totalRequests: stats.totalRequests,
-      })}`, 'info');
+      await ctx.log(
+        `📊 Proxy manager initialized: ${stats.total} proxies available | Details: ${JSON.stringify(
+          {
+            totalProxies: stats.total,
+            healthyProxies: stats.healthy,
+            unhealthyProxies: stats.unhealthy,
+            activeProxies: stats.active,
+            avgSuccessRate: stats.avgSuccessRate,
+            totalRequests: stats.totalRequests,
+          },
+        )}`,
+        'info',
+      );
 
       if (proxyManager.hasProxies()) {
         const proxy = proxyManager.getNextProxy();
@@ -54,31 +59,45 @@ export const redditAdapter: PlatformAdapter = {
             password: proxy.password || '',
             id: proxy.id, // Store proxy ID for tracking
           };
-          await ctx.log(`✅ Proxy selected: ${proxy.host}:${proxy.port} | Details: ${JSON.stringify({
-            proxyHost: proxy.host,
-            proxyPort: proxy.port,
-            hasAuth: !!(proxy.username && proxy.password),
-            protocol: 'http',
-            proxyId: proxy.id,
-          })}`, 'info');
+          await ctx.log(
+            `✅ Proxy selected: ${proxy.host}:${proxy.port} | Details: ${JSON.stringify({
+              proxyHost: proxy.host,
+              proxyPort: proxy.port,
+              hasAuth: !!(proxy.username && proxy.password),
+              protocol: 'http',
+              proxyId: proxy.id,
+            })}`,
+            'info',
+          );
         } else {
-          await ctx.log(`⚠️ Proxy enabled but unavailable, using direct connection | Details: ${JSON.stringify({
-            reason: 'getNextProxy() returned null',
-            totalProxies: stats.total,
-          })}`, 'warn');
+          await ctx.log(
+            `⚠️ Proxy enabled but unavailable, using direct connection | Details: ${JSON.stringify({
+              reason: 'getNextProxy() returned null',
+              totalProxies: stats.total,
+            })}`,
+            'warn',
+          );
         }
       } else {
-        await ctx.log(`⚠️ Proxy enabled but no proxies found, using direct connection | Details: ${JSON.stringify({
-          reason: 'No proxies loaded from proxy directory',
-          proxyDirectory: './proxy',
-          suggestion: 'Check if proxy files exist in ./proxy directory',
-        })}`, 'warn');
+        await ctx.log(
+          `⚠️ Proxy enabled but no proxies found, using direct connection | Details: ${JSON.stringify(
+            {
+              reason: 'No proxies loaded from proxy directory',
+              proxyDirectory: './proxy',
+              suggestion: 'Check if proxy files exist in ./proxy directory',
+            },
+          )}`,
+          'warn',
+        );
       }
     } else {
-      await ctx.log(`🌐 Running in direct connection mode (proxy disabled) | Details: ${JSON.stringify({
-        proxyEnabled: false,
-        connectionMode: 'direct',
-      })}`, 'info');
+      await ctx.log(
+        `🌐 Running in direct connection mode (proxy disabled) | Details: ${JSON.stringify({
+          proxyEnabled: false,
+          connectionMode: 'direct',
+        })}`,
+        'info',
+      );
     }
 
     // Event bus wrapper
@@ -102,7 +121,10 @@ export const redditAdapter: PlatformAdapter = {
     // Cancellation checker
     const shouldStop = async () => ctx.getShouldStop();
 
-    await ctx.log(`Initializing Reddit scraper... (proxy: ${proxyConfig ? `${proxyConfig.host}:${proxyConfig.port}` : 'none'}, type: ${jobConfig.postUrl ? 'post' : 'subreddit'})`, 'info');
+    await ctx.log(
+      `Initializing Reddit scraper... (proxy: ${proxyConfig ? `${proxyConfig.host}:${proxyConfig.port}` : 'none'}, type: ${jobConfig.postUrl ? 'post' : 'subreddit'})`,
+      'info',
+    );
 
     const scraper = new RedditScraper(proxyConfig, eventBus, shouldStop, proxyManager);
     const isPostUrl = !!jobConfig.postUrl;
@@ -121,7 +143,10 @@ export const redditAdapter: PlatformAdapter = {
         const scrapeResult = await scraper.scrapePost(jobConfig.postUrl);
         const postScrapeDuration = Date.now() - postScrapeStartTime;
 
-        await ctx.log(`Single post scrape completed in ${(postScrapeDuration / 1000).toFixed(1)}s (status: ${scrapeResult.status})`, 'info');
+        await ctx.log(
+          `Single post scrape completed in ${(postScrapeDuration / 1000).toFixed(1)}s (status: ${scrapeResult.status})`,
+          'info',
+        );
 
         if (scrapeResult.status === 'success' && scrapeResult.post && scrapeResult.comments) {
           posts = [{ ...scrapeResult.post, comments: scrapeResult.comments }];
@@ -133,9 +158,25 @@ export const redditAdapter: PlatformAdapter = {
         // Subreddit
         const subreddit = jobConfig.subreddit;
         const limit = jobConfig.limit || 50;
-        const sortType = (jobConfig as any).sortType || 'hot';
 
-        await ctx.log(`Starting subreddit scrape: r/${subreddit} (limit: ${limit}, sort: ${sortType}, estimated: ~${(limit * 3 / 60).toFixed(1)} min)`, 'info');
+        // Map strategy to sortType
+        // strategy can be: 'auto', 'super_full', 'super_recent', 'new'
+        // sortType can be: 'hot', 'new', 'top'
+        const strategy = (jobConfig as any).strategy || 'auto';
+        let sortType: 'hot' | 'new' | 'top' = 'hot';
+        if (strategy === 'new' || strategy === 'super_recent') {
+          sortType = 'new';
+        } else if (strategy === 'super_full') {
+          sortType = 'top';
+        } else {
+          // 'auto' or default -> 'hot'
+          sortType = 'hot';
+        }
+
+        await ctx.log(
+          `Starting subreddit scrape: r/${subreddit} (limit: ${limit}, sort: ${sortType}, estimated: ~${((limit * 3) / 60).toFixed(1)} min)`,
+          'info',
+        );
 
         if (await ctx.getShouldStop()) {
           await ctx.log('Job cancellation detected before starting scrape', 'warn');
@@ -146,7 +187,10 @@ export const redditAdapter: PlatformAdapter = {
         const scrapeResult = await scraper.scrapeSubreddit(subreddit, limit, sortType);
         const subredditScrapeDuration = Date.now() - subredditScrapeStartTime;
 
-        await ctx.log(`Subreddit scrape completed in ${(subredditScrapeDuration / 1000).toFixed(1)}s (status: ${scrapeResult.status}, posts: ${scrapeResult.posts?.length || 0}/${scrapeResult.totalPosts || 0})`, 'info');
+        await ctx.log(
+          `Subreddit scrape completed in ${(subredditScrapeDuration / 1000).toFixed(1)}s (status: ${scrapeResult.status}, posts: ${scrapeResult.posts?.length || 0}/${scrapeResult.totalPosts || 0})`,
+          'info',
+        );
 
         if (scrapeResult.status === 'success' && scrapeResult.posts) {
           posts = scrapeResult.posts.map((item) => ({
@@ -269,7 +313,10 @@ export const redditAdapter: PlatformAdapter = {
         markdownPath = exportRedditToMarkdown(postsForMarkdown, runDir, filename);
 
         await ctx.log(`Markdown export saved: ${markdownPath}`, 'info');
-        await ctx.log(`Download URL: /api/download?path=${encodeURIComponent(markdownPath)}`, 'info');
+        await ctx.log(
+          `Download URL: /api/download?path=${encodeURIComponent(markdownPath)}`,
+          'info',
+        );
       } else {
         await ctx.log('No posts to export to markdown', 'warn');
       }
@@ -286,7 +333,10 @@ export const redditAdapter: PlatformAdapter = {
         };
       }
 
-      await ctx.log(`Job completed in ${(duration / 1000).toFixed(1)}s (${posts.length} posts)`, 'info');
+      await ctx.log(
+        `Job completed in ${(duration / 1000).toFixed(1)}s (${posts.length} posts)`,
+        'info',
+      );
 
       // Return result with download URL (same format as Twitter adapter)
       const result = {
@@ -302,14 +352,18 @@ export const redditAdapter: PlatformAdapter = {
 
       if (!result.downloadUrl) {
         await ctx.log('WARNING: No download URL generated!', 'error');
-        await ctx.log(`Posts: ${posts.length}, MarkdownPath: ${markdownPath || 'undefined'}`, 'error');
+        await ctx.log(
+          `Posts: ${posts.length}, MarkdownPath: ${markdownPath || 'undefined'}`,
+          'error',
+        );
       }
 
       return result;
     } catch (error: any) {
       const errorMessage = error.message || 'Unknown error';
-      const isCancelled = errorMessage.toLowerCase().includes('cancel') ||
-                        errorMessage.toLowerCase().includes('abort');
+      const isCancelled =
+        errorMessage.toLowerCase().includes('cancel') ||
+        errorMessage.toLowerCase().includes('abort');
 
       await ctx.log(`Error: ${errorMessage}`, 'error');
       logger.error('Reddit adapter error', error);

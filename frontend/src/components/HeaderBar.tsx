@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Check, ChevronDown, Key, Menu, X } from 'lucide-react';
+import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

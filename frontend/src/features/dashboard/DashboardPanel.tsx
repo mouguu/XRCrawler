@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Download, X, CheckCircle2, XCircle, Loader2, Clock, Zap } from 'lucide-react';
-import { connectToJobStream, cancelJob, type JobProgressEvent } from '@/utils/queueClient';
+import { AnimatePresence, motion } from 'framer-motion';
+import { CheckCircle2, Clock, Download, Loader2, X, XCircle, Zap } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Badge } from '@/components/ui/badge';
+import { cancelJob, connectToJobStream, type JobProgressEvent } from '@/utils/queueClient';
 
 interface ActiveJob {
   jobId: string;
@@ -37,17 +37,20 @@ export function DashboardPanel({
   const [activeJobs, setActiveJobs] = useState<Map<string, ActiveJob>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
 
-  const updateJob = useCallback((jobId: string, updatesOrFn: Partial<ActiveJob> | ((job: ActiveJob) => Partial<ActiveJob>)) => {
-    setActiveJobs((prev) => {
-      const updated = new Map(prev);
-      const existing = updated.get(jobId);
-      if (existing) {
-        const updates = typeof updatesOrFn === 'function' ? updatesOrFn(existing) : updatesOrFn;
-        updated.set(jobId, { ...existing, ...updates });
-      }
-      return updated;
-    });
-  }, []);
+  const updateJob = useCallback(
+    (jobId: string, updatesOrFn: Partial<ActiveJob> | ((job: ActiveJob) => Partial<ActiveJob>)) => {
+      setActiveJobs((prev) => {
+        const updated = new Map(prev);
+        const existing = updated.get(jobId);
+        if (existing) {
+          const updates = typeof updatesOrFn === 'function' ? updatesOrFn(existing) : updatesOrFn;
+          updated.set(jobId, { ...existing, ...updates });
+        }
+        return updated;
+      });
+    },
+    [],
+  );
 
   const fetchJobStatus = useCallback(
     async (jobId: string): Promise<ActiveJob['result'] | undefined> => {
@@ -108,15 +111,18 @@ export function DashboardPanel({
               return {
                 state: data.state,
                 hasConnected: true,
-                logs: [...existingLogs, `✅ Connected! Job state: ${data.state}`, `📊 Starting job monitoring...`],
+                logs: [
+                  ...existingLogs,
+                  `✅ Connected! Job state: ${data.state}`,
+                  `📊 Starting job monitoring...`,
+                ],
               };
             });
           },
           onProgress: (progress) => {
             updateJob(jobId, (currentJob: ActiveJob) => {
-              const percentage = progress.target > 0
-                ? Math.round((progress.current / progress.target) * 100)
-                : 0;
+              const percentage =
+                progress.target > 0 ? Math.round((progress.current / progress.target) * 100) : 0;
               const progressMsg = `📊 Progress: ${progress.current}/${progress.target} (${percentage}%) - ${progress.action}`;
               const existingLogs = currentJob.logs || [];
               return {
@@ -135,7 +141,9 @@ export function DashboardPanel({
 
               // Debug: log if logs are being truncated unexpectedly
               if (existingLogs.length > 0 && newLogs.length < existingLogs.length) {
-                console.warn(`[DashboardPanel] Logs truncated: ${existingLogs.length} -> ${newLogs.length}`);
+                console.warn(
+                  `[DashboardPanel] Logs truncated: ${existingLogs.length} -> ${newLogs.length}`,
+                );
               }
 
               return {
@@ -171,7 +179,10 @@ export function DashboardPanel({
               const existingLogs = currentJob.logs || [];
               return {
                 state: isCancelled ? 'cancelled' : 'failed',
-                logs: [...existingLogs, isCancelled ? '🛑 Job cancelled by user' : `❌ Job failed: ${errorMessage}`],
+                logs: [
+                  ...existingLogs,
+                  isCancelled ? '🛑 Job cancelled by user' : `❌ Job failed: ${errorMessage}`,
+                ],
               };
             });
 
@@ -209,7 +220,10 @@ export function DashboardPanel({
                     const existingLogs = currentJob.logs || [];
                     return {
                       state: 'failed',
-                      logs: [...existingLogs, `❌ Job failed: ${status.failedReason || 'Unknown error'}`],
+                      logs: [
+                        ...existingLogs,
+                        `❌ Job failed: ${status.failedReason || 'Unknown error'}`,
+                      ],
                     };
                   });
                 }
@@ -250,8 +264,8 @@ export function DashboardPanel({
       } catch (error) {
         console.error('Failed to cancel job:', error);
         updateJob(jobId, (currentJob: ActiveJob) => ({
-            isCancelling: false,
-            logs: [...(currentJob.logs || []), `❌ Failed to send cancel request: ${error}`],
+          isCancelling: false,
+          logs: [...(currentJob.logs || []), `❌ Failed to send cancel request: ${error}`],
         }));
       }
     },
@@ -453,7 +467,9 @@ function JobCard({
         window.open(url, '_blank');
       } else {
         // If no download URL, show error
-        setDownloadError('No download URL available. The job may have been cancelled with no data scraped.');
+        setDownloadError(
+          'No download URL available. The job may have been cancelled with no data scraped.',
+        );
       }
     } catch (error: any) {
       console.error('Failed to resolve download URL:', error);

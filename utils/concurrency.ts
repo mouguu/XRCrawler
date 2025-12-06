@@ -59,10 +59,10 @@ export async function sleepOrCancel(
     }
     const elapsedTime = Date.now() - start;
     const remaining = ms - elapsedTime;
-    
+
     // Check if time expired during the async check
     if (remaining <= 0) break;
-    
+
     // Cap delay at remaining time, but ensure it's at least 0 (sanity check)
     // and wait for at most checkIntervalMs
     const waitTime = Math.max(0, Math.min(remaining, checkIntervalMs));

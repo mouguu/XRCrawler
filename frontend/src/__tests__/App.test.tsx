@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { vi, describe, it, beforeEach, afterEach, expect } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
 
 describe('App form submission', () => {

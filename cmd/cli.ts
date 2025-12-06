@@ -11,7 +11,7 @@ import * as path from 'node:path';
 import * as readline from 'node:readline';
 import { Command } from 'commander';
 import type { LogMessageData, ScrapeProgressData, TwitterUserIdentifier } from '../core';
-import { eventBusInstance, scrapeThread, scrapeTwitterUsers, ProxyManager } from '../core';
+import { eventBusInstance, ProxyManager, scrapeThread, scrapeTwitterUsers } from '../core';
 import { RedditScraper } from '../core/platforms/reddit/scraper'; // [NEW] Import TS Scraper
 import { getConfigManager } from '../utils';
 import * as aiExportUtils from '../utils/ai-export';
@@ -116,18 +116,18 @@ program
       // 1. Initialize Proxy Manager
       const proxyManager = new ProxyManager(); // Loads from ./proxy by default
       await proxyManager.init();
-      
+
       let proxyConfig;
       if (proxyManager.hasProxies()) {
         const proxy = proxyManager.getNextProxy();
         if (proxy) {
-            proxyConfig = {
-                host: proxy.host,
-                port: proxy.port,
-                username: proxy.username || '',
-                password: proxy.password || '',
-            };
-            console.log(`🛡️ Using Proxy: ${proxy.host}:${proxy.port}`);
+          proxyConfig = {
+            host: proxy.host,
+            port: proxy.port,
+            username: proxy.username || '',
+            password: proxy.password || '',
+          };
+          console.log(`🛡️ Using Proxy: ${proxy.host}:${proxy.port}`);
         }
       }
 
@@ -135,7 +135,8 @@ program
       const redditEventBus = {
         emitLog: (message: string, level: any) => eventBusInstance.emit('log', { message, level }),
         emitProgress: (data: any) => eventBusInstance.emit('progress', data),
-        emitError: (error: Error) => eventBusInstance.emit('log', { message: error.message, level: 'error' }),
+        emitError: (error: Error) =>
+          eventBusInstance.emit('log', { message: error.message, level: 'error' }),
         emitPerformance: () => {},
       };
 
@@ -145,7 +146,7 @@ program
       // 3. Start Progress Monitoring
       monitorStop = monitorProgress(!!options.saveJson); // Use debug flag logic? or just show bar. passing false usually shows bar. passing debug shows logs.
       // existing monitorProgress takes debugMode.
-      
+
       const result = await scraper.scrapeSubreddit({
         subreddit: options.subreddit,
         limit: parseInt(options.count, 10),
@@ -157,21 +158,21 @@ program
       if (result.status === 'success') {
         console.log('\n✅ Scraping completed successfully!');
         console.log(`📈 Scraped Count: ${result.scrapedCount}`);
-        
+
         // Save results to file (Backup/Export)
         if (options.saveJson && result.posts && result.posts.length > 0) {
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const filename = `reddit_${options.subreddit}_${timestamp}.json`;
-            const outputPath = path.join(outputConfig.baseDir, 'reddit', filename);
-            const dir = path.dirname(outputPath);
-            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+          const filename = `reddit_${options.subreddit}_${timestamp}.json`;
+          const outputPath = path.join(outputConfig.baseDir, 'reddit', filename);
+          const dir = path.dirname(outputPath);
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-            try {
-              fs.writeFileSync(outputPath, JSON.stringify(result.posts, null, 2));
-              console.log(`💾 Saved backup JSON to: ${outputPath}`);
-            } catch (saveError: any) {
-              console.error(`Failed to save JSON: ${saveError.message}`);
-            }
+          try {
+            fs.writeFileSync(outputPath, JSON.stringify(result.posts, null, 2));
+            console.log(`💾 Saved backup JSON to: ${outputPath}`);
+          } catch (saveError: any) {
+            console.error(`Failed to save JSON: ${saveError.message}`);
+          }
         }
       } else {
         console.error('\n❌ Scraping failed:', result.message);
@@ -182,7 +183,6 @@ program
       process.exit(1);
     }
   });
-
 
 // Twitter Command (existing)
 program

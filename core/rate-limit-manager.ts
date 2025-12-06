@@ -52,10 +52,10 @@ export class RateLimitManager {
         this.sessionManager.markBad(currentSessionId, 'rate-limit');
       }
       // Try to get a different session
-      // We pass undefined as preferredId because we specifically DON'T want the current one if possible? 
-      // Actually getNextSession(preferredId) returns preferred if valid. 
+      // We pass undefined as preferredId because we specifically DON'T want the current one if possible?
+      // Actually getNextSession(preferredId) returns preferred if valid.
       // If we want a different one, we should probably not pass currentSessionId.
-      // But the original code passed `undefined, currentSessionId`. 
+      // But the original code passed `undefined, currentSessionId`.
       // I'll assume it meant "any session" and just call it without args, OR if it meant "exclude current", my new logic doesn't support exclusion explicitly yet.
       // But let's just await it for now.
       const nextSession = await this.sessionManager.getNextSession();

@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+
 /**
  * Force Cancel Job Script
  *
@@ -9,9 +10,9 @@
  *   bun run scripts/force-cancel-job.ts 14
  */
 
+import { JobRepository } from '../core/db/job-repo';
 import { redisConnection } from '../core/queue/connection';
 import { scrapeQueue } from '../core/queue/scrape-queue';
-import { JobRepository } from '../core/db/job-repo';
 import { createEnhancedLogger } from '../utils/logger';
 
 const logger = createEnhancedLogger('ForceCancel');
@@ -62,7 +63,9 @@ async function forceCancelJob(jobId: string) {
     // await redisConnection.del(cancelledKey);
 
     logger.info(`✅ Job ${jobId} force cancelled successfully!`);
-    logger.info(`Note: If the job is currently running, it will stop on the next cancellation check.`);
+    logger.info(
+      `Note: If the job is currently running, it will stop on the next cancellation check.`,
+    );
   } catch (error) {
     logger.error('Force cancel failed:', error);
     throw error;
@@ -87,5 +90,3 @@ forceCancelJob(jobId)
     logger.error('Force cancel failed:', error);
     process.exit(1);
   });
-
-

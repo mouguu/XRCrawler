@@ -108,7 +108,7 @@ async function scrapeChunkWithRetry(
       const errorMsg = error instanceof Error ? error.message : String(error);
 
       if (errorMsg === 'Job cancelled by user') {
-         throw error;
+        throw error;
       }
 
       engine.eventBus.emitLog(
@@ -189,11 +189,11 @@ export async function runTimelineDateChunks(
   // REVERSE ranges to scrape newest first (Deep Search usually implies getting latest history first)
   ranges.reverse();
 
-  let parallelChunks = (config as any).parallelChunks || 1; 
+  let parallelChunks = (config as any).parallelChunks || 1;
   if (parallelChunks > 1) {
     engine.eventBus.emitLog(
-        `Safety Override: Parallel chunking (requested: ${parallelChunks}) is disabled to prevent resource exhaustion (OOM). Forcing sequential execution (parallelChunks=1).`,
-        'warn'
+      `Safety Override: Parallel chunking (requested: ${parallelChunks}) is disabled to prevent resource exhaustion (OOM). Forcing sequential execution (parallelChunks=1).`,
+      'warn',
     );
     parallelChunks = 1;
   }

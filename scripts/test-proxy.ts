@@ -11,7 +11,7 @@ import * as path from 'path';
 // Load proxy from file
 const proxyFile = path.join(process.cwd(), 'proxy', 'Webshare 10 proxies.txt');
 const content = fs.readFileSync(proxyFile, 'utf-8');
-const lines = content.split('\n').filter(l => l.trim().length > 0);
+const lines = content.split('\n').filter((l) => l.trim().length > 0);
 
 if (lines.length === 0) {
   console.error('❌ No proxies found in file');
@@ -157,7 +157,7 @@ try {
   const proxyUrl = `http://${username}:${password}@${host}:${port}`;
   const result = execSync(
     `curl -x "${proxyUrl}" -s -o /dev/null -w "%{http_code}" "https://www.reddit.com/r/singularity/hot.json?limit=1"`,
-    { timeout: 10000, encoding: 'utf-8' }
+    { timeout: 10000, encoding: 'utf-8' },
   );
   console.log(`   ✅ Curl status code: ${result.trim()}`);
 } catch (error: any) {
@@ -170,4 +170,3 @@ try {
 
 console.log('');
 console.log('✅ Proxy testing complete!');
-

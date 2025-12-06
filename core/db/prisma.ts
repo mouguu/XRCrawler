@@ -36,12 +36,12 @@ const createRealPrismaClient = (): PrismaClient => {
   try {
     const { Pool } = require('pg');
     const { PrismaPg } = require('@prisma/adapter-pg');
-    
+
     console.log('[Prisma Init] Initializing PrismaClient with pg adapter...');
     const pool = new Pool({ connectionString: process.env.DATABASE_URL });
     const adapter = new PrismaPg(pool);
-    
-    return new PrismaClient({ 
+
+    return new PrismaClient({
       adapter,
       log: [
         { emit: 'event', level: 'query' },
@@ -51,7 +51,10 @@ const createRealPrismaClient = (): PrismaClient => {
       ],
     } as any);
   } catch (e) {
-    console.warn('[Prisma Init] Failed to load adapter, falling back to standard client (might fail if engine type mismatch):', e);
+    console.warn(
+      '[Prisma Init] Failed to load adapter, falling back to standard client (might fail if engine type mismatch):',
+      e,
+    );
     return new PrismaClient();
   }
 };

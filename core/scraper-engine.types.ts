@@ -22,7 +22,7 @@ export interface ScraperEngineOptions {
   headless?: boolean;
   browserOptions?: BrowserLaunchOptions;
   sessionId?: string;
-  
+
   /** Optional logger or callbacks */
   logger?: ScraperLogger;
   onProgress?: (progress: { current: number; target: number; action: string }) => void;
@@ -32,13 +32,13 @@ export interface ScraperEngineOptions {
    * Suitable for pure GraphQL API mode.
    */
   apiOnly?: boolean;
-  
+
   /** Dependency injection */
   dependencies?: ScraperDependencies;
 
   /** Linked BullMQ Job ID (for DB persistence) */
   jobId?: string;
-  
+
   /**
    * Anti-detection level (default: 'high')
    */

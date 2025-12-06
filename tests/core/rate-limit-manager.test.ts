@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { Page, Protocol } from 'puppeteer';
-import { ScraperEventBus } from '../../core/scraper-engine.types';
 import { RateLimitManager } from '../../core/rate-limit-manager';
+import { ScraperEventBus } from '../../core/scraper-engine.types';
 import { Session } from '../../core/session-manager';
 
 class FakeSessionManager {
@@ -51,10 +51,10 @@ describe('RateLimitManager', () => {
 
   beforeEach(() => {
     mockEventBus = {
-        emitLog: () => {},
-        emitProgress: () => {},
-        emitError: () => {},
-        emitPerformance: () => {},
+      emitLog: () => {},
+      emitProgress: () => {},
+      emitError: () => {},
+      emitPerformance: () => {},
     };
     fakeSessionManager = new FakeSessionManager();
     rateLimitManager = new RateLimitManager(fakeSessionManager as any, mockEventBus);

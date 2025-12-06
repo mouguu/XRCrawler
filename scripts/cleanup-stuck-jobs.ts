@@ -1,17 +1,18 @@
 #!/usr/bin/env bun
+
 /**
  * Cleanup Stuck Jobs Script
- * 
+ *
  * This script helps clean up stuck/cancelled jobs from Redis and PostgreSQL
- * 
+ *
  * Usage:
  *   bun run scripts/cleanup-stuck-jobs.ts
  *   bun run scripts/cleanup-stuck-jobs.ts --force  # Force cleanup all active jobs
  */
 
+import { JobRepository } from '../core/db/job-repo';
 import { redisConnection } from '../core/queue/connection';
 import { scrapeQueue } from '../core/queue/scrape-queue';
-import { JobRepository } from '../core/db/job-repo';
 import { createEnhancedLogger } from '../utils/logger';
 
 const logger = createEnhancedLogger('CleanupScript');
@@ -31,13 +32,15 @@ async function cleanupStuckJobs(force: boolean = false) {
     for (const job of activeJobs) {
       const jobId = job.id || '';
       const state = await job.getState();
-      
+
       // Check if job is marked as cancelled
       const cancelledKey = `${CANCELLATION_PREFIX}${jobId}`;
       const isCancelled = await redisConnection.exists(cancelledKey);
-      
+
       if (isCancelled || force) {
-        logger.info(`Found ${isCancelled ? 'cancelled' : 'active'} job: ${jobId} (state: ${state})`);
+        logger.info(
+          `Found ${isCancelled ? 'cancelled' : 'active'} job: ${jobId} (state: ${state})`,
+        );
         stuckJobs.push(jobId);
       }
     }
@@ -109,6 +112,3 @@ cleanupStuckJobs(force)
     logger.error('Cleanup script failed:', error);
     process.exit(1);
   });
-
-
-

@@ -16,12 +16,12 @@ class MockPrismaClient {
   cookieSession = {
     upsert: async (args: any) => {
       const id = args.where.platform_username ? args.where.platform_username.username : 'new-id';
-      const data = { 
-        id, 
+      const data = {
+        id,
         errorCount: 0,
-        ...args.create, 
+        ...args.create,
         ...args.update,
-        cookies: args.create?.cookies || args.update?.cookies || [] 
+        cookies: args.create?.cookies || args.update?.cookies || [],
       };
       this.store.set(id, data);
       return data;
@@ -29,7 +29,7 @@ class MockPrismaClient {
     findFirst: async (args: any) => {
       // Simple mock implementation
       if (args?.where?.id) {
-         return this.store.get(args.where.id) || null;
+        return this.store.get(args.where.id) || null;
       }
       // Return first valid session
       for (const val of this.store.values()) {
@@ -48,11 +48,11 @@ class MockPrismaClient {
       return updated;
     },
     findMany: async (args: any) => {
-        return Array.from(this.store.values()).filter(s => s.isValid);
+      return Array.from(this.store.values()).filter((s) => s.isValid);
     },
     count: async (args: any) => {
-        return Array.from(this.store.values()).filter(s => s.isValid).length;
-    }
+      return Array.from(this.store.values()).filter((s) => s.isValid).length;
+    },
   };
 }
 
@@ -63,8 +63,8 @@ describe('SessionManager', () => {
 
   beforeEach(() => {
     testCookieDir = path.join(os.tmpdir(), `test-cookies-${Date.now()}`);
-    if(!fs.existsSync(testCookieDir)) fs.mkdirSync(testCookieDir, { recursive: true });
-    
+    if (!fs.existsSync(testCookieDir)) fs.mkdirSync(testCookieDir, { recursive: true });
+
     mockPrisma = new MockPrismaClient();
     sessionManager = new SessionManager(testCookieDir, 3, undefined, mockPrisma);
   });
@@ -76,7 +76,9 @@ describe('SessionManager', () => {
   });
 
   function createMockCookieFile(filename: string) {
-    const cookieData = [{ name: 'auth_token', value: 'test123', domain: '.twitter.com', path: '/' }]; // Array!
+    const cookieData = [
+      { name: 'auth_token', value: 'test123', domain: '.twitter.com', path: '/' },
+    ]; // Array!
     fs.writeFileSync(path.join(testCookieDir, filename), JSON.stringify(cookieData));
   }
 
@@ -121,12 +123,15 @@ describe('SessionManager', () => {
     });
 
     test('should prioritise valid sessions', async () => {
-        // retire s1 manually in mock
-        const s1 = mockPrisma.store.get('s1');
-        if(s1) { s1.isValid = false; mockPrisma.store.set('s1', s1); }
+      // retire s1 manually in mock
+      const s1 = mockPrisma.store.get('s1');
+      if (s1) {
+        s1.isValid = false;
+        mockPrisma.store.set('s1', s1);
+      }
 
-        const session = await sessionManager.getNextSession();
-        expect(session?.id).toBe('s2');
+      const session = await sessionManager.getNextSession();
+      expect(session?.id).toBe('s2');
     });
   });
 
@@ -149,9 +154,9 @@ describe('SessionManager', () => {
     });
 
     test('should increment error count on markBad', async () => {
-        await sessionManager.markBad('s1');
-        const s1 = await sessionManager.getSessionById('s1');
-        expect(s1?.errorCount).toBe(1);
+      await sessionManager.markBad('s1');
+      const s1 = await sessionManager.getSessionById('s1');
+      expect(s1?.errorCount).toBe(1);
     });
   });
 });

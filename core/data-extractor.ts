@@ -577,9 +577,9 @@ export async function recoverFromErrorPage(
         // 但如果是第一次尝试，可以再等一会儿看看页面是否自动恢复
         if (attempt === 0) {
           await new Promise((r) => setTimeout(r, ERROR_RECOVERY_CONFIG.autoRecoveryWait));
-          
+
           if (shouldStop?.()) {
-             return false;
+            return false;
           }
 
           const autoRecovered = !(await detectErrorPage(page));

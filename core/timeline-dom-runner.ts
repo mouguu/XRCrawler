@@ -87,9 +87,9 @@ export async function runTimelineDom(
         // biome-ignore lint/style/noNonNullAssertion: page ensured
         await waitOrCancel(
           engine.navigationService.navigateToUrl(engine.getPageInstance()!, targetUrl),
-          shouldStop
+          shouldStop,
         );
-        
+
         if (await shouldStop()) break;
 
         const tweetsFound = await waitOrCancel(
@@ -99,9 +99,9 @@ export async function runTimelineDom(
             {
               timeout: 10000, // 减少超时时间
               maxRetries: 1, // 只重试1次
-            }
+            },
           ),
-          shouldStop
+          shouldStop,
         );
 
         engine.performanceMonitor.endPhase();
@@ -211,7 +211,10 @@ export async function runTimelineDom(
       try {
         engine.performanceMonitor.startPhase('extraction');
         // biome-ignore lint/style/noNonNullAssertion: page existence checked by ensurePage
-        let tweetsOnPage = await waitOrCancel(dataExtractor.extractTweetsFromPage(engine.getPageInstance()!), shouldStop);
+        let tweetsOnPage = await waitOrCancel(
+          dataExtractor.extractTweetsFromPage(engine.getPageInstance()!),
+          shouldStop,
+        );
         engine.performanceMonitor.endPhase();
 
         // 检查页面是否显示错误或限制（如 "Something went wrong", "Rate limit" 等）
@@ -229,7 +232,11 @@ export async function runTimelineDom(
           );
 
           // biome-ignore lint/style/noNonNullAssertion: page exists
-          const recovered = await dataExtractor.recoverFromErrorPage(engine.getPageInstance()!, 2, shouldStop);
+          const recovered = await dataExtractor.recoverFromErrorPage(
+            engine.getPageInstance()!,
+            2,
+            shouldStop,
+          );
 
           if (recovered) {
             engine.eventBus.emitLog(
@@ -239,7 +246,10 @@ export async function runTimelineDom(
             // 重新提取推文
             await sleepOrCancel(2000, shouldStop); // 等待页面加载
             // biome-ignore lint/style/noNonNullAssertion: page exists
-            tweetsOnPage = await waitOrCancel(dataExtractor.extractTweetsFromPage(engine.getPageInstance()!), shouldStop);
+            tweetsOnPage = await waitOrCancel(
+              dataExtractor.extractTweetsFromPage(engine.getPageInstance()!),
+              shouldStop,
+            );
             if (tweetsOnPage.length > 0) {
               engine.eventBus.emitLog(
                 `Recovery successful: found ${tweetsOnPage.length} tweets after retry.`,
@@ -373,7 +383,7 @@ export async function runTimelineDom(
           // 只有遇到显式 Error (catch块) 时才轮换。
           let sessionSwitchThreshold: number;
           if (isChunkMode) {
-             sessionSwitchThreshold = 999; // 实际上禁用
+            sessionSwitchThreshold = 999; // 实际上禁用
           } else if (isLowCount) {
             sessionSwitchThreshold = 3; // timeline模式：尽快切换
           } else if (isHighCount) {
@@ -436,9 +446,11 @@ export async function runTimelineDom(
                   // biome-ignore lint/style/noNonNullAssertion: page exists
                   await waitOrCancel(
                     engine.navigationService.waitForTweets(engine.getPageInstance()!, {
-                    timeout: 10000, // Increase from 3s to 10s to prevent flakes
-                    maxRetries: 1, // Allow 1 retry
-                  }), shouldStop);
+                      timeout: 10000, // Increase from 3s to 10s to prevent flakes
+                      maxRetries: 1, // Allow 1 retry
+                    }),
+                    shouldStop,
+                  );
                 } catch (_navErr) {
                   engine.eventBus.emitLog(
                     `waitForTweets after session switch failed, skipping retry for faster switching...`,
@@ -502,10 +514,13 @@ export async function runTimelineDom(
                   }
 
                   // 每滚动 scrollsPerExtraction 次后，提取一次推文
-                  const tweetsOnPage = await waitOrCancel(dataExtractor.extractTweetsFromPage(
-                    // biome-ignore lint/style/noNonNullAssertion: page exists
-                    engine.getPageInstance()!,
-                  ), shouldStop);
+                  const tweetsOnPage = await waitOrCancel(
+                    dataExtractor.extractTweetsFromPage(
+                      // biome-ignore lint/style/noNonNullAssertion: page exists
+                      engine.getPageInstance()!,
+                    ),
+                    shouldStop,
+                  );
                   const cleaned = await cleanTweetsFast([], tweetsOnPage, { limit });
                   if (cleaned.usedWasm && !wasmCleanerLogged) {
                     engine.eventBus.emitLog(
@@ -710,7 +725,7 @@ export async function runTimelineDom(
               // biome-ignore lint/style/noNonNullAssertion: page exists
               engine.getPageInstance()!,
               constants.WAIT_FOR_NEW_TWEETS_TIMEOUT,
-              shouldStop
+              shouldStop,
             );
 
             // 每次滚动后等待，给内容加载时间
@@ -769,12 +784,18 @@ export async function runTimelineDom(
               // 重新导航到目标URL
               engine.performanceMonitor.startPhase('navigation');
               // biome-ignore lint/style/noNonNullAssertion: page exists
-              await waitOrCancel(engine.navigationService.navigateToUrl(engine.getPageInstance()!, targetUrl), shouldStop);
+              await waitOrCancel(
+                engine.navigationService.navigateToUrl(engine.getPageInstance()!, targetUrl),
+                shouldStop,
+              );
               // biome-ignore lint/style/noNonNullAssertion: page exists
-              await waitOrCancel(engine.navigationService.waitForTweets(engine.getPageInstance()!, {
-                timeout: 8000, // 减少超时时间，加快切换
-                maxRetries: 0, // 不重试，快速切换
-              }), shouldStop);
+              await waitOrCancel(
+                engine.navigationService.waitForTweets(engine.getPageInstance()!, {
+                  timeout: 8000, // 减少超时时间，加快切换
+                  maxRetries: 0, // 不重试，快速切换
+                }),
+                shouldStop,
+              );
               engine.performanceMonitor.endPhase();
 
               engine.eventBus.emitLog(
@@ -830,7 +851,7 @@ export async function runTimelineDom(
     };
     // biome-ignore lint/suspicious/noExplicitAny: error handling
   } catch (error: any) {
-    if (error.message === 'Job cancelled by user' || await shouldStop()) {
+    if (error.message === 'Job cancelled by user' || (await shouldStop())) {
       // If we are stopping, any protocol/detached error is likely a side effect
       if (
         error.message.includes('detached Frame') ||
@@ -838,11 +859,11 @@ export async function runTimelineDom(
         error.message.includes('Session closed') ||
         error.message.includes('Protocol error')
       ) {
-         throw new Error('Job cancelled by user');
+        throw new Error('Job cancelled by user');
       }
       throw error;
     }
-    
+
     engine.performanceMonitor.stop();
     engine.eventBus.emitError(new Error(`DOM scraping failed: ${error.message}`));
 

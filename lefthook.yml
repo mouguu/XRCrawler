@@ -1,9 +1,13 @@
-pre-commit:
-  parallel: true
-  commands:
-    check:
-      glob: "*.{js,ts,cjs,mjs,d.cts,d.mts,jsx,tsx,json,jsonc}"
-      run: bun biome check --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error {staged_files}
-    test:
-      glob: "*.{spec,test}.{ts,tsx}"
-      run: bun test
+# Pre-commit hooks disabled by user request for faster workflow
+# To re-enable, uncomment the lines below
+
+# pre-commit:
+#   parallel: true
+#   commands:
+#     check:
+#       glob: '*.{js,ts,cjs,mjs,d.cts,d.mts,jsx,tsx,json,jsonc}'
+#       run: bun biome check --no-errors-on-unmatched --files-ignore-unknown=true --diagnostic-level=error {staged_files}
+#     test:
+#       glob: '*.{spec,test}.{ts,tsx}'
+#       run: bun test
+

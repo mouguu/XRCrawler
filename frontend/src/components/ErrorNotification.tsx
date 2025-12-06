@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { X, RefreshCw, AlertCircle, Wifi, Key, Clock, Settings, AlertTriangle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Clock, Key, RefreshCw, Settings, Wifi, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const ERROR_CATEGORIES = {

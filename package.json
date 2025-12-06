@@ -2,7 +2,9 @@
   "name": "xrcrawler",
   "private": true,
   "version": "1.0.0",
-  "workspaces": ["frontend"],
+  "workspaces": [
+    "frontend"
+  ],
   "description": "XRCrawler - A powerful tool to scrape Twitter/X and Reddit content (Powered by Bun 🚀)",
   "main": "cmd/cli.ts",
   "scripts": {

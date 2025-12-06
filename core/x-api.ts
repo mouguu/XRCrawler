@@ -8,8 +8,8 @@ import {
   X_API_OPS,
   X_API_SEARCH_HEADERS,
 } from '../config/constants';
-import { Proxy } from './proxy-manager';
 import { ScraperErrors } from './errors';
+import { Proxy } from './proxy-manager';
 import { XClIdGen } from './xclid';
 
 const RETRY_MAX_ATTEMPTS = 3;
@@ -28,7 +28,7 @@ export class XApiClient {
     this.cookies = cookies;
     this.proxy = proxy;
     this.headers = this.buildHeaders();
-    
+
     // Create configured axios instance
     const axiosConfig: AxiosRequestConfig = {
       timeout: 30000,
@@ -43,15 +43,17 @@ export class XApiClient {
       if (this.proxy.username && this.proxy.password) {
         proxyUrl = `http://${this.proxy.username}:${this.proxy.password}@${this.proxy.host}:${this.proxy.port}`;
       }
-      
+
       const agent = new HttpsProxyAgent(proxyUrl);
       axiosConfig.httpsAgent = agent;
       axiosConfig.httpAgent = agent; // Apply to both just in case
       axiosConfig.proxy = false; // Disable axios default proxy handling
-      
-      console.log(`[XApiClient] Initialized with proxy agent: ${this.proxy.host}:${this.proxy.port}`);
+
+      console.log(
+        `[XApiClient] Initialized with proxy agent: ${this.proxy.host}:${this.proxy.port}`,
+      );
     } else {
-      axiosConfig.proxy = false; 
+      axiosConfig.proxy = false;
     }
 
     this.axiosInstance = axios.create(axiosConfig);
@@ -205,11 +207,11 @@ export class XApiClient {
     variables: any,
   ) {
     const queryId = op.operationName === 'SearchTimeline' ? this.searchQueryId : op.queryId;
-    // Note: don't include variables in query params for axios POST/GET if we were using POST, 
+    // Note: don't include variables in query params for axios POST/GET if we were using POST,
     // but these endpoints are GET with query params.
     // Axios handles params object or we can construct URL manually.
     // Constructing manual URL to ensure exact format X expects.
-    
+
     const url = `https://x.com/i/api/graphql/${queryId}/${op.operationName}`;
 
     let features = X_API_FEATURES_TIMELINE;
@@ -227,7 +229,7 @@ export class XApiClient {
 
     // Clone headers to avoid mutating instance headers
     const headers: Record<string, string> = {
-      ...this.axiosInstance.defaults.headers.common as Record<string, string>,
+      ...(this.axiosInstance.defaults.headers.common as Record<string, string>),
       ...this.headers,
       'x-twitter-auth-type': 'OAuth2Session',
     };
@@ -239,7 +241,7 @@ export class XApiClient {
       const xclid = isCursorRequest
         ? await this.getXClientTransactionId(path)
         : X_API_SEARCH_HEADERS.clid;
-      
+
       Object.assign(headers, {
         'x-client-transaction-id': xclid || X_API_SEARCH_HEADERS.clid,
         'x-xp-forwarded-for': X_API_SEARCH_HEADERS.xpf,
@@ -248,20 +250,20 @@ export class XApiClient {
         'sec-ch-ua-platform': X_API_SEARCH_HEADERS.secChUaPlatform,
         'accept-language': X_API_SEARCH_HEADERS.acceptLanguage,
         'x-twitter-client-language': X_API_SEARCH_HEADERS.clientLanguage,
-        'referer': `${X_API_SEARCH_HEADERS.refererBase}${encodeURIComponent(variables.rawQuery || '')}&src=typed_query`,
-        'accept': '*/*',
+        referer: `${X_API_SEARCH_HEADERS.refererBase}${encodeURIComponent(variables.rawQuery || '')}&src=typed_query`,
+        accept: '*/*',
       });
     }
 
     try {
       const response = await this.axiosInstance.get(fullUrl, { headers });
-      
+
       if (response.status !== 200) {
         if (response.status === 429) {
           throw ScraperErrors.rateLimitExceeded();
         }
         if (response.status === 401 || response.status === 403) {
-           throw ScraperErrors.authenticationFailed(
+          throw ScraperErrors.authenticationFailed(
             `Authentication failed (${response.status})`,
             response.status,
           );
@@ -272,31 +274,32 @@ export class XApiClient {
           { operation: op.operationName, url: fullUrl },
         );
       }
-      
+
       return response.data;
     } catch (error: any) {
-       // Re-throw known scraper errors
-       if (error instanceof Error && (error as any).code?.startsWith('SCRAPER_')) {
-         throw error;
-       }
-       
-       // Handle Axios errors that didn't go through validateStatus check (like network errors)
-       if (axios.isAxiosError(error)) {
-          if (error.response) {
-             const status = error.response.status;
-             if (status === 429) throw ScraperErrors.rateLimitExceeded();
-             if (status === 401 || status === 403) throw ScraperErrors.authenticationFailed(`Auth failed: ${status}`, status);
-             throw ScraperErrors.apiRequestFailed(`API Error: ${status}`, status, { url: fullUrl });
-          }
-          throw error; // Network error likely
-       }
-       throw error;
+      // Re-throw known scraper errors
+      if (error instanceof Error && (error as any).code?.startsWith('SCRAPER_')) {
+        throw error;
+      }
+
+      // Handle Axios errors that didn't go through validateStatus check (like network errors)
+      if (axios.isAxiosError(error)) {
+        if (error.response) {
+          const status = error.response.status;
+          if (status === 429) throw ScraperErrors.rateLimitExceeded();
+          if (status === 401 || status === 403)
+            throw ScraperErrors.authenticationFailed(`Auth failed: ${status}`, status);
+          throw ScraperErrors.apiRequestFailed(`API Error: ${status}`, status, { url: fullUrl });
+        }
+        throw error; // Network error likely
+      }
+      throw error;
     }
   }
 
   private async performRestRequest(url: string) {
     const headers: Record<string, string> = {
-      ...this.axiosInstance.defaults.headers.common as Record<string, string>,
+      ...(this.axiosInstance.defaults.headers.common as Record<string, string>),
       ...this.headers,
       accept: 'application/json',
     };
@@ -307,8 +310,8 @@ export class XApiClient {
       if (response.status === 429) {
         throw ScraperErrors.rateLimitExceeded();
       }
-       if (response.status === 401 || response.status === 403) {
-         throw ScraperErrors.authenticationFailed(
+      if (response.status === 401 || response.status === 403) {
+        throw ScraperErrors.authenticationFailed(
           `Authentication failed (${response.status})`,
           response.status,
         );

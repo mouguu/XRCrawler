@@ -5,12 +5,12 @@
 
 import { AntiDetection, type AntiDetectionLevel } from './anti-detection';
 import { ErrorSnapshotter } from './error-snapshotter';
-import { ScraperEventBus } from './scraper-engine.types';
 import { NavigationService } from './navigation-service';
 import { PerformanceMonitor } from './performance-monitor';
 import { ProgressManager } from './progress-manager';
 import { ProxyManager } from './proxy-manager';
 import { RateLimitManager } from './rate-limit-manager';
+import { ScraperEventBus } from './scraper-engine.types';
 import { SessionManager } from './session-manager';
 
 export interface ScraperDependencies {

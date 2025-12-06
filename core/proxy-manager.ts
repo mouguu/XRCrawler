@@ -27,13 +27,16 @@ export class ProxyManager {
   private proxies: Proxy[] = [];
   private enabled: boolean = true;
   private currentIndex: number = 0;
-  private proxyStats: Map<string, {
-    failures: number;
-    successes: number;
-    lastFailure?: number;
-    lastSuccess?: number;
-    isHealthy: boolean;
-  }> = new Map();
+  private proxyStats: Map<
+    string,
+    {
+      failures: number;
+      successes: number;
+      lastFailure?: number;
+      lastSuccess?: number;
+      isHealthy: boolean;
+    }
+  > = new Map();
   private maxFailuresBeforeMarkUnhealthy = 3;
   private failureCooldown = 60000; // 1 minute cooldown after failure
 
@@ -74,7 +77,7 @@ export class ProxyManager {
   }
 
   hasProxies(): boolean {
-      return this.proxies.length > 0;
+    return this.proxies.length > 0;
   }
 
   /**
@@ -174,11 +177,13 @@ export class ProxyManager {
    * Get proxy statistics
    */
   getProxyStats(proxyId: string) {
-    return this.proxyStats.get(proxyId) || {
-      failures: 0,
-      successes: 0,
-      isHealthy: true,
-    };
+    return (
+      this.proxyStats.get(proxyId) || {
+        failures: 0,
+        successes: 0,
+        isHealthy: true,
+      }
+    );
   }
 
   /**
@@ -194,25 +199,25 @@ export class ProxyManager {
   private async loadProxiesFromFile(filePath: string): Promise<void> {
     try {
       const content = fs.readFileSync(filePath, 'utf-8');
-      const lines = content.split('\n').filter(l => l.trim().length > 0);
+      const lines = content.split('\n').filter((l) => l.trim().length > 0);
 
       for (const line of lines) {
         // Format: host:port:user:pass
         const trimmedLine = line.trim();
         if (!trimmedLine) continue;
-        
+
         const parts = trimmedLine.split(':');
         if (parts.length >= 4) {
           const host = parts[0];
           const port = parseInt(parts[1], 10);
           const username = parts[2];
           const password = parts.slice(3).join(':'); // Handle passwords that might contain ':'
-          
+
           if (!host || !port || isNaN(port)) {
             logger.warn(`Invalid proxy line (missing host/port): ${trimmedLine.substring(0, 50)}`);
             continue;
           }
-          
+
           let url = `http://${host}:${port}`;
           if (username && password) {
             url = `http://${username}:${password}@${host}:${port}`;
@@ -225,9 +230,9 @@ export class ProxyManager {
             username,
             password,
             protocol: 'http',
-            url
+            url,
           });
-          
+
           logger.debug(`Loaded proxy: ${host}:${port} (auth: ${username ? 'yes' : 'no'})`);
         } else if (parts.length >= 2) {
           // Proxy without auth: host:port
@@ -239,7 +244,7 @@ export class ProxyManager {
               host,
               port,
               protocol: 'http',
-              url: `http://${host}:${port}`
+              url: `http://${host}:${port}`,
             });
             logger.debug(`Loaded proxy without auth: ${host}:${port}`);
           }
@@ -259,9 +264,15 @@ export class ProxyManager {
 
   // Method to satisfy interfaces that might need stats
   getStats() {
-    const healthyCount = Array.from(this.proxyStats.values()).filter(s => s.isHealthy).length;
-    const totalRequests = Array.from(this.proxyStats.values()).reduce((sum, s) => sum + s.successes + s.failures, 0);
-    const totalSuccesses = Array.from(this.proxyStats.values()).reduce((sum, s) => sum + s.successes, 0);
+    const healthyCount = Array.from(this.proxyStats.values()).filter((s) => s.isHealthy).length;
+    const totalRequests = Array.from(this.proxyStats.values()).reduce(
+      (sum, s) => sum + s.successes + s.failures,
+      0,
+    );
+    const totalSuccesses = Array.from(this.proxyStats.values()).reduce(
+      (sum, s) => sum + s.successes,
+      0,
+    );
     const avgSuccessRate = totalRequests > 0 ? totalSuccesses / totalRequests : 1.0;
 
     return {

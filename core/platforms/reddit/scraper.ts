@@ -6,10 +6,10 @@
  */
 
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
-import { HttpsProxyAgent } from 'https-proxy-agent';
 import { HttpProxyAgent } from 'http-proxy-agent';
-import { ProxyConfig } from '../../browser-manager';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 import { createEnhancedLogger } from '../../../utils';
+import { ProxyConfig } from '../../browser-manager';
 import { ScraperEventBus } from '../../scraper-engine.types';
 import {
   FlattenedComment,
@@ -58,7 +58,7 @@ export class RedditScraper {
     const axiosConfig: AxiosRequestConfig = {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-        'Accept': 'application/json',
+        Accept: 'application/json',
         'Accept-Language': 'en-US,en;q=0.9',
       },
       timeout: 20000, // 20s timeout - will retry on timeout
@@ -69,9 +69,10 @@ export class RedditScraper {
     if (proxyConfig) {
       // Use HttpsProxyAgent for proper proxy authentication
       // Format: http://username:password@host:port
-      const proxyUrl = proxyConfig.username && proxyConfig.password
-        ? `http://${proxyConfig.username}:${proxyConfig.password}@${proxyConfig.host}:${proxyConfig.port}`
-        : `http://${proxyConfig.host}:${proxyConfig.port}`;
+      const proxyUrl =
+        proxyConfig.username && proxyConfig.password
+          ? `http://${proxyConfig.username}:${proxyConfig.password}@${proxyConfig.host}:${proxyConfig.port}`
+          : `http://${proxyConfig.host}:${proxyConfig.port}`;
 
       const httpsAgent = new HttpsProxyAgent(proxyUrl);
       const httpAgent = new HttpProxyAgent(proxyUrl);
@@ -114,10 +115,14 @@ export class RedditScraper {
     // Mark current proxy as failed
     if (this.currentProxy?.id) {
       this.proxyManager.markProxyFailed(this.currentProxy.id, reason);
-      this.log(`🔄 Marked proxy ${this.currentProxy.id} as failed, switching to next proxy`, 'warn', {
-        failedProxyId: this.currentProxy.id,
-        reason,
-      });
+      this.log(
+        `🔄 Marked proxy ${this.currentProxy.id} as failed, switching to next proxy`,
+        'warn',
+        {
+          failedProxyId: this.currentProxy.id,
+          reason,
+        },
+      );
     }
 
     // Get next proxy
@@ -144,9 +149,8 @@ export class RedditScraper {
       if (this.shouldStop) {
         const shouldStopFn = this.shouldStop;
         const checkInterval = setInterval(async () => {
-          const shouldStop = typeof shouldStopFn === 'function'
-            ? await shouldStopFn()
-            : shouldStopFn;
+          const shouldStop =
+            typeof shouldStopFn === 'function' ? await shouldStopFn() : shouldStopFn;
           if (shouldStop) {
             this.abortController.abort();
             clearInterval(checkInterval);
@@ -157,9 +161,10 @@ export class RedditScraper {
     }
 
     // Recreate axios client with new proxy using HttpsProxyAgent
-    const proxyUrl = nextProxy.username && nextProxy.password
-      ? `http://${nextProxy.username}:${nextProxy.password}@${nextProxy.host}:${nextProxy.port}`
-      : `http://${nextProxy.host}:${nextProxy.port}`;
+    const proxyUrl =
+      nextProxy.username && nextProxy.password
+        ? `http://${nextProxy.username}:${nextProxy.password}@${nextProxy.host}:${nextProxy.port}`
+        : `http://${nextProxy.host}:${nextProxy.port}`;
 
     const httpsAgent = new HttpsProxyAgent(proxyUrl);
     const httpAgent = new HttpProxyAgent(proxyUrl);
@@ -167,7 +172,7 @@ export class RedditScraper {
     const axiosConfig: AxiosRequestConfig = {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-        'Accept': 'application/json',
+        Accept: 'application/json',
         'Accept-Language': 'en-US,en;q=0.9',
       },
       timeout: 20000,
@@ -192,9 +197,7 @@ export class RedditScraper {
 
   private log(message: string, level: 'info' | 'warn' | 'error' = 'info', details?: any) {
     const timestamp = new Date().toISOString();
-    const logMessage = details
-      ? `${message} | Details: ${JSON.stringify(details)}`
-      : message;
+    const logMessage = details ? `${message} | Details: ${JSON.stringify(details)}` : message;
 
     if (this.eventBus) {
       this.eventBus.emitLog(`[${timestamp}] ${logMessage}`, level);
@@ -249,11 +252,15 @@ export class RedditScraper {
 
       // Log progress every 2 seconds
       if (elapsed % 2000 < step) {
-        this.log(`Delay progress: ${elapsed}/${ms}ms (${((elapsed / ms) * 100).toFixed(1)}%)`, 'info', {
-          elapsed,
-          total: ms,
-          remaining: ms - elapsed,
-        });
+        this.log(
+          `Delay progress: ${elapsed}/${ms}ms (${((elapsed / ms) * 100).toFixed(1)}%)`,
+          'info',
+          {
+            elapsed,
+            total: ms,
+            remaining: ms - elapsed,
+          },
+        );
       }
     }
 
@@ -296,31 +303,41 @@ export class RedditScraper {
       let lastError: any = null;
       let retryCount = 0;
       const maxRetries = 3;
-      let response: { data: RedditListing; status: number; statusText: string; headers: any } | null = null;
+      let response: {
+        data: RedditListing;
+        status: number;
+        statusText: string;
+        headers: any;
+      } | null = null;
 
       while (retryCount <= maxRetries && !response) {
         await this.checkCancel();
 
         if (retryCount > 0) {
-          this.log(`Retrying page ${page} (attempt ${retryCount + 1}/${maxRetries + 1})...`, 'warn', {
-            previousError: lastError?.message || lastError?.code,
-            delay: retryCount * 2000,
-          });
+          this.log(
+            `Retrying page ${page} (attempt ${retryCount + 1}/${maxRetries + 1})...`,
+            'warn',
+            {
+              previousError: lastError?.message || lastError?.code,
+              delay: retryCount * 2000,
+            },
+          );
           await this.delay(retryCount * 2000); // Exponential backoff: 2s, 4s, 6s
         }
 
         try {
           // Check if using proxy via httpsAgent or currentProxy
           const isUsingProxy = !!(this.client.defaults.httpsAgent || this.currentProxy);
-          const proxyInfo = isUsingProxy && this.currentProxy
-            ? {
-                proxyHost: this.currentProxy.host,
-                proxyPort: this.currentProxy.port,
-                proxyProtocol: 'http',
-                usingProxy: true,
-                proxyId: this.currentProxy.id,
-              }
-            : { usingProxy: false, connectionMode: 'direct' };
+          const proxyInfo =
+            isUsingProxy && this.currentProxy
+              ? {
+                  proxyHost: this.currentProxy.host,
+                  proxyPort: this.currentProxy.port,
+                  proxyProtocol: 'http',
+                  usingProxy: true,
+                  proxyId: this.currentProxy.id,
+                }
+              : { usingProxy: false, connectionMode: 'direct' };
 
           this.log(`Making HTTP request to Reddit API`, 'info', {
             url,
@@ -349,30 +366,46 @@ export class RedditScraper {
           // 5s warning
           const warning5s = setTimeout(() => {
             const elapsed = Date.now() - requestStartTime;
-            this.log(`⚠️ HTTP request still pending (${(elapsed / 1000).toFixed(1)}s elapsed)`, 'warn', {
-              elapsed: `${(elapsed / 1000).toFixed(1)}s`,
-              timeout: '20s',
-              remaining: `${(20 - elapsed / 1000).toFixed(1)}s`,
-              attempt: retryCount + 1,
-              proxyId: this.currentProxy?.id,
-            });
+            this.log(
+              `⚠️ HTTP request still pending (${(elapsed / 1000).toFixed(1)}s elapsed)`,
+              'warn',
+              {
+                elapsed: `${(elapsed / 1000).toFixed(1)}s`,
+                timeout: '20s',
+                remaining: `${(20 - elapsed / 1000).toFixed(1)}s`,
+                attempt: retryCount + 1,
+                proxyId: this.currentProxy?.id,
+              },
+            );
           }, 5000);
           warningIntervals.push(warning5s);
 
           // 8s: Smart switch - cancel and retry with new proxy if available
           const smartSwitchTimeout = setTimeout(() => {
             const elapsed = Date.now() - requestStartTime;
-            if (this.proxyManager && this.currentProxy?.id && retryCount < maxRetries && !requestAborted) {
-              this.log(`🔄 Smart switch: Request too slow (${(elapsed / 1000).toFixed(1)}s), switching proxy immediately`, 'warn', {
-                elapsed: `${(elapsed / 1000).toFixed(1)}s`,
-                page,
-                attempt: retryCount + 1,
-                previousProxy: this.currentProxy.id,
-                reason: 'slow_response_8s',
-              });
+            if (
+              this.proxyManager &&
+              this.currentProxy?.id &&
+              retryCount < maxRetries &&
+              !requestAborted
+            ) {
+              this.log(
+                `🔄 Smart switch: Request too slow (${(elapsed / 1000).toFixed(1)}s), switching proxy immediately`,
+                'warn',
+                {
+                  elapsed: `${(elapsed / 1000).toFixed(1)}s`,
+                  page,
+                  attempt: retryCount + 1,
+                  previousProxy: this.currentProxy.id,
+                  reason: 'slow_response_8s',
+                },
+              );
 
               // Mark proxy as failed and switch (switchToNextProxy will handle abort controller)
-              this.proxyManager.markProxyFailed(this.currentProxy.id, `Slow response: ${(elapsed / 1000).toFixed(1)}s`);
+              this.proxyManager.markProxyFailed(
+                this.currentProxy.id,
+                `Slow response: ${(elapsed / 1000).toFixed(1)}s`,
+              );
 
               // Abort current request
               this.abortController.abort();
@@ -387,12 +420,16 @@ export class RedditScraper {
           // 15s final warning
           const warning15s = setTimeout(() => {
             const elapsed = Date.now() - requestStartTime;
-            this.log(`⚠️ HTTP request still pending (${(elapsed / 1000).toFixed(1)}s elapsed, final warning)`, 'warn', {
-              elapsed: `${(elapsed / 1000).toFixed(1)}s`,
-              timeout: '20s',
-              remaining: `${(20 - elapsed / 1000).toFixed(1)}s`,
-              attempt: retryCount + 1,
-            });
+            this.log(
+              `⚠️ HTTP request still pending (${(elapsed / 1000).toFixed(1)}s elapsed, final warning)`,
+              'warn',
+              {
+                elapsed: `${(elapsed / 1000).toFixed(1)}s`,
+                timeout: '20s',
+                remaining: `${(20 - elapsed / 1000).toFixed(1)}s`,
+                attempt: retryCount + 1,
+              },
+            );
           }, 15000);
           warningIntervals.push(warning15s);
 
@@ -409,11 +446,15 @@ export class RedditScraper {
 
             // If aborted due to smart switch, retry with new proxy
             if (error.name === 'AbortError' && this.proxyManager && retryCount < maxRetries) {
-              this.log(`🔄 Retrying page ${page} with new proxy after smart switch (attempt ${retryCount + 2}/${maxRetries + 1})`, 'info', {
-                page,
-                attempt: retryCount + 2,
-                reason: 'smart_switch_retry',
-              });
+              this.log(
+                `🔄 Retrying page ${page} with new proxy after smart switch (attempt ${retryCount + 2}/${maxRetries + 1})`,
+                'info',
+                {
+                  page,
+                  attempt: retryCount + 2,
+                  reason: 'smart_switch_retry',
+                },
+              );
               retryCount++;
               continue; // Retry with new proxy
             }
@@ -433,7 +474,6 @@ export class RedditScraper {
 
             // Otherwise, continue to retry
             retryCount++;
-            continue;
           }
         } catch (error: any) {
           lastError = error;
@@ -444,7 +484,6 @@ export class RedditScraper {
           }
 
           retryCount++;
-          continue;
         }
       }
 
@@ -465,7 +504,11 @@ export class RedditScraper {
           networkError: lastError?.code === 'ENOTFOUND' || lastError?.code === 'ECONNREFUSED',
         };
 
-        this.log(`HTTP request failed for page ${page} after ${maxRetries + 1} attempts`, 'error', errorDetails);
+        this.log(
+          `HTTP request failed for page ${page} after ${maxRetries + 1} attempts`,
+          'error',
+          errorDetails,
+        );
 
         if (lastError?.name === 'AbortError' || lastError?.code === 'ERR_CANCELED') {
           this.log('Request was cancelled/aborted', 'warn');
@@ -483,20 +526,31 @@ export class RedditScraper {
             subreddit,
             page,
             proxyId: this.currentProxy?.id,
-            possibleReasons: ['Proxy IP blocked by Reddit', 'Private subreddit', 'Banned subreddit'],
+            possibleReasons: [
+              'Proxy IP blocked by Reddit',
+              'Private subreddit',
+              'Banned subreddit',
+            ],
           });
 
           // Mark current proxy as failed and try switching
           if (this.proxyManager && this.currentProxy?.id && retryCount < maxRetries) {
-            this.proxyManager.markProxyFailed(this.currentProxy.id, '403 Forbidden - IP likely blocked');
+            this.proxyManager.markProxyFailed(
+              this.currentProxy.id,
+              '403 Forbidden - IP likely blocked',
+            );
             const switched = this.switchToNextProxy('403 Forbidden');
             if (switched) {
-              this.log(`🔄 Switching proxy after 403 (page ${page}, attempt ${retryCount + 2}/${maxRetries + 1})`, 'info', {
-                page,
-                attempt: retryCount + 2,
-                reason: '403_forbidden',
-                newProxy: this.currentProxy?.id,
-              });
+              this.log(
+                `🔄 Switching proxy after 403 (page ${page}, attempt ${retryCount + 2}/${maxRetries + 1})`,
+                'info',
+                {
+                  page,
+                  attempt: retryCount + 2,
+                  reason: '403_forbidden',
+                  newProxy: this.currentProxy?.id,
+                },
+              );
               retryCount++;
               continue; // Retry with new proxy
             }
@@ -511,30 +565,41 @@ export class RedditScraper {
             proxyHost: this.currentProxy?.host,
             proxyPort: this.currentProxy?.port,
             hasAuth: !!(this.currentProxy?.username && this.currentProxy?.password),
-            responseBody: lastError?.response?.data ? String(lastError.response.data).substring(0, 200) : null,
+            responseBody: lastError?.response?.data
+              ? String(lastError.response.data).substring(0, 200)
+              : null,
           });
 
           // Mark current proxy as failed
           if (this.proxyManager && this.currentProxy?.id) {
-            this.proxyManager.markProxyFailed(this.currentProxy.id, '407 Proxy Authentication Required');
+            this.proxyManager.markProxyFailed(
+              this.currentProxy.id,
+              '407 Proxy Authentication Required',
+            );
           }
 
           // Try switching proxy if available
           if (this.proxyManager && retryCount < maxRetries) {
             const switched = this.switchToNextProxy('407 Proxy Authentication Required');
             if (switched) {
-              this.log(`🔄 Retrying page ${page} with new proxy (attempt ${retryCount + 2}/${maxRetries + 1})`, 'info', {
-                page,
-                attempt: retryCount + 2,
-                reason: 'proxy_auth_failed',
-                previousProxy: this.currentProxy?.id,
-              });
+              this.log(
+                `🔄 Retrying page ${page} with new proxy (attempt ${retryCount + 2}/${maxRetries + 1})`,
+                'info',
+                {
+                  page,
+                  attempt: retryCount + 2,
+                  reason: 'proxy_auth_failed',
+                  previousProxy: this.currentProxy?.id,
+                },
+              );
               retryCount++;
               continue; // Retry with new proxy
             }
           }
 
-          throw new Error(`Proxy authentication failed (407): ${lastError?.response?.data || lastError.message}`);
+          throw new Error(
+            `Proxy authentication failed (407): ${lastError?.response?.data || lastError.message}`,
+          );
         }
         if (status === 429) {
           const retryAfter = parseInt(lastError?.response?.headers['retry-after'] || '60', 10);
@@ -550,44 +615,56 @@ export class RedditScraper {
 
         // Network/timeout errors - try switching proxy before final failure
         if (lastError?.code === 'ECONNABORTED' || lastError?.code === 'ETIMEDOUT') {
-          const elapsed = lastError.elapsed || (lastError.config?.timeout || 20000);
+          const elapsed = lastError.elapsed || lastError.config?.timeout || 20000;
 
           // Try switching proxy if available
           if (this.proxyManager && this.currentProxy?.id && retryCount < maxRetries) {
-            const switched = this.switchToNextProxy(`Timeout after ${(elapsed / 1000).toFixed(1)}s`);
+            const switched = this.switchToNextProxy(
+              `Timeout after ${(elapsed / 1000).toFixed(1)}s`,
+            );
             if (switched) {
-              this.log(`🔄 Retrying page ${page} with new proxy (attempt ${retryCount + 2}/${maxRetries + 1})`, 'info', {
-                page,
-                attempt: retryCount + 2,
-                reason: 'proxy_switched',
-              });
+              this.log(
+                `🔄 Retrying page ${page} with new proxy (attempt ${retryCount + 2}/${maxRetries + 1})`,
+                'info',
+                {
+                  page,
+                  attempt: retryCount + 2,
+                  reason: 'proxy_switched',
+                },
+              );
               retryCount++;
               continue; // Retry with new proxy
             }
           }
 
-          this.log(`❌ Request timeout after ${maxRetries + 1} attempts (${lastError.code})`, 'error', {
-            timeout: lastError.config?.timeout || 20000,
-            elapsed: `${(elapsed / 1000).toFixed(1)}s`,
-            attempts: maxRetries + 1,
-            url: lastError.config?.url,
-            possibleReasons: [
-              'Network too slow',
-              'Reddit server not responding',
-              'Proxy timeout',
-              'DNS resolution timeout',
-              'Firewall blocking',
-              'Reddit blocking requests',
-            ],
-            suggestions: [
-              'Check internet connection',
-              'Try using proxy (enable proxy in task form)',
-              'Check if Reddit is accessible (visit reddit.com in browser)',
-              'Check firewall/antivirus settings',
-              'Try again later',
-            ],
-          });
-          throw new Error(`Request timeout after ${maxRetries + 1} attempts (${(elapsed / 1000).toFixed(1)}s each): ${lastError.message}`);
+          this.log(
+            `❌ Request timeout after ${maxRetries + 1} attempts (${lastError.code})`,
+            'error',
+            {
+              timeout: lastError.config?.timeout || 20000,
+              elapsed: `${(elapsed / 1000).toFixed(1)}s`,
+              attempts: maxRetries + 1,
+              url: lastError.config?.url,
+              possibleReasons: [
+                'Network too slow',
+                'Reddit server not responding',
+                'Proxy timeout',
+                'DNS resolution timeout',
+                'Firewall blocking',
+                'Reddit blocking requests',
+              ],
+              suggestions: [
+                'Check internet connection',
+                'Try using proxy (enable proxy in task form)',
+                'Check if Reddit is accessible (visit reddit.com in browser)',
+                'Check firewall/antivirus settings',
+                'Try again later',
+              ],
+            },
+          );
+          throw new Error(
+            `Request timeout after ${maxRetries + 1} attempts (${(elapsed / 1000).toFixed(1)}s each): ${lastError.message}`,
+          );
         }
 
         if (lastError?.code === 'ENOTFOUND' || lastError?.code === 'ECONNREFUSED') {
@@ -605,7 +682,9 @@ export class RedditScraper {
           ...errorDetails,
           attempts: maxRetries + 1,
         });
-        throw new Error(`Failed to fetch page ${page} after ${maxRetries + 1} attempts: ${lastError?.message || 'Unknown error'}`);
+        throw new Error(
+          `Failed to fetch page ${page} after ${maxRetries + 1} attempts: ${lastError?.message || 'Unknown error'}`,
+        );
       }
 
       // Successfully got response, process it
@@ -628,14 +707,21 @@ export class RedditScraper {
 
           // Mark proxy as failed and switch
           if (this.proxyManager && this.currentProxy?.id && retryCount < maxRetries) {
-            this.proxyManager.markProxyFailed(this.currentProxy.id, '403 Forbidden - IP blocked by Reddit');
+            this.proxyManager.markProxyFailed(
+              this.currentProxy.id,
+              '403 Forbidden - IP blocked by Reddit',
+            );
             const switched = this.switchToNextProxy('403 Forbidden');
             if (switched) {
-              this.log(`🔄 Switching proxy after 403 (page ${page}, attempt ${retryCount + 2}/${maxRetries + 1})`, 'info', {
-                page,
-                attempt: retryCount + 2,
-                newProxy: this.currentProxy?.id,
-              });
+              this.log(
+                `🔄 Switching proxy after 403 (page ${page}, attempt ${retryCount + 2}/${maxRetries + 1})`,
+                'info',
+                {
+                  page,
+                  attempt: retryCount + 2,
+                  newProxy: this.currentProxy?.id,
+                },
+              );
               retryCount++;
               continue; // Retry with new proxy
             }
@@ -751,12 +837,19 @@ export class RedditScraper {
             subreddit,
             page,
             proxyId: this.currentProxy?.id,
-            possibleReasons: ['Proxy IP blocked by Reddit', 'Private subreddit', 'Banned subreddit'],
+            possibleReasons: [
+              'Proxy IP blocked by Reddit',
+              'Private subreddit',
+              'Banned subreddit',
+            ],
           });
 
           // Mark current proxy as failed and try switching
           if (this.proxyManager && this.currentProxy?.id) {
-            this.proxyManager.markProxyFailed(this.currentProxy.id, '403 Forbidden - IP likely blocked');
+            this.proxyManager.markProxyFailed(
+              this.currentProxy.id,
+              '403 Forbidden - IP likely blocked',
+            );
             const switched = this.switchToNextProxy('403 Forbidden');
             if (switched) {
               this.log(`🔄 Switching proxy after 403 (page ${page})`, 'info', {
@@ -784,7 +877,7 @@ export class RedditScraper {
 
         // Network/timeout errors
         if (lastError?.code === 'ECONNABORTED' || lastError?.code === 'ETIMEDOUT') {
-          const elapsed = lastError.elapsed || (lastError.config?.timeout || 20000);
+          const elapsed = lastError.elapsed || lastError.config?.timeout || 20000;
           this.log(`❌ Request timeout after ${maxRetries + 1} attempts (${error.code})`, 'error', {
             timeout: lastError.config?.timeout || 20000,
             elapsed: `${(elapsed / 1000).toFixed(1)}s`,
@@ -806,7 +899,9 @@ export class RedditScraper {
               'Try again later',
             ],
           });
-          throw new Error(`Request timeout after ${maxRetries + 1} attempts (${(elapsed / 1000).toFixed(1)}s each): ${lastError.message}`);
+          throw new Error(
+            `Request timeout after ${maxRetries + 1} attempts (${(elapsed / 1000).toFixed(1)}s each): ${lastError.message}`,
+          );
         }
 
         if (lastError?.code === 'ENOTFOUND' || lastError?.code === 'ECONNREFUSED') {
@@ -824,7 +919,9 @@ export class RedditScraper {
           ...errorDetails,
           attempts: maxRetries + 1,
         });
-        throw new Error(`Failed to fetch page ${page} after ${maxRetries + 1} attempts: ${lastError?.message || 'Unknown error'}`);
+        throw new Error(
+          `Failed to fetch page ${page} after ${maxRetries + 1} attempts: ${lastError?.message || 'Unknown error'}`,
+        );
       }
     }
 
@@ -840,7 +937,7 @@ export class RedditScraper {
     // Extract post ID from Reddit permalink format: /r/subreddit/comments/{id}/title/
     // or handle full URL
     let postId = 'unknown';
-    const permalinkMatch = postUrl.match(/\/comments\/([^\/]+)/);
+    const permalinkMatch = postUrl.match(/\/comments\/([^/]+)/);
     if (permalinkMatch) {
       postId = permalinkMatch[1];
     } else {
@@ -853,9 +950,7 @@ export class RedditScraper {
     // Remove trailing slash and add .json
     let jsonUrl = postUrl.replace(/\/$/, '');
     if (!jsonUrl.endsWith('.json')) {
-      jsonUrl = jsonUrl.includes('?')
-        ? jsonUrl.replace('?', '.json?')
-        : `${jsonUrl}.json`;
+      jsonUrl = jsonUrl.includes('?') ? jsonUrl.replace('?', '.json?') : `${jsonUrl}.json`;
     }
 
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -871,15 +966,16 @@ export class RedditScraper {
       try {
         // Check if using proxy via httpsAgent or currentProxy
         const isUsingProxy = !!(this.client.defaults.httpsAgent || this.currentProxy);
-        const proxyInfo = isUsingProxy && this.currentProxy
-          ? {
-              proxyHost: this.currentProxy.host,
-              proxyPort: this.currentProxy.port,
-              proxyProtocol: 'http',
-              usingProxy: true,
-              proxyId: this.currentProxy.id,
-            }
-          : { usingProxy: false, connectionMode: 'direct' };
+        const proxyInfo =
+          isUsingProxy && this.currentProxy
+            ? {
+                proxyHost: this.currentProxy.host,
+                proxyPort: this.currentProxy.port,
+                proxyProtocol: 'http',
+                usingProxy: true,
+                proxyId: this.currentProxy.id,
+              }
+            : { usingProxy: false, connectionMode: 'direct' };
 
         this.log(`Making HTTP GET request...`, 'info', {
           url: jsonUrl,
@@ -909,25 +1005,34 @@ export class RedditScraper {
           const elapsed = Date.now() - fetchStartTime;
           if (!requestAborted) {
             // Clear all timeout warnings BEFORE aborting to prevent spurious warning logs
-            timeoutWarnings.forEach(timeout => clearTimeout(timeout));
-            
+            timeoutWarnings.forEach((timeout) => clearTimeout(timeout));
+
             // On attempts 0-1, switch proxy and retry
             if (this.proxyManager && this.currentProxy?.id && attempt < 2) {
-              this.log(`🔄 Smart switch: Post fetch too slow (${(elapsed / 1000).toFixed(1)}s), switching proxy immediately`, 'warn', {
-                postId,
-                elapsed: `${(elapsed / 1000).toFixed(1)}s`,
-                attempt: attempt + 1,
-                previousProxy: this.currentProxy.id,
-                reason: 'slow_response_8s',
-              });
+              this.log(
+                `🔄 Smart switch: Post fetch too slow (${(elapsed / 1000).toFixed(1)}s), switching proxy immediately`,
+                'warn',
+                {
+                  postId,
+                  elapsed: `${(elapsed / 1000).toFixed(1)}s`,
+                  attempt: attempt + 1,
+                  previousProxy: this.currentProxy.id,
+                  reason: 'slow_response_8s',
+                },
+              );
 
               // Abort current request
               this.abortController.abort();
               requestAborted = true;
 
               // Mark proxy as failed and switch
-              this.proxyManager.markProxyFailed(this.currentProxy.id, `Slow response: ${(elapsed / 1000).toFixed(1)}s`);
-              const switched = this.switchToNextProxy(`Slow response: ${(elapsed / 1000).toFixed(1)}s`);
+              this.proxyManager.markProxyFailed(
+                this.currentProxy.id,
+                `Slow response: ${(elapsed / 1000).toFixed(1)}s`,
+              );
+              const switched = this.switchToNextProxy(
+                `Slow response: ${(elapsed / 1000).toFixed(1)}s`,
+              );
 
               if (switched) {
                 this.log(`✅ Smart switch completed, ready for retry with new proxy`, 'info', {
@@ -946,15 +1051,19 @@ export class RedditScraper {
         const lastAttemptTimeout = setTimeout(() => {
           if (attempt >= 2 && !requestAborted) {
             const elapsed = Date.now() - fetchStartTime;
-            timeoutWarnings.forEach(timeout => clearTimeout(timeout));
-            
-            this.log(`⏱️ Last attempt timeout (${(elapsed / 1000).toFixed(1)}s), giving up on this post`, 'warn', {
-              postId,
-              elapsed: `${(elapsed / 1000).toFixed(1)}s`,
-              attempt: attempt + 1,
-              proxyId: this.currentProxy?.id,
-              reason: 'last_attempt_timeout_15s',
-            });
+            timeoutWarnings.forEach((timeout) => clearTimeout(timeout));
+
+            this.log(
+              `⏱️ Last attempt timeout (${(elapsed / 1000).toFixed(1)}s), giving up on this post`,
+              'warn',
+              {
+                postId,
+                elapsed: `${(elapsed / 1000).toFixed(1)}s`,
+                attempt: attempt + 1,
+                proxyId: this.currentProxy?.id,
+                reason: 'last_attempt_timeout_15s',
+              },
+            );
 
             this.abortController.abort();
             requestAborted = true;
@@ -966,24 +1075,29 @@ export class RedditScraper {
         try {
           response = await this.client.get<RedditThing[]>(jsonUrl);
           // Clear all timeout warnings on success
-          timeoutWarnings.forEach(timeout => clearTimeout(timeout));
+          timeoutWarnings.forEach((timeout) => clearTimeout(timeout));
         } catch (error: any) {
           // Clear all timeout warnings on error
-          timeoutWarnings.forEach(timeout => clearTimeout(timeout));
+          timeoutWarnings.forEach((timeout) => clearTimeout(timeout));
 
           // If aborted due to smart switch, retry with new proxy
-          const isAborted = error.name === 'AbortError' ||
-                           error.name === 'CanceledError' ||
-                           error.code === 'ERR_CANCELED';
+          const isAborted =
+            error.name === 'AbortError' ||
+            error.name === 'CanceledError' ||
+            error.code === 'ERR_CANCELED';
 
           if (isAborted && this.proxyManager && attempt < 2) {
-            this.log(`🔄 Retrying with new proxy after smart switch (attempt ${attempt + 2}/3)`, 'info', {
-              postId,
-              attempt: attempt + 2,
-              reason: 'smart_switch_retry',
-              errorName: error.name,
-              errorCode: error.code,
-            });
+            this.log(
+              `🔄 Retrying with new proxy after smart switch (attempt ${attempt + 2}/3)`,
+              'info',
+              {
+                postId,
+                attempt: attempt + 2,
+                reason: 'smart_switch_retry',
+                errorName: error.name,
+                errorCode: error.code,
+              },
+            );
             continue; // Retry with new proxy
           }
 
@@ -1010,7 +1124,10 @@ export class RedditScraper {
 
           // Mark proxy as failed and switch
           if (this.proxyManager && this.currentProxy?.id && attempt < 2) {
-            this.proxyManager.markProxyFailed(this.currentProxy.id, '403 Forbidden - IP blocked by Reddit');
+            this.proxyManager.markProxyFailed(
+              this.currentProxy.id,
+              '403 Forbidden - IP blocked by Reddit',
+            );
             const switched = this.switchToNextProxy('403 Forbidden');
             if (switched) {
               this.log(`🔄 Switching proxy after 403 (attempt ${attempt + 2}/3)`, 'info', {
@@ -1112,18 +1229,23 @@ export class RedditScraper {
         this.log(`Post fetch attempt ${attempt + 1} failed`, 'error', errorDetails);
 
         // Check if aborted due to smart switch - if so, retry with new proxy
-        const isAborted = error.name === 'AbortError' ||
-                         error.name === 'CanceledError' ||
-                         error.code === 'ERR_CANCELED';
+        const isAborted =
+          error.name === 'AbortError' ||
+          error.name === 'CanceledError' ||
+          error.code === 'ERR_CANCELED';
 
         if (isAborted && this.proxyManager && attempt < 2) {
-          this.log(`🔄 Retrying with new proxy after smart switch (attempt ${attempt + 2}/3)`, 'info', {
-            postId,
-            attempt: attempt + 2,
-            reason: 'smart_switch_retry',
-            errorName: error.name,
-            errorCode: error.code,
-          });
+          this.log(
+            `🔄 Retrying with new proxy after smart switch (attempt ${attempt + 2}/3)`,
+            'info',
+            {
+              postId,
+              attempt: attempt + 2,
+              reason: 'smart_switch_retry',
+              errorName: error.name,
+              errorCode: error.code,
+            },
+          );
           continue; // Retry with new proxy
         }
 
@@ -1144,12 +1266,20 @@ export class RedditScraper {
             postId,
             attempt: attempt + 1,
             proxyId: this.currentProxy?.id,
-            possibleReasons: ['Proxy IP blocked by Reddit', 'Rate limited', 'Post removed', 'Private subreddit'],
+            possibleReasons: [
+              'Proxy IP blocked by Reddit',
+              'Rate limited',
+              'Post removed',
+              'Private subreddit',
+            ],
           });
 
           // Mark current proxy as failed and try switching
           if (this.proxyManager && this.currentProxy?.id && attempt < 2) {
-            this.proxyManager.markProxyFailed(this.currentProxy.id, '403 Forbidden - IP likely blocked');
+            this.proxyManager.markProxyFailed(
+              this.currentProxy.id,
+              '403 Forbidden - IP likely blocked',
+            );
             const switched = this.switchToNextProxy('403 Forbidden');
             if (switched) {
               this.log(`🔄 Switching proxy after 403 (attempt ${attempt + 2}/3)`, 'info', {
@@ -1174,29 +1304,40 @@ export class RedditScraper {
             hasAuth: !!(this.currentProxy?.username && this.currentProxy?.password),
             postId,
             attempt: attempt + 1,
-            responseBody: error?.response?.data ? String(error.response.data).substring(0, 200) : null,
+            responseBody: error?.response?.data
+              ? String(error.response.data).substring(0, 200)
+              : null,
           });
 
           // Mark current proxy as failed
           if (this.proxyManager && this.currentProxy?.id) {
-            this.proxyManager.markProxyFailed(this.currentProxy.id, '407 Proxy Authentication Required');
+            this.proxyManager.markProxyFailed(
+              this.currentProxy.id,
+              '407 Proxy Authentication Required',
+            );
           }
 
           // Try switching proxy if available
           if (this.proxyManager && attempt < 2) {
             const switched = this.switchToNextProxy('407 Proxy Authentication Required');
             if (switched) {
-              this.log(`🔄 Retrying with new proxy after auth failure (attempt ${attempt + 2}/3)`, 'info', {
-                postId,
-                attempt: attempt + 2,
-                reason: 'proxy_auth_failed',
-                previousProxy: this.currentProxy?.id,
-              });
+              this.log(
+                `🔄 Retrying with new proxy after auth failure (attempt ${attempt + 2}/3)`,
+                'info',
+                {
+                  postId,
+                  attempt: attempt + 2,
+                  reason: 'proxy_auth_failed',
+                  previousProxy: this.currentProxy?.id,
+                },
+              );
               continue; // Retry with new proxy
             }
           }
 
-          throw new Error(`Proxy authentication failed (407): ${error?.response?.data || error.message}`);
+          throw new Error(
+            `Proxy authentication failed (407): ${error?.response?.data || error.message}`,
+          );
         }
 
         // Network/timeout errors - try switching proxy
@@ -1209,7 +1350,9 @@ export class RedditScraper {
 
           // Auto-switch proxy on timeout if available
           if (this.proxyManager && this.currentProxy?.id && attempt < 2) {
-            const switched = this.switchToNextProxy(`Timeout after ${(fetchDuration / 1000).toFixed(1)}s`);
+            const switched = this.switchToNextProxy(
+              `Timeout after ${(fetchDuration / 1000).toFixed(1)}s`,
+            );
             if (switched) {
               this.log(`🔄 Retrying with new proxy (attempt ${attempt + 2}/3)`, 'info', {
                 postId,
@@ -1225,11 +1368,15 @@ export class RedditScraper {
           if (this.proxyManager && this.currentProxy?.id && attempt < 2) {
             const switched = this.switchToNextProxy(`Network error: ${error.code}`);
             if (switched) {
-              this.log(`🔄 Retrying with new proxy after network error (attempt ${attempt + 2}/3)`, 'info', {
-                postId,
-                attempt: attempt + 2,
-                errorCode: error.code,
-              });
+              this.log(
+                `🔄 Retrying with new proxy after network error (attempt ${attempt + 2}/3)`,
+                'info',
+                {
+                  postId,
+                  attempt: attempt + 2,
+                  errorCode: error.code,
+                },
+              );
               continue; // Retry with new proxy
             }
           }
@@ -1321,7 +1468,7 @@ export class RedditScraper {
 
       this.log(`Step 2: Starting to fetch post details...`, 'info', {
         totalPosts: postUrls.length,
-        estimatedTime: `${(postUrls.length * 3 / 60).toFixed(1)} minutes (assuming 3s per post)`,
+        estimatedTime: `${((postUrls.length * 3) / 60).toFixed(1)} minutes (assuming 3s per post)`,
       });
 
       // Step 2: Fetch posts serially (for better cancellation)
@@ -1349,7 +1496,11 @@ export class RedditScraper {
 
           posts.push(result);
 
-          this.emitProgress(posts.length, postUrls.length, `Scraped ${posts.length}/${postUrls.length} posts`);
+          this.emitProgress(
+            posts.length,
+            postUrls.length,
+            `Scraped ${posts.length}/${postUrls.length} posts`,
+          );
           this.log(`✓ [${i + 1}/${postUrls.length}] Post processed successfully`, 'info', {
             postId: id,
             comments: result.comments.length,

@@ -16,9 +16,9 @@ import { logger } from 'hono/logger';
 import { createCookieManager, scrapeQueue } from '../core';
 import { JobRepository } from '../core/db/job-repo';
 import { apiKeyMiddleware } from '../middleware/api-key';
-import healthRoutes from '../server/routes/health';
 import queueMonitor from '../routes/queue-monitor';
 import statsRoutes from '../routes/stats';
+import healthRoutes from '../server/routes/health';
 // Route imports
 import jobRoutes from '../server/routes/jobs';
 import {

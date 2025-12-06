@@ -1,20 +1,17 @@
-import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Upload,
   CheckCircle,
-  XCircle,
-  RefreshCw,
-  FileJson,
-  User,
   Cookie,
+  FileJson,
   FileUp,
+  RefreshCw,
+  Upload,
+  User,
+  XCircle,
 } from 'lucide-react';
-
-import { Button } from '@/components/ui/button';
+import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -23,6 +20,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 interface SessionInfo {
   filename: string;

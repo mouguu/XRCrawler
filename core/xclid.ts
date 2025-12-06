@@ -1,8 +1,8 @@
-import axios, { AxiosRequestConfig } from 'axios';
 import crypto from 'node:crypto';
+import axios, { AxiosRequestConfig } from 'axios';
 import { HttpsProxyAgent } from 'https-proxy-agent';
-import { Proxy } from './proxy-manager';
 import { ScraperErrors } from './errors';
+import { Proxy } from './proxy-manager';
 
 const INDICES_REGEX = /(\(\w{1}\[(\d{1,2})\],\s*16\))+/gm;
 
@@ -102,7 +102,11 @@ class Cubic {
   }
 }
 
-async function getPageText(url: string, headers: Record<string, string>, proxy?: Proxy): Promise<string> {
+async function getPageText(
+  url: string,
+  headers: Record<string, string>,
+  proxy?: Proxy,
+): Promise<string> {
   const config: AxiosRequestConfig = {
     headers,
     responseType: 'text', // Force text response
@@ -110,15 +114,15 @@ async function getPageText(url: string, headers: Record<string, string>, proxy?:
   };
 
   if (proxy) {
-      let proxyUrl = `http://${proxy.host}:${proxy.port}`;
-      if (proxy.username && proxy.password) {
-        proxyUrl = `http://${proxy.username}:${proxy.password}@${proxy.host}:${proxy.port}`;
-      }
-      
-      const agent = new HttpsProxyAgent(proxyUrl);
-      config.httpsAgent = agent;
-      config.httpAgent = agent;
-      config.proxy = false;
+    let proxyUrl = `http://${proxy.host}:${proxy.port}`;
+    if (proxy.username && proxy.password) {
+      proxyUrl = `http://${proxy.username}:${proxy.password}@${proxy.host}:${proxy.port}`;
+    }
+
+    const agent = new HttpsProxyAgent(proxyUrl);
+    config.httpsAgent = agent;
+    config.httpAgent = agent;
+    config.proxy = false;
   } else {
     config.proxy = false;
   }
@@ -126,28 +130,28 @@ async function getPageText(url: string, headers: Record<string, string>, proxy?:
   // Axios follows redirects by default (maxRedirects: 5)
   // We don't need manual redirect handling unless X.com does weird JS redirects.
   // The original code handled manual JS redirects (>document.location = ...).
-  
+
   const response = await axios.get(url, config);
 
   if (response.status !== 200) {
-     throw ScraperErrors.apiRequestFailed(`Failed to load ${url}`, response.status, { url });
+    throw ScraperErrors.apiRequestFailed(`Failed to load ${url}`, response.status, { url });
   }
-  
+
   const text = response.data;
-  
+
   // Handle JS Challenge / Redirect logic as in original
   if (!text.includes('>document.location =')) return text;
 
   const redirect = text.split('document.location = "')[1]?.split('"')[0];
   if (!redirect) return text;
-  
+
   const redirected = await axios.get(redirect, config);
-  
+
   if (redirected.status !== 200)
     throw ScraperErrors.apiRequestFailed(`Failed migrate redirect`, redirected.status, {
       redirect,
     });
-    
+
   const migrated = redirected.data;
   if (!migrated.includes('action="https://x.com/x/migrate"')) return migrated;
 
@@ -158,17 +162,17 @@ async function getPageText(url: string, headers: Record<string, string>, proxy?:
     const value = chunk.split('value="')[1]?.split('"')[0];
     if (name && value !== undefined) data[name] = value;
   }
-  
+
   const postConfig = { ...config };
   postConfig.headers = { ...headers, 'content-type': 'application/json' };
-  
+
   const finalResp = await axios.post('https://x.com/x/migrate', data, postConfig);
 
   if (finalResp.status !== 200)
     throw ScraperErrors.apiRequestFailed(`Migrate post failed`, finalResp.status, {
       url: 'https://x.com/x/migrate',
     });
-    
+
   return finalResp.data;
 }
 
@@ -192,29 +196,29 @@ function extractScriptsList(html: string): string[] {
 async function parseAnimIdx(html: string, proxy?: Proxy): Promise<number[]> {
   const scripts = extractScriptsList(html).filter((u) => u.includes('/ondemand.s.'));
   if (!scripts.length) throw ScraperErrors.dataExtractionFailed('No ondemand.s.* script found');
-  
+
   const config: AxiosRequestConfig = { responseType: 'text', validateStatus: () => true };
   if (proxy) {
-      let proxyUrl = `http://${proxy.host}:${proxy.port}`;
-      if (proxy.username && proxy.password) {
-        proxyUrl = `http://${proxy.username}:${proxy.password}@${proxy.host}:${proxy.port}`;
-      }
-      
-      const agent = new HttpsProxyAgent(proxyUrl);
-      config.httpsAgent = agent;
-      config.httpAgent = agent;
-      config.proxy = false;
+    let proxyUrl = `http://${proxy.host}:${proxy.port}`;
+    if (proxy.username && proxy.password) {
+      proxyUrl = `http://${proxy.username}:${proxy.password}@${proxy.host}:${proxy.port}`;
+    }
+
+    const agent = new HttpsProxyAgent(proxyUrl);
+    config.httpsAgent = agent;
+    config.httpAgent = agent;
+    config.proxy = false;
   } else {
-      config.proxy = false;
+    config.proxy = false;
   }
 
   const scriptResp = await axios.get(scripts[0], config);
-  
+
   if (scriptResp.status !== 200)
     throw ScraperErrors.apiRequestFailed(`Failed to load script`, scriptResp.status, {
       url: scripts[0],
     });
-    
+
   const scriptText = scriptResp.data;
   const matches = [...scriptText.matchAll(INDICES_REGEX)].flatMap((m) => Number(m[2]));
   if (!matches.length) throw ScraperErrors.dataExtractionFailed('No animation indices found');
@@ -244,7 +248,10 @@ function parseAnimArr(html: string, vkBytes: number[]): number[][] {
     .map((seg) => seg.split(/\s+/).map(Number));
 }
 
-async function loadKeys(html: string, proxy?: Proxy): Promise<{ vkBytes: number[]; animKey: string }> {
+async function loadKeys(
+  html: string,
+  proxy?: Proxy,
+): Promise<{ vkBytes: number[]; animKey: string }> {
   const animIdx = await parseAnimIdx(html, proxy);
   const vkBytes = extractVkBytes(html);
   const animArr = parseAnimArr(html, vkBytes);
@@ -293,7 +300,7 @@ export class XClIdGen {
   static async create(
     cookiesHeader: string,
     userAgent: string = DEFAULT_USER_AGENT,
-    proxy?: Proxy
+    proxy?: Proxy,
   ): Promise<XClIdGen> {
     const headers = {
       'user-agent': userAgent,
