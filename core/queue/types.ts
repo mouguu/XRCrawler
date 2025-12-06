@@ -13,7 +13,7 @@ export interface ScrapeJobData {
     tweetUrl?: string;
     searchQuery?: string;
     limit?: number;
-    mode?: 'puppeteer' | 'graphql' | 'mixed';
+    mode?: 'puppeteer' | 'graphql';
     likes?: boolean;
     tab?: 'posts' | 'likes' | 'replies'; // 'posts' is the default, but we don't pass it to scrapeTimeline
 

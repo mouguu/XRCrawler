@@ -121,7 +121,7 @@ describe('ConfigManager', () => {
       expect(twitterConfig).toHaveProperty('defaultMode');
       expect(twitterConfig).toHaveProperty('defaultLimit');
       expect(twitterConfig).toHaveProperty('apiTimeout');
-      expect(['graphql', 'puppeteer', 'mixed']).toContain(twitterConfig.defaultMode);
+      expect(['graphql', 'puppeteer']).toContain(twitterConfig.defaultMode);
     });
   });
 

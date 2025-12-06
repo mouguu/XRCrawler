@@ -42,7 +42,7 @@ export interface PerformanceStats {
   phases: PhaseMetric[];
 
   // 模式标识
-  mode: 'graphql' | 'puppeteer' | 'mixed'; // 爬取模式
+  mode: 'graphql' | 'puppeteer'; // 爬取模式
 }
 
 export interface PhaseMetric {
@@ -83,7 +83,7 @@ export class PerformanceMonitor {
   private phases: Map<string, number> = new Map();
 
   // 模式追踪
-  private mode: 'graphql' | 'puppeteer' | 'mixed' = 'mixed';
+  private mode: 'graphql' | 'puppeteer' = 'graphql';
 
   /**
    * 开始监控
@@ -325,7 +325,7 @@ export class PerformanceMonitor {
     lines.push('───────────────────────────────────────────────────────────');
     lines.push(`   Total Duration:     ${this.formatDuration(stats.totalDuration)}`);
 
-    if (stats.mode === 'graphql' || stats.mode === 'mixed') {
+    if (stats.mode === 'graphql') {
       lines.push(
         `   API Request Time:   ${this.formatDuration(stats.apiRequestTime)} (${this.percentage(stats.apiRequestTime, stats.totalDuration)})`,
       );
@@ -339,7 +339,7 @@ export class PerformanceMonitor {
       }
     }
 
-    if (stats.mode === 'puppeteer' || stats.mode === 'mixed') {
+    if (stats.mode === 'puppeteer') {
       lines.push(
         `   Navigation Time:    ${this.formatDuration(stats.navigationTime)} (${this.percentage(stats.navigationTime, stats.totalDuration)})`,
       );
@@ -454,7 +454,7 @@ export class PerformanceMonitor {
     this.peakMemoryUsage = 0;
     this.currentPhase = null;
     this.phases.clear();
-    this.mode = 'mixed';
+    this.mode = 'graphql';
     this.stopMemoryTracking();
   }
 }

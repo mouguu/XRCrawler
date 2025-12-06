@@ -9,7 +9,7 @@
 // ============================================================================
 
 export type ScrapeType = 'profile' | 'thread' | 'search' | 'reddit';
-export type ScrapeMode = 'graphql' | 'puppeteer' | 'mixed';
+export type ScrapeMode = 'graphql' | 'puppeteer';
 export type RedditStrategy = 'auto' | 'super_full' | 'super_recent' | 'new';
 
 export interface DateRange {

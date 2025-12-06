@@ -1,3 +1,26 @@
+/**
+ * Timeline DOM Runner - Legacy DOM Scraping Mode
+ *
+ * **Status: DEPRECATED in favor of Passive Interception Mode**
+ *
+ * **Why This Exists:**
+ * - Originally used for scraping when API access was difficult
+ * - Still available as fallback for edge cases
+ *
+ * **Current Architecture:**
+ * - **GraphQL Mode (Default)**: Uses `timeline-api-runner.ts` → `x-api.ts` → `xclid-puppeteer.ts`
+ *   - Passive interception mode (proven stable)
+ *   - No DOM parsing needed
+ *
+ * - **Puppeteer Mode (This File)**: Direct DOM scraping
+ *   - Slower and less reliable
+ *   - Only used when explicitly requested or as fallback
+ *
+ * **Recommendation:**
+ * - Use GraphQL mode (default) for all new scraping tasks
+ * - This DOM runner is kept for backward compatibility only
+ */
+
 import * as constants from '../config/constants';
 import type { ProfileInfo, Tweet } from '../types/tweet-definitions';
 import * as fileUtils from '../utils';
@@ -180,7 +203,7 @@ export async function runTimelineDom(
 
     // 滚动并提取推文
     let consecutiveNoNew = 0;
-    // 针对 mixed 续跑场景，使用总目标而非本地 remainingLimit 来决定耐心阈值
+    // 使用总目标而非本地 remainingLimit 来决定耐心阈值
     const effectiveTarget = totalTarget;
     // 对于大目标（>500条），适度增加连续无新推文的容忍度
     // 降低最大尝试次数，避免过长时间的无效重复尝试

@@ -24,7 +24,7 @@ Request:
   "type": "profile" | "thread" | "search" | "reddit",
   "input": "username or URL",
   "limit": 100,
-  "mode": "graphql" | "puppeteer" | "mixed",
+  "mode": "graphql" | "puppeteer",
   "dateRange": { "start": "2024-01-01", "end": "2024-12-31" },
   "likes": false,
   "enableRotation": true,
@@ -113,11 +113,34 @@ Response:
 
 **GET /api/sessions** - List available cookie sessions
 
-Response: `{ "success": true, "sessions": [{ "filename": "account1.json", "valid": true, "username": "user1" }] }`
+Response:
+```json
+{
+  "success": true,
+  "sessions": [
+    {
+      "id": "uuid",
+      "filename": "account1.json",
+      "displayName": "Account 1",
+      "username": "user1",
+      "platform": "twitter",
+      "isValid": true,
+      "lastUsed": "2024-12-03T20:00:00Z",
+      "errorCount": 0,
+      "cookieCount": 15,
+      "dbId": "uuid"
+    }
+  ]
+}
+```
 
 **POST /api/cookies** - Upload cookie file (multipart/form-data, field: `file`)
 
 Response: `{ "success": true, "filename": "account1.json" }`
+
+**DELETE /api/sessions/:id** - Delete session (supports both UUID and filename)
+
+**PATCH /api/sessions/:id/rename** - Rename session display name
 
 ### Configuration & Downloads
 

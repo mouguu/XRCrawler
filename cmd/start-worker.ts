@@ -7,6 +7,7 @@
 import { closeRedisConnections } from '../core/queue/connection';
 import { closeScrapeQueue } from '../core/queue/scrape-queue';
 import { createScrapeWorker, shutdownWorker } from '../core/queue/worker';
+import { prisma } from '../core/db/repositories';
 import { getConfigManager } from '../utils/config-manager';
 import { createEnhancedLogger } from '../utils/logger';
 
@@ -37,6 +38,10 @@ async function shutdown(signal: string) {
 
     // Close Redis connections
     await closeRedisConnections();
+
+    // Disconnect Prisma
+    await prisma.$disconnect();
+    logger.info('Prisma disconnected');
 
     logger.info('Shutdown complete');
     process.exit(0);

@@ -24,5 +24,5 @@ export interface PerformanceStats {
   apiAverageLatency?: number;
   apiRetryCount?: number;
   rateLimitWaitTime?: number;
-  mode?: 'graphql' | 'puppeteer' | 'mixed';
+  mode?: 'graphql' | 'puppeteer';
 }

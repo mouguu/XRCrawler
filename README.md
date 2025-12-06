@@ -22,18 +22,81 @@
 - **📊 Platform Selector** — Choose between Profile, Thread, Search, or Reddit modes with intuitive cards
 - **⚡ Real-time Dashboard** — Monitor active jobs with live progress, logs, and SSE streaming
 - **🔐 Session Manager** — Upload and manage multiple cookie files with custom naming
-- **🎯 Smart Configuration** — GraphQL/Puppeteer/Mixed modes, date chunking, parallel scrapers
+- **🎯 Smart Configuration** — GraphQL API-only / Puppeteer modes, automatic search fallback, session rotation, date chunking
 
 ---
 
 ## ✨ Highlights
 
-- **Break the ~800 tweet wall**: Date chunking + resilient session rotation for deep timelines.
+- **Break the ~800 tweet wall**: Intelligent session rotation + **automatic search mode fallback** for deep timelines (up to 1000+ tweets). When Timeline API hits its depth limit (~800 tweets), automatically switches to Search API (`from:username until:date`) to continue scraping older tweets.
+- **API-only mode**: Pure GraphQL API scraping without browser overhead. Fast, lightweight, and perfect for large-scale operations. Automatically enabled when using GraphQL mode.
+- **Smart Session Rotation**: Automatic session switching on timeouts, rate limits, or API errors. Intelligently rotates through available sessions to maximize success rate.
 - **Rust/WASM micro-kernel**: Fast, low-memory dedupe/normalization; LLM-ready Markdown export.
-- **Modern Web UI**: Real-time SSE streaming, live progress/logs, one-click **Download .md**, with custom session naming.
+- **Modern Web UI**: Real-time SSE streaming, live progress/logs, one-click **Download .md**, with **database-backed session management** (upload, rename, delete sessions).
 - **Queue-first architecture**: BullMQ on Redis; workers publish progress/logs via Pub/Sub, server streams to `/api/job/:id/stream`.
 - **Multi-platform**: Twitter/X + Reddit, all in TypeScript with plugin-style adapters.
 - **Advanced Anti-Detection**: Multi-layer protection with fingerprint spoofing, human behavior simulation, and smart proxy rotation.
+
+---
+
+## 🚀 Advanced Features
+
+### Automatic Search Mode Fallback
+
+When scraping user timelines, XRCrawler intelligently handles Twitter/X API depth limits:
+
+1. **Timeline API Mode** (default): Fast GraphQL API scraping, typically gets ~800 tweets
+2. **Automatic Detection**: When Timeline API returns 0 tweets but cursor exists, system detects the limit
+3. **Smart Session Rotation**: Tries different sessions first (up to 4 sessions) to maximize timeline depth
+4. **Search Mode Fallback**: If session rotation doesn't help, automatically switches to Search API using `from:username until:date` queries
+5. **Seamless Continuation**: Continues scraping older tweets beyond the ~800 limit, potentially reaching 1000+ tweets
+
+**Example Flow:**
+```
+Timeline API: 831 tweets → Session rotation (tries 4 sessions) → Search API: from:username until:2025-11-14 → +40 more tweets = 871 total
+```
+
+### GraphQL Mode
+
+XRCrawler supports **GraphQL API scraping** with two different approaches:
+
+#### For Timeline/Profile Scraping (API-Only)
+- **Fast & Lightweight**: Direct Axios HTTP requests, no browser launch, minimal memory usage
+- **True API-only**: Pure GraphQL API calls without browser overhead
+- **Session Management**: Database-backed session storage with automatic rotation
+- **Rate Limit Handling**: Smart retry logic with session switching on errors
+
+#### For Search Queries (Passive Interception)
+- **Browser-based interception**: Uses browser to navigate and intercept GraphQL responses
+- **More reliable**: Bypasses TLS fingerprint detection and other protections
+- **Still efficient**: Intercepts clean JSON responses (no DOM parsing)
+- **Note**: Search queries require browser even in GraphQL mode due to Twitter's protections
+
+**When to use GraphQL mode:**
+- ✅ Timeline/Profile scraping (true API-only, fastest)
+- ✅ Search queries (passive interception, most reliable)
+- ✅ Large-scale scraping (1000+ tweets)
+- ✅ Production environments
+
+**When to use Puppeteer mode:**
+- ✅ Need to scrape protected/private accounts
+- ✅ Complex interactions (likes, retweets)
+- ✅ When you need full browser control
+
+### Smart Session Rotation
+
+Automatic session switching on:
+- ⚡ **Timeouts**: API requests stuck >35 seconds
+- 🚫 **Rate Limits**: 429 errors or rate limit headers
+- 🔐 **Auth Errors**: 401/403 authentication failures
+- 🌐 **Network Errors**: Connection resets, socket hang ups
+- 📊 **Empty Responses**: 0 tweets with cursor (possible API boundary)
+
+**Rotation Strategy:**
+- Tries up to 4 different sessions before giving up
+- Tracks attempted sessions to avoid redundant switches
+- Resets error counters on successful session switch
+- Falls back to search mode if all sessions exhausted
 
 ---
 
@@ -103,7 +166,7 @@ Migrated from Node.js to Bun for **blazing fast performance**:
 | **Memory Usage**    | 400MB            | **~120MB**           | 💾 **70% reduction**         |
 | **Dev Experience**  | Compile first    | **Run .ts directly** | 🎯 **Zero config**           |
 
-> **Why Bun?** Native TypeScript support, faster package manager, lower memory footprint, and full Node.js compatibility. Read our [migration journey](docs/dev/BUN_MIGRATION_ADVENTURE.md).
+> **Why Bun?** Native TypeScript support, faster package manager, lower memory footprint, and full Node.js compatibility.
 
 ---
 
@@ -111,9 +174,11 @@ Migrated from Node.js to Bun for **blazing fast performance**:
 
 - **Bun** 1.3+ (replaces Node.js + pnpm for blazing fast performance)
 - **Redis** on `localhost:6379` (for queue + SSE pub/sub)
-- **PostgreSQL** 14+ (for data persistence and resume capabilities)
+- **PostgreSQL** 14+ (for data persistence, session management, and resume capabilities)
 
 **Using Docker Compose?** All services (Redis + PostgreSQL) are included.
+
+**Session Management**: Sessions are now stored in PostgreSQL database (not just files). Upload cookies via Web UI or use the session management API.
 
 ---
 
@@ -125,9 +190,10 @@ Migrated from Node.js to Bun for **blazing fast performance**:
 git clone https://github.com/mouguu/XRCrawler.git
 cd XRcrawler
 
-# Place your Twitter cookie files in data/cookies/
+# Sessions are managed via Web UI or API (stored in PostgreSQL)
+# You can also place cookie files in data/cookies/ for automatic import
 mkdir -p data/cookies
-# Export cookies via EditThisCookie or DevTools → data/cookies/my_account.json
+# Export cookies via EditThisCookie or DevTools → Upload via Web UI at http://localhost:5001
 
 # One command to rule them all
 docker compose up -d --build
@@ -187,19 +253,13 @@ bun run cmd/cli.ts reddit -r programming -c 500
 
 ## 📚 Documentation
 
-We have comprehensive documentation for all aspects of the project:
+Essential documentation for using and configuring XRCrawler:
 
-| Document                                                              | Description                                          |
-| --------------------------------------------------------------------- | ---------------------------------------------------- |
-| [**DATABASE.md**](docs/DATABASE.md)                                   | PostgreSQL schema and Prisma repositories            |
-| [**OPERATIONS.md**](docs/OPERATIONS.md)                               | Health checks, monitoring, and rate limiting         |
-| [**ARCHITECTURE.md**](docs/ARCHITECTURE.md)                           | Technical architecture and component overview        |
-| [**API_REFERENCE.md**](docs/API_REFERENCE.md)                         | REST API endpoints documentation                     |
-| [**CONFIGURATION.md**](docs/CONFIGURATION.md)                         | Configuration system guide (ConfigManager, env vars) |
-| [**LOGGING.md**](docs/LOGGING.md)                                     | Structured logging standards with winston            |
-| [**BUN_MIGRATION_PLAN.md**](docs/BUN_MIGRATION_PLAN.md)               | Bun migration roadmap and status                     |
-| [**BUN_MIGRATION_ADVENTURE.md**](docs/dev/BUN_MIGRATION_ADVENTURE.md) | Detailed migration journey and lessons learned       |
-| [**CONTRIBUTING.md**](CONTRIBUTING.md)                                | Contribution guidelines and code standards           |
+| Document                          | Description                                          |
+| --------------------------------- | ---------------------------------------------------- |
+| [**API_REFERENCE.md**](docs/API_REFERENCE.md) | REST API endpoints documentation                     |
+| [**CONFIGURATION.md**](docs/CONFIGURATION.md) | Configuration system guide (ConfigManager, env vars) |
+| [**DATABASE.md**](docs/DATABASE.md) | PostgreSQL schema and Prisma repositories            |
 
 ---
 

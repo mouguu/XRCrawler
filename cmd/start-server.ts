@@ -35,6 +35,7 @@ import {
   getConfigManager,
   setLogLevel,
 } from '../utils';
+import { prisma } from '../core/db/repositories';
 
 process.stdout.write('[START] Utils loaded\n');
 process.stderr.write('[START] Utils loaded\n');
@@ -167,18 +168,31 @@ try {
 }
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
+// Graceful shutdown
+process.on('SIGTERM', async () => {
   serverLogger.info('Received SIGTERM, shutting down gracefully...');
   if (server) {
     server.stop();
   }
+  try {
+    await prisma.$disconnect();
+    serverLogger.info('Prisma disconnected');
+  } catch (e) {
+    serverLogger.error('Error disconnecting Prisma', e as Error);
+  }
   process.exit(0);
 });
 
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   serverLogger.info('Received SIGINT, shutting down gracefully...');
   if (server) {
     server.stop();
+  }
+  try {
+    await prisma.$disconnect();
+    serverLogger.info('Prisma disconnected');
+  } catch (e) {
+    serverLogger.error('Error disconnecting Prisma', e as Error);
   }
   process.exit(0);
 });

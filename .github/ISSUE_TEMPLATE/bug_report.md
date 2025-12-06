@@ -39,7 +39,7 @@ If applicable, add screenshots to help explain your problem.
 
 ```json
 {
-  "scrapeMode": "graphql|puppeteer|mixed",
+  "scrapeMode": "graphql|puppeteer",
   "mode": "timeline|search",
   "limit": 100
 }

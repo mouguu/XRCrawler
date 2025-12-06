@@ -7,6 +7,7 @@ import {
   FileUp,
   RefreshCw,
   Save,
+  Trash2,
   Upload,
   User,
   X,
@@ -52,6 +53,11 @@ export function SessionManager() {
   const [editingSession, setEditingSession] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [renaming, setRenaming] = useState(false);
+
+  // Delete state
+  const [deletingSession, setDeletingSession] = useState<string | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<SessionInfo | null>(null);
 
   const fetchSessions = async () => {
     setLoading(true);
@@ -157,10 +163,15 @@ export function SessionManager() {
 
     setRenaming(true);
     try {
-      const response = await fetch(`/api/sessions/${session.filename}/rename`, {
+      // Use dbId if available, otherwise fallback to filename
+      const sessionId = session.dbId || session.filename;
+      const response = await fetch(`/api/sessions/${sessionId}/rename`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ displayName: editName.trim() }),
+        body: JSON.stringify({
+          displayName: editName.trim(),
+          dbId: session.dbId // Explicitly pass dbId for reliability
+        }),
       });
 
       const data = await response.json();
@@ -177,6 +188,43 @@ export function SessionManager() {
     } finally {
       setRenaming(false);
     }
+  };
+
+  const handleDeleteClick = (session: SessionInfo) => {
+    setSessionToDelete(session);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!sessionToDelete) return;
+
+    setDeletingSession(sessionToDelete.filename);
+    try {
+      // Use dbId if available, otherwise fallback to filename
+      const sessionId = sessionToDelete.dbId || sessionToDelete.filename;
+      const response = await fetch(`/api/sessions/${sessionId}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        await fetchSessions();
+        setError(null);
+      } else {
+        setError(data.error || 'Failed to delete session');
+      }
+    } catch {
+      setError('Network error while deleting session');
+    } finally {
+      setDeletingSession(null);
+      setDeleteConfirmOpen(false);
+      setSessionToDelete(null);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteConfirmOpen(false);
+    setSessionToDelete(null);
   };
 
   return (
@@ -221,6 +269,46 @@ export function SessionManager() {
           </Button>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="w-5 h-5" />
+              Delete Session
+            </DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete{' '}
+              <strong>{sessionToDelete?.displayName || sessionToDelete?.username || sessionToDelete?.filename}</strong>?
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={handleDeleteCancel} disabled={deletingSession !== null}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteConfirm}
+              disabled={deletingSession !== null}
+            >
+              {deletingSession ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Upload Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
@@ -401,13 +489,27 @@ export function SessionManager() {
                               session.username ||
                               session.filename.replace(/\.json$/i, '')}
                           </h4>
-                          <button
-                            onClick={() => handleStartRename(session)}
-                            className="opacity-0 group-hover/item:opacity-100 transition-opacity p-1 hover:bg-muted rounded"
-                            title="Rename session"
-                          >
-                            <Edit2 className="w-3 h-3 text-muted-foreground" />
-                          </button>
+                          <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => handleStartRename(session)}
+                              className="p-1 hover:bg-muted rounded"
+                              title="Rename session"
+                            >
+                              <Edit2 className="w-3 h-3 text-muted-foreground" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteClick(session)}
+                              className="p-1 hover:bg-red-50 rounded text-red-600 hover:text-red-700"
+                              title="Delete session"
+                              disabled={deletingSession === session.filename}
+                            >
+                              {deletingSession === session.filename ? (
+                                <RefreshCw className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-3 h-3" />
+                              )}
+                            </button>
+                          </div>
                         </div>
 
                         <div className="flex items-center gap-2 mt-2">

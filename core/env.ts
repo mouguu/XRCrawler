@@ -22,7 +22,7 @@ const envSchema = z.object({
   REDIS_PASSWORD: z.string().optional(),
 
   // Twitter
-  TWITTER_DEFAULT_MODE: z.enum(['graphql', 'puppeteer', 'mixed']).default('graphql'),
+  TWITTER_DEFAULT_MODE: z.enum(['graphql', 'puppeteer']).default('graphql'),
   TWITTER_DEFAULT_LIMIT: z
     .string()
     .default('50')

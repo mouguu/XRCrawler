@@ -11,7 +11,7 @@ import { AdapterJobContext, PlatformAdapter } from './types';
 const logger = createEnhancedLogger('TwitterAdapter');
 
 interface TwitterJobConfig {
-  mode?: 'puppeteer' | 'graphql' | 'mixed';
+  mode?: 'puppeteer' | 'graphql';
   limit?: number;
   username?: string;
   tweetUrl?: string;
@@ -148,9 +148,7 @@ export const twitterAdapter: PlatformAdapter = {
           searchQuery: jobConfig.searchQuery,
           limit: jobConfig.limit || 50,
           saveMarkdown: true,
-          scrapeMode: (jobConfig.mode === 'mixed' ? 'puppeteer' : jobConfig.mode || 'puppeteer') as
-            | 'puppeteer'
-            | 'graphql',
+          scrapeMode: (jobConfig.mode || 'puppeteer') as 'puppeteer' | 'graphql',
           dateRange:
             jobConfig.dateRange?.start && jobConfig.dateRange?.end
               ? { start: jobConfig.dateRange.start, end: jobConfig.dateRange.end }

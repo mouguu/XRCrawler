@@ -218,7 +218,7 @@ function App() {
             : 'reddit',
         input,
         limit,
-        mode: activeTab === 'search' ? 'puppeteer' : scrapeMode,
+        mode: scrapeMode,
         likes: scrapeLikes,
         enableRotation: autoRotateSessions,
         enableProxy,

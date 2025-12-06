@@ -42,7 +42,7 @@ export interface AppConfig {
 
   // Twitter 配置
   twitter: {
-    defaultMode: 'graphql' | 'puppeteer' | 'mixed';
+    defaultMode: 'graphql' | 'puppeteer';
     defaultLimit: number;
     apiTimeout: number;
     browserTimeout: number;
@@ -206,8 +206,8 @@ export class ConfigManager {
 
     // Twitter 配置
     if (process.env.TWITTER_DEFAULT_MODE) {
-      const mode = process.env.TWITTER_DEFAULT_MODE as 'graphql' | 'puppeteer' | 'mixed';
-      if (['graphql', 'puppeteer', 'mixed'].includes(mode)) {
+      const mode = process.env.TWITTER_DEFAULT_MODE as 'graphql' | 'puppeteer';
+      if (['graphql', 'puppeteer'].includes(mode)) {
         this.config.twitter.defaultMode = mode;
       }
     }

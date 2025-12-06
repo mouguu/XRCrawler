@@ -144,6 +144,5 @@ describe('TaskForm Component', () => {
     render(<TaskForm {...defaultProps} />);
     expect(screen.getByText('GraphQL')).toBeInTheDocument();
     expect(screen.getByText('Puppeteer')).toBeInTheDocument();
-    expect(screen.getByText('Mixed')).toBeInTheDocument();
   });
 });

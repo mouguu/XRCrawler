@@ -219,7 +219,7 @@ program
   )
   .option('--resume', 'Resume from last saved progress', false)
   .option('--resume-from <tweetId>', 'Resume after the specified tweet ID')
-  .option('--mode <graphql|puppeteer|mixed>', 'Scrape mode', twitterConfig.defaultMode)
+  .option('--mode <graphql|puppeteer>', 'Scrape mode', twitterConfig.defaultMode)
   .option(
     '--api <graphql|rest>',
     'API variant when using API mode (graphql default, rest uses tweet_mode=extended)',
@@ -294,7 +294,7 @@ program
       options.count = parseInt(options.count, 10);
       options.headless = options.headless === 'true';
       let scrapeMode = (options.mode || 'graphql').toLowerCase();
-      const validModes = new Set(['graphql', 'puppeteer', 'mixed']);
+      const validModes = new Set(['graphql', 'puppeteer']);
       if (!validModes.has(scrapeMode)) {
         console.warn(`Unknown mode "${options.mode}", falling back to "graphql".`);
         scrapeMode = 'graphql';

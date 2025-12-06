@@ -257,11 +257,11 @@ export function TaskForm({ onSubmit, onStop }: TaskFormProps) {
                   )}
 
                   {/* Extraction Mode */}
-                  {(activeTab === 'profile' || activeTab === 'thread') && (
+                  {(activeTab === 'profile' || activeTab === 'thread' || activeTab === 'search') && (
                     <div className="space-y-3">
                       <Label className="text-sm font-medium">Extraction Mode</Label>
                       <div className="flex flex-wrap gap-2">
-                        {(['graphql', 'puppeteer', 'mixed'] as const).map((mode) => (
+                        {(['graphql', 'puppeteer'] as const).map((mode) => (
                           <button
                             key={mode}
                             onClick={() => setScrapeMode(mode)}
@@ -276,27 +276,17 @@ export function TaskForm({ onSubmit, onStop }: TaskFormProps) {
                           >
                             {mode === 'graphql'
                               ? 'GraphQL'
-                              : mode === 'puppeteer'
-                                ? 'Puppeteer'
-                                : 'Mixed'}
+                              : 'Puppeteer'}
                           </button>
                         ))}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {scrapeMode === 'graphql' && "Fast extraction using Twitter's internal API"}
-                        {scrapeMode === 'puppeteer' && 'Browser simulation for reliable results'}
-                        {scrapeMode === 'mixed' && 'Start with API, fallback to browser if needed'}
-                      </p>
-                    </div>
-                  )}
-
-                  {activeTab === 'search' && (
-                    <div className="p-4 bg-muted/50 rounded-xl">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge variant="secondary">Puppeteer Mode</Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Search uses browser automation for comprehensive results.
+                        {scrapeMode === 'graphql' && activeTab === 'search' && 
+                          "Browser-based GraphQL interception (passive mode). Fast and reliable for search queries."}
+                        {scrapeMode === 'graphql' && activeTab !== 'search' && 
+                          "Fast extraction using Twitter's internal GraphQL API (API-only, no browser)"}
+                        {scrapeMode === 'puppeteer' && 
+                          'Browser simulation with DOM parsing for reliable results'}
                       </p>
                     </div>
                   )}

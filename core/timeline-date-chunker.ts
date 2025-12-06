@@ -1,7 +1,7 @@
 import { CHUNK_RETRY_CONFIG } from '../config/constants';
 import type { Tweet } from '../types/tweet-definitions';
 import { DateUtils } from '../utils/datetime';
-import * as exportUtils from '../utils/export';
+import * as exportUtils from '../utils';
 import { createRunContext } from '../utils/filesystem';
 import * as markdownUtils from '../utils/markdown';
 import { ScraperErrors } from './errors';
@@ -190,13 +190,27 @@ export async function runTimelineDateChunks(
   ranges.reverse();
 
   let parallelChunks = (config as any).parallelChunks || 1;
-  if (parallelChunks > 1) {
+  const scrapeMode = (config as any).scrapeMode || 'graphql';
+
+  // 对于 Puppeteer 模式，禁用并行处理以防止内存耗尽（每个 chunk 会启动一个浏览器实例）
+  // 对于 GraphQL 模式，可以安全地并行处理（纯 API 调用，无浏览器）
+  if (parallelChunks > 1 && scrapeMode === 'puppeteer') {
     engine.eventBus.emitLog(
-      `Safety Override: Parallel chunking (requested: ${parallelChunks}) is disabled to prevent resource exhaustion (OOM). Forcing sequential execution (parallelChunks=1).`,
+      `Safety Override: Parallel chunking (requested: ${parallelChunks}) is disabled for Puppeteer mode to prevent resource exhaustion (OOM). Forcing sequential execution (parallelChunks=1).`,
       'warn',
     );
     parallelChunks = 1;
   }
+
+  // GraphQL 模式允许并行处理（最多 3 个并发，避免 API 限流）
+  if (parallelChunks > 1 && scrapeMode === 'graphql') {
+    parallelChunks = Math.min(parallelChunks, 3); // 限制最大并发数为 3
+    engine.eventBus.emitLog(
+      `Parallel chunking enabled for GraphQL mode: ${parallelChunks} chunks will run simultaneously.`,
+      'info',
+    );
+  }
+
   const isParallel = parallelChunks > 1;
 
   if (isParallel) {
@@ -384,7 +398,7 @@ export async function runTimelineDateChunks(
           };
 
           const chunkEngine = new ScraperEngine(chunkShouldStop, {
-            apiOnly: false,
+            apiOnly: scrapeMode === 'graphql', // GraphQL 模式使用 API-only，Puppeteer 模式需要浏览器
             dependencies: engine.dependencies, // 共享依赖（session manager等）
             logger: {
               info: (msg) => wrappedEventBus.emitLog(msg, 'info'),

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { TabType } from '@/types/ui';
 
-type ScrapeMode = 'graphql' | 'puppeteer' | 'mixed';
+type ScrapeMode = 'graphql' | 'puppeteer';
 type AntiDetectionLevel = 'low' | 'medium' | 'high' | 'paranoid';
 
 interface CrawlerState {

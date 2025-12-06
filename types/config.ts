@@ -79,8 +79,8 @@ export interface TimelineScrapeOptions {
   mode?: 'timeline' | 'search';
   /** Maximum number of tweets to scrape */
   limit?: number;
-  /** Scraping technique: 'graphql', 'puppeteer', or 'mixed' */
-  scrapeMode?: 'graphql' | 'puppeteer' | 'mixed';
+  /** Scraping technique: 'graphql' or 'puppeteer' */
+  scrapeMode?: 'graphql' | 'puppeteer';
   /** Date range for search mode */
   dateRange?: { start: string; end: string };
   /** Enable deep search with date chunking */
@@ -289,9 +289,9 @@ export function validateConfig(config: Partial<CompleteConfig>): void {
 
   if (
     config.timeline?.scrapeMode &&
-    !['graphql', 'puppeteer', 'mixed'].includes(config.timeline.scrapeMode)
+    !['graphql', 'puppeteer'].includes(config.timeline.scrapeMode)
   ) {
-    throw new Error("timeline.scrapeMode must be 'graphql', 'puppeteer', or 'mixed'");
+    throw new Error("timeline.scrapeMode must be 'graphql' or 'puppeteer'");
   }
 
   if (config.thread?.scrapeMode && !['graphql', 'puppeteer'].includes(config.thread.scrapeMode)) {
