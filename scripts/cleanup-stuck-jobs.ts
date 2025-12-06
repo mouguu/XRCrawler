@@ -112,3 +112,4 @@ cleanupStuckJobs(force)
     logger.error('Cleanup script failed:', error);
     process.exit(1);
   });
+

@@ -4,7 +4,7 @@
 
 [![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)](https://www.typescriptlang.org/)
-[![Bun](https://img.shields.io/badge/Bun-1.2.8-f472b6)](https://bun.sh/)
+[![Bun](https://img.shields.io/badge/Bun-1.3+-f472b6)](https://bun.sh/)
 [![Docker](https://img.shields.io/badge/Docker-Enabled-blue)](https://www.docker.com/)
 [![Redis](https://img.shields.io/badge/Redis-Queue-red)](https://redis.io/)
 [![WASM](https://img.shields.io/badge/WASM-Rust-orange)](https://webassembly.org/)
@@ -109,7 +109,7 @@ Migrated from Node.js to Bun for **blazing fast performance**:
 
 ## 🧰 Requirements
 
-- **Bun** 1.2+ (replaces Node.js + pnpm for blazing fast performance)
+- **Bun** 1.3+ (replaces Node.js + pnpm for blazing fast performance)
 - **Redis** on `localhost:6379` (for queue + SSE pub/sub)
 - **PostgreSQL** 14+ (for data persistence and resume capabilities)
 
@@ -224,7 +224,7 @@ If SSE payload lacks `downloadUrl`, UI fetches `/api/job/{id}` as fallback.
 XRCrawler uses a **plugin-style architecture** for multi-platform support:
 
 - **Core worker** dispatches by platform name via adapters (`core/platforms/*-adapter.ts`)
-- **Registered** in `core/platforms/registry.ts`
+- **Direct imports** in `core/queue/worker.ts` (explicit switch case for type safety)
 - **Contract**: `PlatformAdapter.process(job, ctx)` → `ScrapeJobResult`
   - Optional: `init()`, `classifyError()`
 - **Shared types**: `core/platforms/types.ts`
@@ -238,7 +238,15 @@ XRCrawler uses a **plugin-style architecture** for multi-platform support:
 
 1. Create `core/platforms/yourplatform-adapter.ts`
 2. Implement `PlatformAdapter` interface
-3. Register in `registry.ts`: `registerAdapter(yourAdapter)`
+3. Import and add to switch case in `core/queue/worker.ts`:
+   ```typescript
+   import { yourPlatformAdapter } from '../platforms/yourplatform-adapter';
+   // ... in process function:
+   } else if (type === 'yourplatform') {
+     if (yourPlatformAdapter.init) await yourPlatformAdapter.init();
+     result = await yourPlatformAdapter.process(job.data, ctx);
+   }
+   ```
 4. Pass `job.data.type = 'yourplatform'` from API
 
 ---
@@ -254,9 +262,9 @@ output/
 │   ├── metadata.json      # Run statistics
 │   └── ai-persona.txt     # LLM analysis prompt (auto-generated)
 └── reddit/{subreddit}/run-{timestamp}/
-    ├── index.md
-    ├── posts.json
-    └── posts.md
+    ├── {post-title}.md      # Single post: uses post title as filename
+    └── index.md              # Multiple posts: summary with links
+        # Individual posts saved as: {number}-{post-title}.md
 ```
 
 ---
@@ -380,11 +388,11 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
 
 | Technology                                            | Purpose                                                               |
 | ----------------------------------------------------- | --------------------------------------------------------------------- |
-| **[Bun](https://bun.sh/) 1.2**                        | Ultra-fast JavaScript runtime with native TypeScript support          |
-| **[TypeScript](https://www.typescriptlang.org/) 5.x** | Type-safe JavaScript                                                  |
+| **[Bun](https://bun.sh/) 1.3+**                       | Ultra-fast JavaScript runtime with native TypeScript support          |
+| **[TypeScript](https://www.typescriptlang.org/) 5.9** | Type-safe JavaScript                                                  |
 | **[Hono](https://hono.dev/)**                         | Ultrafast web framework for the Edge (Express replacement)            |
 | **[BullMQ](https://docs.bullmq.io/)**                 | Redis-backed job queue with retries, backoff, and concurrency control |
-| **[Prisma](https://www.prisma.io/)**                  | Type-safe ORM for PostgreSQL                                          |
+| **[Prisma](https://www.prisma.io/) 7.1**              | Type-safe ORM for PostgreSQL                                          |
 | **[Puppeteer](https://pptr.dev/)**                    | Headless Chrome for dynamic content scraping                          |
 
 ### Database & Cache
@@ -398,7 +406,7 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
 
 | Technology                                          | Purpose                                   |
 | --------------------------------------------------- | ----------------------------------------- |
-| **[React](https://react.dev/) 18**                  | UI components                             |
+| **[React](https://react.dev/) 19**                  | UI components                             |
 | **[Vite](https://vitejs.dev/)**                     | Fast dev server and build tool            |
 | **[TypeScript](https://www.typescriptlang.org/)**   | Type-safe frontend code                   |
 | **[Tailwind CSS](https://tailwindcss.com/)**        | Utility-first CSS framework               |

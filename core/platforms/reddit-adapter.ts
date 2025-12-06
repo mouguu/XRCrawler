@@ -309,7 +309,11 @@ export const redditAdapter: PlatformAdapter = {
           comments: p.comments,
         }));
 
-        const filename = `reddit_${subredditName}_${timestamp}.md`;
+        // For single post, use post title as filename (exportRedditToMarkdown handles this)
+        // For multiple posts, use index.md
+        const filename = posts.length === 1
+          ? undefined // Let exportRedditToMarkdown use post title
+          : `reddit_${subredditName}_${timestamp}.md`; // Multiple posts use timestamp
         markdownPath = exportRedditToMarkdown(postsForMarkdown, runDir, filename);
 
         await ctx.log(`Markdown export saved: ${markdownPath}`, 'info');

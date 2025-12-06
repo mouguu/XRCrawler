@@ -90,3 +90,4 @@ forceCancelJob(jobId)
     logger.error('Force cancel failed:', error);
     process.exit(1);
   });
+
